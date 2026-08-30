@@ -535,14 +535,6 @@
     cursor:pointer;font-size:13px;flex-shrink:0;padding:2px 3px;line-height:1;}
   .income-entry-row .edit:hover{color:var(--primary);}
   .income-entry-row .del:hover{color:var(--a-clay);}
-  .income-entry-row.saldo-row{border-style:dashed;}
-  .income-entry-row.saldo-row.good{background:var(--good-bg);border-color:var(--good);}
-  .income-entry-row.saldo-row.good .lbl,.income-entry-row.saldo-row.good .amt-cur{color:var(--good);}
-  .income-entry-row.saldo-row.neg{background:var(--a-clay-bg);border-color:var(--a-clay);}
-  .income-entry-row.saldo-row.neg .lbl,.income-entry-row.saldo-row.neg .amt-cur{color:var(--a-clay-ink);}
-  .income-entry-row.saldo-row .add{background:none;border:none;color:inherit;
-    cursor:pointer;font-size:15px;font-weight:700;flex-shrink:0;padding:2px 5px;line-height:1;}
-  .income-entry-row.saldo-row .add:hover{opacity:0.7;}
 
   /* an income row swapped into edit mode */
   .income-entry-row.editing{display:block;padding:8px;border-color:var(--primary);}
@@ -654,7 +646,6 @@
   <div class="tab-panel active" id="panel-ingresos" role="tabpanel">
     <div class="card">
       <div class="section-title" id="incomeSectionTitle">Ingresos mensuales</div>
-      <div id="prevMonthSaldo"></div>
       <!-- una columna por persona del espacio, armada en renderIncomeLists() -->
       <div class="people-grid" id="incomeGrid"></div>
       <button type="button" class="btn-add" style="margin:18px 0 0;" onclick="openIncomeModal()">+ Agregar ingreso</button>
@@ -3753,18 +3744,6 @@ function incomeRowHtml(p, e){
   </div>`;
 }
 
-// previous month's leftover: what each person actually kept after their share
-// of that month's expenses — same formula as the Ahorro tab's savings history
-function prevMonthKey(key){
-  const [y,m] = key.split('-').map(Number);
-  const d = new Date(y, m-2, 1);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-}
-function prevMonthLeftover(person){
-  const prevKey = prevMonthKey(viewMonth);
-  return incomeTotalArs(person, prevKey) - monthTotalForPerson(prevKey, person);
-}
-
 function renderIncomeLists(){
   const title = $('incomeSectionTitle');
   if(title) title.textContent = `Ingresos de ${monthShort(viewMonth)}`;
@@ -3780,50 +3759,7 @@ function renderIncomeLists(){
     </div>`;
   }).join('');
 
-  renderPrevMonthSaldo();
   renderIncomePreview();
-}
-
-function renderPrevMonthSaldo(){
-  const box = $('prevMonthSaldo');
-  if(!box) return;
-  const prevKey = prevMonthKey(viewMonth);
-  // nothing to carry over before any expenses/income have ever been logged
-  if(!expenses.some(x=>monthKey(x.date) === prevKey) && !pids().some(p=>(income.entries[p]||[]).some(e=>monthKey(e.date) === prevKey))){
-    box.innerHTML = '';
-    return;
-  }
-  const cols = pids().map(p=>{
-    const left = prevMonthLeftover(p);
-    if(Math.abs(left) < 1) return '<div></div>';
-    // already carried over into this month? don't offer it twice
-    const alreadyUsed = (income.entries[p]||[]).some(e=>e.fromMonth === prevKey);
-    return `<div class="income-entry-row saldo-row ${left > 0 ? 'good' : 'neg'}">
-      <span class="ie-main"><span class="lbl">Saldo de ${monthShort(prevKey)}</span></span>
-      <span class="amt-cur">${fmt(left)}</span>
-      ${left > 0 && !alreadyUsed ? `<button type="button" class="add" onclick="usePrevMonthSaldo('${p}')" aria-label="Sumar como ingreso de este mes" title="Sumar como ingreso de este mes">+</button>` : ''}
-    </div>`;
-  });
-  // both columns empty means nothing worth showing this month
-  box.innerHTML = cols.every(c=>c==='<div></div>') ? '' : `<div class="row2" style="margin-bottom:10px;">${cols.join('')}</div>`;
-}
-
-function usePrevMonthSaldo(person){
-  const prevKey = prevMonthKey(viewMonth);
-  if((income.entries[person]||[]).some(e=>e.fromMonth === prevKey)) return;   // already added
-  const amount = Math.round(prevMonthLeftover(person));
-  if(amount <= 0) return;
-  income.entries[person].push({
-    id: genId(),
-    label: `Saldo de ${monthShort(prevKey)}`,
-    amount,
-    currency: 'ARS',
-    date: defaultDate(),
-    fromMonth: prevKey
-  });
-  saveIncome();
-  renderIncomeLists();
-  render();
 }
 
 function renderIncomePreview(){
@@ -4052,6 +3988,11 @@ const finSum = (fin, field) => pids().reduce((s,id)=>s + fin[id][field], 0);
 // El criterio sale del reparto que ya tiene cada gasto, no de un campo aparte:
 // si lo banca una sola persona es de ella, y si lo bancan varias es del hogar.
 function expenseOwner(ex){
+  // Si se cargó como Compartido, es del hogar y va a esa pestaña —  aunque el
+  // reparto le haya puesto 0% a alguien (p. ej. dividido según ingresos y esa
+  // persona todavía no cargó el suyo). Un gasto propio nunca lleva
+  // splitType 'income' ni paidBy 'shared', así que esto no lo toca.
+  if(isSharedPay(ex.paidBy) || ex.splitType === 'income') return 'shared';
   const bearers = pids().filter(id=>personShareOf(ex, id) > 0);
   return bearers.length === 1 ? bearers[0] : 'shared';
 }
@@ -4589,11 +4530,6 @@ function renderRule5030(person){
     row('Necesidades', needs, 50, true) +
     row('Deseos', wants, 30, true) +
     row('Ahorro', Math.max(0, saved), 20, false);
-}
-
-// this person's share of everything booked in a given month
-function monthTotalForPerson(key, person){
-  return expenses.filter(x=>monthKey(x.date) === key).reduce((s,x)=>s+personShareOf(x, person),0);
 }
 
 function renderAhorro(){
