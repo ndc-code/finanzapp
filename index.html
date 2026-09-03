@@ -2405,42 +2405,69 @@ async function loadAll(){
   renderVarEstimates();
   renderBudgetTemplates();
   render();
+
+  maybeAutoBackup();   // una copia por día, silenciosa (ver más abajo)
 }
 
-// last-ditch guard against a silent mass wipe: the UI only ever removes
-// expenses/income one at a time, so a single save that takes a non-empty set
-// straight to empty is never a real user action — it's a corrupted in-memory
-// state (a bad sync push that slipped through, a lost reference). Refuse it and
-// resync from the authoritative row instead of persisting the loss.
-async function bailOnMassWipe(colName, len, reload){
-  const prev = Array.isArray(coupleRow && coupleRow[colName]) ? coupleRow[colName].length : 0;
-  if(prev >= 2 && len === 0){
+// last-ditch guard against a silent mass wipe. The UI only ever removes items
+// one at a time, so a single save that takes a non-empty set straight to empty
+// is never a real user action — it's corrupted in-memory state (a bad sync push
+// that slipped through, a lost reference). Refuse it and resync from the
+// authoritative row instead of persisting the loss. Covers every data column,
+// not just the big ones, since "how it broke" is exactly what we can't predict.
+// The handful of flows that legitimately clear data in bulk (lowering the
+// people count, restoring a backup) set `allowBulkClear` around their saves.
+let allowBulkClear = false;
+function countItems(v){
+  if(Array.isArray(v)) return v.length;
+  if(v && typeof v === 'object') return Object.keys(v).reduce((s,k)=> s + (Array.isArray(v[k]) ? v[k].length : 0), 0);
+  return 0;
+}
+async function bailOnMassWipe(prevCount, nextCount, reload){
+  if(allowBulkClear) return false;
+  if(prevCount >= 2 && nextCount === 0){
     notyf.error('Se evitó un borrado masivo de datos. Resincronizando…');
-    try{ const row = await fetchCoupleRow(coupleCode); if(isWholeCoupleRow(row)){ coupleRow = row; applyCoupleRow(); reload(); } }catch(e){}
+    try{
+      const row = await fetchCoupleRow(coupleCode);
+      if(isWholeCoupleRow(row)){ coupleRow = row; applyCoupleRow(); reload(); }
+    }catch(e){}
     return true;
   }
   return false;
 }
+const prevCol = (col) => countItems(coupleRow && coupleRow[col]);
+
 async function saveExpenses(){
-  if(await bailOnMassWipe('expenses', expenses.length, ()=>{ render(); renderChips(); })) return false;
+  if(await bailOnMassWipe(prevCol('expenses'), expenses.length, ()=>{ render(); renderChips(); })) return false;
   return await store.set(STORE_KEY, JSON.stringify(expenses));
 }
 async function saveNames(){ await store.set(NAMES_KEY, JSON.stringify(people)); }
 async function saveIncome(){
-  const entryCount = pids().reduce((s,id)=>s + ((income.entries && income.entries[id]) ? income.entries[id].length : 0), 0);
-  const prevCount = (()=>{ const e = coupleRow && coupleRow.income && coupleRow.income.entries; return e ? Object.keys(e).reduce((s,k)=>s + (Array.isArray(e[k]) ? e[k].length : 0), 0) : 0; })();
-  if(prevCount >= 2 && entryCount === 0){
-    notyf.error('Se evitó un borrado masivo de ingresos. Resincronizando…');
-    try{ const row = await fetchCoupleRow(coupleCode); if(isWholeCoupleRow(row)){ coupleRow = row; applyCoupleRow(); render(); renderIncomeLists(); } }catch(e){}
-    return false;
-  }
-  await store.set(INCOME_KEY, JSON.stringify(income));
+  const prev = countItems(coupleRow && coupleRow.income && coupleRow.income.entries);
+  const now = countItems(income && income.entries);
+  if(await bailOnMassWipe(prev, now, ()=>{ render(); renderIncomeLists(); })) return false;
+  return await store.set(INCOME_KEY, JSON.stringify(income));
 }
-async function saveFixed(){ return await store.set(FIXED_KEY, JSON.stringify(fixed)); }
-async function saveVarEstimates(){ return await store.set(VAR_ESTIMATES_KEY, JSON.stringify(varEstimates)); }
-async function saveVarExpenses(){ return await store.set(VAR_EXPENSES_KEY, JSON.stringify(varExpenses)); }
-async function saveBudgetTemplates(){ return await store.set(BUDGET_TEMPLATES_KEY, JSON.stringify(budgetTemplates)); }
-async function saveGoals(){ return await store.set(GOALS_KEY, JSON.stringify(goals)); }
+async function saveFixed(){
+  if(await bailOnMassWipe(prevCol('fixed'), fixed.length, ()=>{ render(); renderFixed(); renderChips(); })) return false;
+  return await store.set(FIXED_KEY, JSON.stringify(fixed));
+}
+async function saveVarEstimates(){
+  if(await bailOnMassWipe(prevCol('variable_estimates'), countItems(varEstimates), ()=>{ render(); renderVarEstimates(); })) return false;
+  return await store.set(VAR_ESTIMATES_KEY, JSON.stringify(varEstimates));
+}
+async function saveVarExpenses(){
+  if(await bailOnMassWipe(prevCol('variable_expenses'), varExpenses.length, ()=>{ render(); })) return false;
+  return await store.set(VAR_EXPENSES_KEY, JSON.stringify(varExpenses));
+}
+async function saveBudgetTemplates(){
+  if(await bailOnMassWipe(prevCol('budget_overrides'), countItems(budgetTemplates), ()=>{ render(); renderBudgetTemplates(); })) return false;
+  return await store.set(BUDGET_TEMPLATES_KEY, JSON.stringify(budgetTemplates));
+}
+async function saveGoals(){
+  if(await bailOnMassWipe(prevCol('goals'), goals.length, ()=>{ render(); })) return false;
+  return await store.set(GOALS_KEY, JSON.stringify(goals));
+}
 
 // ================= Copias de seguridad =================
 // Cada copia es una fila en la tabla `couple_backups`, aparte de `couples` — así
@@ -2526,7 +2553,10 @@ async function applySnapshot(s){
    [FIXED_INCOME_KEY,'fixed_income'],[VAR_ESTIMATES_KEY,'variable_estimates'],
    [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals']]
     .forEach(([k,col])=>{ if(data[col] != null) writeLocalCache(coupleCode, k, JSON.stringify(data[col])); });
-  applyCoupleRow();
+  // el snapshot puede traer una columna legítimamente vacía; que el guardaespaldas
+  // no lo confunda con corrupción durante el refresco posterior
+  allowBulkClear = true;
+  try{ applyCoupleRow(); }finally{ allowBulkClear = false; }
   refreshPeopleUI();
   render();
   renderFixed(); renderChips(); renderFixedIncome(); renderIncomeChips(); renderIncomeLists();
@@ -2617,6 +2647,41 @@ async function renderBackups(){
   }).join('');
 }
 
+// Copia automática: una por día y por espacio, sin que el usuario haga nada.
+// Es la red que convierte cualquier bug futuro que no vimos en "un toque para
+// deshacer" en vez de "perdí todo". Silenciosa: si la tabla no existe o no hay
+// conexión, no molesta y reintenta mañana.
+const AUTO_BACKUP_LABEL = 'Copia automática';
+const AUTO_BACKUP_KEEP = 14;
+function autoBackupLSKey(code){ return `last_auto_backup_${code}`; }
+
+async function pruneAutoBackups(){
+  try{
+    const { data, error } = await sb.from(BACKUP_TABLE)
+      .select('id').eq('code', coupleCode).eq('label', AUTO_BACKUP_LABEL)
+      .order('created_at', { ascending: false });
+    if(error || !data || data.length <= AUTO_BACKUP_KEEP) return;
+    const stale = data.slice(AUTO_BACKUP_KEEP).map(r=>r.id);
+    await sb.from(BACKUP_TABLE).delete().in('id', stale);
+  }catch(e){ /* best-effort */ }
+}
+
+async function maybeAutoBackup(){
+  if(!coupleCode) return;
+  const today = new Date().toISOString().slice(0,10);
+  try{ if(localStorage.getItem(autoBackupLSKey(coupleCode)) === today) return; }catch(e){}
+  try{
+    // ¿ya hay alguna copia de hoy (de este u otro dispositivo)? entonces alcanza
+    const { data } = await sb.from(BACKUP_TABLE)
+      .select('id').eq('code', coupleCode).gte('created_at', today + 'T00:00:00Z').limit(1);
+    if(!data || !data.length){
+      await createBackup(AUTO_BACKUP_LABEL);
+      pruneAutoBackups();
+    }
+    try{ localStorage.setItem(autoBackupLSKey(coupleCode), today); }catch(e){}
+  }catch(e){ /* tabla ausente / offline: mañana se reintenta */ }
+}
+
 // "Guardar gastos fijos" button in Ajustes — fixed already autosaves on every
 // edit, this just forces an immediate write and confirms it with a toast
 async function commitFixed(){
@@ -2630,7 +2695,10 @@ async function commitVarEstimates(){
 }
 
 // ---- fixed incomes ----
-async function saveFixedIncome(){ return await store.set(FIXED_INCOME_KEY, JSON.stringify(fixedIncome)); }
+async function saveFixedIncome(){
+  if(await bailOnMassWipe(prevCol('fixed_income'), fixedIncome.length, ()=>{ render(); renderFixedIncome(); renderIncomeChips(); })) return false;
+  return await store.set(FIXED_INCOME_KEY, JSON.stringify(fixedIncome));
+}
 
 async function commitFixedIncome(){
   const ok = await saveFixedIncome();
@@ -3756,15 +3824,20 @@ function setPeopleCount(n){
     }
     setPeople(next);
   }
-  saveNames();
-  saveExpenses();
-  saveIncome();
-  saveFixed();          // dropPersonData reasigna el dueño de las plantillas
-  saveFixedIncome();
-  saveVarEstimates();
-  saveVarExpenses();
-  saveBudgetTemplates();
-  saveGoals();
+  // quitar una persona borra sus datos a propósito (ya se avisó con el confirm):
+  // el guardaespaldas anti-borrado-masivo no debe pelear contra esto
+  allowBulkClear = true;
+  try{
+    saveNames();
+    saveExpenses();
+    saveIncome();
+    saveFixed();          // dropPersonData reasigna el dueño de las plantillas
+    saveFixedIncome();
+    saveVarEstimates();
+    saveVarExpenses();
+    saveBudgetTemplates();
+    saveGoals();
+  }finally{ allowBulkClear = false; }
   refreshPeopleUI();
   renderFixed();
   renderChips();
