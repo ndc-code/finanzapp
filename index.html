@@ -390,6 +390,24 @@
 
   .chart-title{font-size:12px;color:var(--body-muted);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;}
 
+  /* ---- Copias de seguridad (Ajustes) ---- */
+  .backup-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  .backup-actions .btn-primary{width:auto;flex:0 0 auto;margin:0;}
+  .backup-actions .btn-ghost{background:transparent;color:var(--body-muted);border:1px solid var(--line-strong);}
+  .backup-actions .backup-upload{cursor:pointer;display:inline-flex;align-items:center;font-size:14px;
+    padding:10px 16px;border-radius:9999px;font-weight:600;}
+  .backup-actions .backup-upload input{display:none;}
+  .backup-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);}
+  .backup-row:last-child{border-bottom:none;}
+  .backup-row .b-main{flex:1;min-width:0;}
+  .backup-row .b-when{font-size:13.5px;font-weight:600;}
+  .backup-row .b-label{font-size:12px;color:var(--body-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .backup-row .b-restore{flex:0 0 auto;background:none;border:1px solid var(--line-strong);color:var(--body);
+    border-radius:9999px;padding:6px 14px;font-size:13px;cursor:pointer;}
+  .backup-row .b-restore:hover{border-color:var(--primary);color:var(--primary);}
+  .backup-row .b-del{flex:0 0 auto;background:none;border:none;color:var(--body-muted);cursor:pointer;font-size:14px;padding:4px;}
+  .backup-row .b-del:hover{color:var(--a-clay);}
+
   /* ---- Resumen: hero total + delta vs. last month ---- */
 
   /* ---- Resumen: ranked category bars ---- */
@@ -842,6 +860,20 @@
       <button type="button" class="btn-primary fixed-save-btn" onclick="commitBudgetTemplates()">Guardar gastos posibles</button>
     </div>
 
+    <div class="card">
+      <div class="section-title">Copias de seguridad</div>
+      <p class="income-note" style="margin-top:-4px;">Una copia guarda una foto completa de todo: gastos, ingresos, fijos, metas y ajustes. Si algún día se borra o se rompe algo, restaurás y vuelve tal cual estaba.</p>
+      <div class="backup-actions">
+        <button type="button" class="btn-primary" onclick="doCloseMonth()">Cerrar mes y respaldar</button>
+        <button type="button" class="btn-primary btn-ghost" onclick="doManualBackup()">Crear copia ahora</button>
+        <button type="button" class="btn-primary btn-ghost" onclick="downloadBackupFile()">Descargar copia (.json)</button>
+        <label class="btn-primary btn-ghost backup-upload">Restaurar desde archivo
+          <input type="file" accept="application/json,.json" id="backupFileInput" onchange="restoreFromFile(this)">
+        </label>
+      </div>
+      <p class="income-note" id="backupError" style="color:var(--a-clay-ink);display:none;"></p>
+      <div id="backupList" style="margin-top:14px;"></div>
+    </div>
     <div class="card">
       <div class="section-title">Datos guardados</div>
       <p class="income-note" id="storageInfo" style="margin-top:-4px;"></p>
@@ -1351,18 +1383,36 @@ function isEditingText(){
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
 }
 
+// a payload.new is trustworthy only if it looks like a whole row. Supabase
+// Realtime drops the record to `{}` (with an `errors` entry) when it exceeds
+// the channel's max payload size — a real risk once a space has months of
+// history — and reordered/partial pushes can miss columns too. Adopting one of
+// those blindly used to wipe `expenses`/`income` to empty (see applyCoupleRow).
+function isWholeCoupleRow(row){
+  return !!row && typeof row === 'object'
+    && !!row.code
+    && 'expenses' in row && 'income' in row && 'fixed' in row;
+}
+
 function subscribeCoupleRealtime(code){
   if(coupleRealtimeSub) sb.removeChannel(coupleRealtimeSub);
   coupleRealtimeSub = sb.channel('couple-' + code)
     .on('postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'couples', filter: `code=eq.${code}` },
-      (payload) => {
+      async (payload) => {
+        let fresh = payload.new;
+        // truncated or partial push: don't touch state from it — pull the
+        // authoritative full row instead (nothing was really deleted server-side)
+        if((payload.errors && payload.errors.length) || !isWholeCoupleRow(fresh)){
+          try{ fresh = await fetchCoupleRow(code); }catch(e){ return; }
+          if(!isWholeCoupleRow(fresh)) return;
+        }
         // realtime events for concurrent writes to different columns can arrive
         // out of order (two saves land close together, the network reorders the
-        // notifications) — a stale payload.new would otherwise clobber every
-        // column with an older snapshot than what's already applied locally
-        if(coupleRow && payload.new.updated_at && coupleRow.updated_at && payload.new.updated_at <= coupleRow.updated_at) return;
-        coupleRow = payload.new;
+        // notifications) — a stale row would otherwise clobber every column with
+        // an older snapshot than what's already applied locally
+        if(coupleRow && fresh.updated_at && coupleRow.updated_at && fresh.updated_at <= coupleRow.updated_at) return;
+        coupleRow = fresh;
         applyCoupleRow();
         if(isEditingText()) return;   // re-render once focus moves away instead
         render();
@@ -1372,16 +1422,17 @@ function subscribeCoupleRealtime(code){
 }
 
 // pushes the cached row into the in-memory state variables the rest of the
-// app reads, on every Realtime push from the other device. fixed/fixedIncome
-// are only overwritten once they're actually arrays — loadAll() is the one
-// place responsible for seeding them from null, and a stray UPDATE that
-// touches some other column can carry a not-yet-seeded null for these, which
-// would otherwise wipe out an already-rendered table.
+// app reads, on every Realtime push from the other device. EVERY column is
+// overwritten only when the row actually carries it — loadAll() is the one
+// place responsible for seeding from null. A stray UPDATE that touches some
+// other column (or a truncated Realtime payload) can arrive missing a column,
+// and treating that as "empty" here silently wiped whole months of data
+// (expenses/income especially). Missing column === "unchanged", never "empty".
 function applyCoupleRow(){
   if(!coupleRow) return;
-  expenses = Array.isArray(coupleRow.expenses) ? coupleRow.expenses : [];
+  if(Array.isArray(coupleRow.expenses)) expenses = coupleRow.expenses;
   if(coupleRow.names) setPeople(migratePeople(coupleRow.names));
-  income = migrateIncome(coupleRow.income);
+  if(coupleRow.income && typeof coupleRow.income === 'object') income = migrateIncome(coupleRow.income);
   if(Array.isArray(coupleRow.fixed)) fixed = coupleRow.fixed;
   if(Array.isArray(coupleRow.fixed_income)) fixedIncome = coupleRow.fixed_income;
   if(coupleRow.variable_estimates && Array.isArray(coupleRow.variable_estimates.A) && Array.isArray(coupleRow.variable_estimates.B)) varEstimates = coupleRow.variable_estimates;
@@ -2356,14 +2407,215 @@ async function loadAll(){
   render();
 }
 
-async function saveExpenses(){ await store.set(STORE_KEY, JSON.stringify(expenses)); }
+// last-ditch guard against a silent mass wipe: the UI only ever removes
+// expenses/income one at a time, so a single save that takes a non-empty set
+// straight to empty is never a real user action — it's a corrupted in-memory
+// state (a bad sync push that slipped through, a lost reference). Refuse it and
+// resync from the authoritative row instead of persisting the loss.
+async function bailOnMassWipe(colName, len, reload){
+  const prev = Array.isArray(coupleRow && coupleRow[colName]) ? coupleRow[colName].length : 0;
+  if(prev >= 2 && len === 0){
+    notyf.error('Se evitó un borrado masivo de datos. Resincronizando…');
+    try{ const row = await fetchCoupleRow(coupleCode); if(isWholeCoupleRow(row)){ coupleRow = row; applyCoupleRow(); reload(); } }catch(e){}
+    return true;
+  }
+  return false;
+}
+async function saveExpenses(){
+  if(await bailOnMassWipe('expenses', expenses.length, ()=>{ render(); renderChips(); })) return false;
+  return await store.set(STORE_KEY, JSON.stringify(expenses));
+}
 async function saveNames(){ await store.set(NAMES_KEY, JSON.stringify(people)); }
-async function saveIncome(){ await store.set(INCOME_KEY, JSON.stringify(income)); }
+async function saveIncome(){
+  const entryCount = pids().reduce((s,id)=>s + ((income.entries && income.entries[id]) ? income.entries[id].length : 0), 0);
+  const prevCount = (()=>{ const e = coupleRow && coupleRow.income && coupleRow.income.entries; return e ? Object.keys(e).reduce((s,k)=>s + (Array.isArray(e[k]) ? e[k].length : 0), 0) : 0; })();
+  if(prevCount >= 2 && entryCount === 0){
+    notyf.error('Se evitó un borrado masivo de ingresos. Resincronizando…');
+    try{ const row = await fetchCoupleRow(coupleCode); if(isWholeCoupleRow(row)){ coupleRow = row; applyCoupleRow(); render(); renderIncomeLists(); } }catch(e){}
+    return false;
+  }
+  await store.set(INCOME_KEY, JSON.stringify(income));
+}
 async function saveFixed(){ return await store.set(FIXED_KEY, JSON.stringify(fixed)); }
 async function saveVarEstimates(){ return await store.set(VAR_ESTIMATES_KEY, JSON.stringify(varEstimates)); }
 async function saveVarExpenses(){ return await store.set(VAR_EXPENSES_KEY, JSON.stringify(varExpenses)); }
 async function saveBudgetTemplates(){ return await store.set(BUDGET_TEMPLATES_KEY, JSON.stringify(budgetTemplates)); }
 async function saveGoals(){ return await store.set(GOALS_KEY, JSON.stringify(goals)); }
+
+// ================= Copias de seguridad =================
+// Cada copia es una fila en la tabla `couple_backups`, aparte de `couples` — así
+// no agranda la fila que viaja por Realtime (justamente lo que gatillaba el
+// borrado silencioso). Guarda el valor de cada columna de datos tal cual está.
+// Si la tabla todavía no existe en Supabase, los botones lo avisan y queda la
+// opción de bajar/subir un .json, que no depende de nada.
+const BACKUP_TABLE = 'couple_backups';
+let lastBackupRows = [];
+
+function currentSnapshot(){
+  return {
+    expenses, names: people, income, fixed, fixed_income: fixedIncome,
+    variable_estimates: varEstimates, variable_expenses: varExpenses,
+    budget_overrides: budgetTemplates, goals,
+    migration_flags: (coupleRow && coupleRow.migration_flags) || {}
+  };
+}
+
+function showBackupError(msg){
+  const el = $('backupError');
+  if(!el) return;
+  el.textContent = msg || '';
+  el.style.display = msg ? 'block' : 'none';
+}
+function backupErrText(e){
+  if(e && e.code === '42P01')
+    return 'La tabla "couple_backups" todavía no existe en Supabase. Quien administre el proyecto tiene que correr el SQL de docs/couple_backups.sql. Mientras tanto podés usar "Descargar copia (.json)".';
+  return 'No se pudo completar la operación de copia: ' + (e && e.message ? e.message : 'error desconocido');
+}
+
+async function createBackup(label){
+  const { data, error } = await sb.from(BACKUP_TABLE)
+    .insert({ code: coupleCode, label: label || null, snapshot: currentSnapshot() })
+    .select('id,created_at,label').single();
+  if(error) throw error;
+  return data;
+}
+async function listBackups(){
+  const { data, error } = await sb.from(BACKUP_TABLE)
+    .select('id,created_at,label').eq('code', coupleCode)
+    .order('created_at', { ascending: false });
+  if(error) throw error;
+  return data || [];
+}
+async function fetchBackupSnapshot(id){
+  const { data, error } = await sb.from(BACKUP_TABLE).select('snapshot').eq('id', id).single();
+  if(error) throw error;
+  return data && data.snapshot;
+}
+async function deleteBackup(id){
+  if(!confirm('¿Borrar esta copia de seguridad? Los datos actuales no se tocan.')) return;
+  try{
+    const { error } = await sb.from(BACKUP_TABLE).delete().eq('id', id).eq('code', coupleCode);
+    if(error) throw error;
+    notyf.success('Copia borrada');
+    renderBackups();
+  }catch(e){ showBackupError(backupErrText(e)); }
+}
+
+// aplica un snapshot (de la nube o de un archivo) en UNA escritura atómica a
+// `couples` — todo o nada, para que una restauración nunca deje los datos a
+// medias — y después refresca memoria, caché local y toda la UI.
+async function applySnapshot(s){
+  if(!s || typeof s !== 'object') throw new Error('La copia está vacía o dañada.');
+  const patch = {};
+  if(Array.isArray(s.expenses)) patch.expenses = s.expenses;
+  if(s.names) patch.names = s.names;
+  if(s.income && typeof s.income === 'object') patch.income = s.income;
+  if(Array.isArray(s.fixed)) patch.fixed = s.fixed;
+  if(Array.isArray(s.fixed_income)) patch.fixed_income = s.fixed_income;
+  if(s.variable_estimates && typeof s.variable_estimates === 'object') patch.variable_estimates = s.variable_estimates;
+  if(Array.isArray(s.variable_expenses)) patch.variable_expenses = s.variable_expenses;
+  if(s.budget_overrides && typeof s.budget_overrides === 'object') patch.budget_overrides = s.budget_overrides;
+  if(Array.isArray(s.goals)) patch.goals = s.goals;
+  if(s.migration_flags && typeof s.migration_flags === 'object') patch.migration_flags = s.migration_flags;
+  if(!Object.keys(patch).length) throw new Error('La copia no tiene datos reconocibles.');
+
+  const { data, error } = await sb.from('couples').update(patch).eq('code', coupleCode).select().single();
+  if(error) throw error;
+  coupleRow = data;
+  [[STORE_KEY,'expenses'],[NAMES_KEY,'names'],[INCOME_KEY,'income'],[FIXED_KEY,'fixed'],
+   [FIXED_INCOME_KEY,'fixed_income'],[VAR_ESTIMATES_KEY,'variable_estimates'],
+   [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals']]
+    .forEach(([k,col])=>{ if(data[col] != null) writeLocalCache(coupleCode, k, JSON.stringify(data[col])); });
+  applyCoupleRow();
+  refreshPeopleUI();
+  render();
+  renderFixed(); renderChips(); renderFixedIncome(); renderIncomeChips(); renderIncomeLists();
+  renderVarEstimates(); renderBudgetTemplates();
+}
+
+async function doManualBackup(){
+  showBackupError('');
+  try{ await createBackup('Copia manual'); notyf.success('Copia de seguridad creada'); renderBackups(); }
+  catch(e){ showBackupError(backupErrText(e)); }
+}
+async function doCloseMonth(){
+  showBackupError('');
+  try{ await createBackup('Cierre de ' + monthLabel(viewMonth || monthNow())); notyf.success('Mes cerrado y respaldado'); renderBackups(); }
+  catch(e){ showBackupError(backupErrText(e)); }
+}
+async function restoreFromCloud(id){
+  const row = lastBackupRows.find(r=>r.id === id);
+  const when = row ? new Date(row.created_at).toLocaleString('es-AR', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'seleccionada';
+  if(!confirm(`Restaurar la copia del ${when} reemplaza TODOS los datos actuales del espacio por los de esa copia, en todos los dispositivos.\n\nAntes se guarda automáticamente una copia del estado actual, así que se puede volver.\n\n¿Seguir?`)) return;
+  showBackupError('');
+  try{
+    try{ await createBackup('Antes de restaurar (' + when + ')'); }catch(e){ /* no bloquea */ }
+    await applySnapshot(await fetchBackupSnapshot(id));
+    notyf.success('Datos restaurados');
+    renderBackups();
+  }catch(e){ showBackupError(backupErrText(e)); }
+}
+
+function downloadBackupFile(){
+  const payload = { app:'finanzapp', format:1, code:coupleCode, created_at:new Date().toISOString(), snapshot: currentSnapshot() };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `finanzapp-${coupleCode}-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+function restoreFromFile(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    showBackupError('');
+    try{
+      const parsed = JSON.parse(reader.result);
+      const snap = parsed && parsed.snapshot ? parsed.snapshot : parsed;
+      if(!snap || typeof snap !== 'object') throw new Error('El archivo no parece una copia de FinanzApp.');
+      if(!confirm('Restaurar desde este archivo reemplaza TODOS los datos actuales del espacio, en todos los dispositivos.\n\nAntes se guarda una copia del estado actual.\n\n¿Seguir?')) return;
+      try{ await createBackup('Antes de restaurar (archivo)'); }catch(e){}
+      await applySnapshot(snap);
+      notyf.success('Datos restaurados desde el archivo');
+      renderBackups();
+    }catch(e){ showBackupError('No se pudo restaurar: ' + (e && e.message ? e.message : 'archivo inválido')); }
+  };
+  reader.onerror = () => showBackupError('No se pudo leer el archivo.');
+  reader.readAsText(file);
+}
+
+async function renderBackups(){
+  const box = $('backupList');
+  if(!box) return;
+  box.innerHTML = '<p class="income-note" style="padding:8px 0;">Cargando copias…</p>';
+  try{
+    lastBackupRows = await listBackups();
+  }catch(e){
+    box.innerHTML = '';
+    showBackupError(backupErrText(e));
+    return;
+  }
+  showBackupError('');
+  if(!lastBackupRows.length){
+    box.innerHTML = '<p class="income-note" style="padding:8px 0;">Todavía no hay copias. Creá la primera con los botones de arriba.</p>';
+    return;
+  }
+  box.innerHTML = lastBackupRows.map(r=>{
+    const when = new Date(r.created_at).toLocaleString('es-AR', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    return `<div class="backup-row">
+      <div class="b-main">
+        <div class="b-when">${escapeHtml(when)}</div>
+        <div class="b-label">${r.label ? escapeHtml(r.label) : 'Copia'}</div>
+      </div>
+      <button type="button" class="b-restore" onclick="restoreFromCloud('${r.id}')">Restaurar</button>
+      <button type="button" class="b-del" onclick="deleteBackup('${r.id}')" aria-label="Borrar copia" title="Borrar copia">🗑</button>
+    </div>`;
+  }).join('');
+}
 
 // "Guardar gastos fijos" button in Ajustes — fixed already autosaves on every
 // edit, this just forces an immediate write and confirms it with a toast
@@ -3017,6 +3269,7 @@ function switchTab(name){
     p.classList.toggle('active', p.id === 'panel-' + name);
   });
   window.scrollTo({top:0});
+  if(name === 'ajustes') renderBackups();
 }
 $('tabs').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
