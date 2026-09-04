@@ -128,18 +128,14 @@
     #ahorroStrip .totals-cell:last-child{border-bottom:none;}
   }
 
-  /* ---- savings history bars ---- */
+  /* ---- ahorro en dólares: lista editable ---- */
   .sv-row{display:flex;align-items:center;gap:10px;padding:7px 0;}
   .sv-m{flex:0 0 96px;font-size:12.5px;color:var(--body-muted);}
-  .sv-bar{flex:1;height:8px;background:var(--paper);border-radius:9999px;overflow:hidden;min-width:30px;}
-  .sv-bar i{display:block;height:100%;border-radius:9999px;background:var(--good);}
-  .sv-bar i.neg{background:var(--a-clay);}
-  .sv-v{flex:0 0 104px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;}
-  .sv-v.neg{color:var(--a-clay);}
+  .sv-v{margin-left:auto;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;}
   .sv-total{display:flex;justify-content:space-between;align-items:baseline;
     border-top:1px solid var(--line-strong);margin-top:8px;padding-top:10px;font-size:15px;font-weight:600;}
   .sv-total .v{font-variant-numeric:tabular-nums;}
-  @media(max-width:480px){.sv-m{flex:0 0 68px;font-size:11.5px;}.sv-v{flex:0 0 86px;font-size:12px;}}
+  @media(max-width:480px){.sv-m{flex:0 0 68px;font-size:11.5px;}.sv-v{font-size:12px;}}
 
   /* ---- 50/30/20 rule ---- */
   .rule-row{padding:12px 0;border-bottom:1px solid var(--line);}
@@ -238,6 +234,11 @@
      repeat the card's own background or they read as a card inside a card */
   .card .avail-col{background:var(--pearl);}
 
+  /* subtítulo interno de una card (ej: "Compra dólares" / "Salidas y gustos"
+     dentro de Gastos posibles) — más chico que .section-title, que es para
+     el título de la card entera */
+  .budget-subhead{font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--body-muted);
+    font-weight:600;margin:18px 0 4px;}
   /* ---- "Saldos" footer, closing every big block on Gastos ---- */
   .sld-block{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);}
   /* when Saldos is the card's only content there's nothing above it to divide from */
@@ -307,6 +308,24 @@
       -webkit-overflow-scrolling:touch;}
   }
 
+  /* ---- confirmar eliminación: reemplaza al candado, un solo modal para
+     cualquier borrado (gasto, plantilla, rubro) ---- */
+  .modal-confirm{max-width:380px;}
+  .confirm-text{font-size:14.5px;color:var(--body-muted);line-height:1.5;margin:4px 0 22px;}
+  .confirm-actions{display:flex;gap:10px;justify-content:flex-end;}
+  .confirm-actions button{border-radius:9999px;padding:10px 20px;font-size:14.5px;font-weight:600;
+    cursor:pointer;font-family:inherit;border:none;transition:background-color .15s ease,color .15s ease;}
+  .confirm-actions .btn-cancel{background:none;color:var(--body-muted);border:1px solid var(--line-strong);}
+  .confirm-actions .btn-cancel:hover{background:var(--pearl);color:var(--ink);}
+  .confirm-actions .btn-danger{background:var(--a-clay);color:#fff;}
+  .confirm-actions .btn-danger:hover{background:var(--a-clay-ink);}
+  /* para confirmaciones que no borran nada (ej: copiar mes anterior) — mismo
+     azul que el resto de las acciones primarias, no el rojo de "Eliminar" */
+  .confirm-actions .btn-confirm{background:var(--primary);color:#fff;}
+  .confirm-actions .btn-confirm:hover{background:var(--primary-active);}
+  @media(max-width:540px){.confirm-actions{flex-direction:column-reverse;}
+    .confirm-actions button{width:100%;text-align:center;}}
+
   /* ---- quick-pick chips under Descripción: una sola fila que se desliza,
      con un desvanecido a la derecha que insinúa que hay más para scrollear.
      Apenas arranca el scroll (.chips-scrolled, ver JS) se suma el desvanecido
@@ -357,6 +376,9 @@
   .fixed-row .f-label{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .fixed-row input.f-amt{flex:0 0 130px;width:130px;text-align:right;font-variant-numeric:tabular-nums;padding:8px 10px;}
   .fixed-row input.f-label-edit{flex:1;min-width:0;padding:8px 10px;}
+  /* "veces por mes" (ej: limpieza ×3): badge en la vista, input chico al editar */
+  .f-times-badge{font-size:11px;color:var(--body-muted);margin-left:6px;font-weight:600;}
+  .fixed-row input.f-times{flex:0 0 52px;width:52px;text-align:center;padding:8px 4px;font-variant-numeric:tabular-nums;}
   /* fixed-width action area so rows stay aligned in every state */
   .fixed-actions{flex:0 0 84px;display:flex;gap:4px;justify-content:flex-end;align-items:center;}
   .fixed-actions button{background:none;border:none;color:var(--body-muted);cursor:pointer;
@@ -364,11 +386,6 @@
   .fixed-actions .edit:hover,.fixed-actions .ok:hover{color:var(--primary);}
   .fixed-actions .ok{color:var(--primary);font-weight:600;}
   .fixed-actions .del:hover{color:var(--a-clay);}
-  .fixed-actions .lock{font-size:12px;filter:grayscale(1);opacity:0.55;}
-  .fixed-actions .lock:hover{filter:none;opacity:1;}
-  /* locked: the delete stays in place but is inert, so nothing shifts */
-  .fixed-actions .del:disabled{opacity:0.2;cursor:not-allowed;}
-  .fixed-actions .del:disabled:hover{color:var(--body-muted);}
   .fixed-add{display:flex;gap:8px;margin-top:14px;}
   .fixed-save-btn{display:block;margin-left:auto;margin-top:20px !important;width:auto;}
   @media(max-width:540px){.fixed-save-btn{width:100%;}}
@@ -391,12 +408,20 @@
   .chart-title{font-size:12px;color:var(--body-muted);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;}
 
   /* ---- Copias de seguridad (Ajustes) ---- */
-  .backup-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
-  .backup-actions .btn-primary{width:auto;flex:0 0 auto;margin:0;}
+  /* desktop: las 4 entran en una fila, achicadas y sin cortar palabra; mobile:
+     cada una ocupa todo el ancho, apiladas, con el tamaño cómodo de siempre */
+  .backup-actions{display:flex;flex-wrap:nowrap;gap:8px;margin-top:12px;}
+  .backup-actions .btn-primary{width:auto;flex:1 1 0;min-width:0;margin:0;padding:9px 10px;
+    font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;}
   .backup-actions .btn-ghost{background:transparent;color:var(--body-muted);border:1px solid var(--line-strong);}
-  .backup-actions .backup-upload{cursor:pointer;display:inline-flex;align-items:center;font-size:14px;
-    padding:10px 16px;border-radius:9999px;font-weight:600;}
+  .backup-actions .backup-upload{cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+    border-radius:9999px;font-weight:600;}
   .backup-actions .backup-upload input{display:none;}
+  @media(max-width:540px){
+    .backup-actions{flex-wrap:wrap;}
+    .backup-actions .btn-primary{flex:1 1 100%;width:100%;white-space:normal;overflow:visible;
+      text-overflow:clip;padding:12px 22px;font-size:15px;}
+  }
   .backup-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);}
   .backup-row:last-child{border-bottom:none;}
   .backup-row .b-main{flex:1;min-width:0;}
@@ -405,7 +430,8 @@
   .backup-row .b-restore{flex:0 0 auto;background:none;border:1px solid var(--line-strong);color:var(--body);
     border-radius:9999px;padding:6px 14px;font-size:13px;cursor:pointer;}
   .backup-row .b-restore:hover{border-color:var(--primary);color:var(--primary);}
-  .backup-row .b-del{flex:0 0 auto;background:none;border:none;color:var(--body-muted);cursor:pointer;font-size:14px;padding:4px;}
+  .backup-row .b-del{flex:0 0 auto;background:none;border:none;color:var(--body-muted);cursor:pointer;padding:4px;
+    display:inline-flex;align-items:center;justify-content:center;}
   .backup-row .b-del:hover{color:var(--a-clay);}
 
   /* ---- Resumen: hero total + delta vs. last month ---- */
@@ -501,6 +527,16 @@
   .bill-main{flex:1;min-width:0;}
   .bill-name{font-size:15px;font-weight:600;letter-spacing:-0.224px;}
   .bill-meta{font-size:12px;color:var(--body-muted);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  /* "Según ingresos" (la misma etiqueta que en el modal) en vez del detalle
+     "N $X / V $Y" completo, que ocupaba toda la línea — el detalle por
+     persona solo aparece al pasar el mouse (o con foco por teclado), sin
+     click ni subrayado que lo hagan parecer un botón */
+  .bill-info-wrap{position:relative;display:inline-flex;align-items:center;cursor:help;outline:none;}
+  .bill-info-btn{color:var(--body-muted);font-size:12px;line-height:1;}
+  .bill-info-pop{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+    background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 9px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:20;font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;}
+  .bill-info-wrap:hover .bill-info-pop,.bill-info-wrap:focus-visible .bill-info-pop{display:block;}
   .tag{font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;}
   /* un color por persona, en el orden en que están cargadas en Ajustes */
   .tag-p0{background:var(--a-gold-bg);color:var(--a-gold-ink);}
@@ -519,14 +555,39 @@
   .bill-paid{display:flex;align-items:center;flex-shrink:0;margin-bottom:0px;}
   .bill-paid input{width:13px;height:13px;accent-color:var(--good);cursor:pointer;}
   .bill-edit,.bill-del{background:none;border:none;color:var(--body-muted);cursor:pointer;font-size:16px;padding:2px 4px;flex-shrink:0;border-radius:6px;transition:color .15s ease, transform .1s ease;}
+  /* ✎ y ✕ van juntos, como un solo grupo de acciones — el resto de la fila
+     usa el gap normal del contenedor, esto sólo acerca estos dos entre sí */
+  .bill-del{margin-left:-8px;}
   .bill-edit:hover{color:var(--primary);}
   .bill-del:hover{color:var(--a-clay);}
   .bill-edit:active,.bill-del:active{transform:scale(0.9);}
-  /* protegido por el candado de Ajustes: se ve, no se toca */
-  .bill-del:disabled{opacity:.3;cursor:not-allowed;}
-  .bill-del:disabled:hover{color:var(--body-muted);}
-  .bill-del:disabled:active{transform:none;}
   .empty{color:var(--body-muted);font-size:14px;padding:14px 0;text-align:center;line-height:1.5;}
+
+  /* cierre "Pagado" / "A pagar" debajo de Totales: mismo bloque .bill, más chico.
+     Desplegable cuando tiene items: mismo patrón de flecha + acordeón que un
+     gasto con "veces por mes" (ver .bill-clickable / .bill-occurrences abajo) */
+  .bill-subtotal{padding:10px 16px;margin-bottom:4px;}
+  .bill-subtotal .bill-name{font-weight:500;color:var(--body-muted);font-size:13.5px;}
+  .bill-subtotal .bill-amt{font-weight:600;color:var(--body-muted);font-size:13.5px;}
+  .bill-subtotal.is-paid .bill-amt{color:var(--good);}
+  .bill-subtotal-item{padding:8px 14px;}
+
+  /* gasto con "veces por mes" (ej: limpieza ×3): tarjeta padre + acordeón de
+     ocurrencias. La flecha vive junto al nombre (.bill-name-row) y toda la
+     tarjeta abre/cierra al tocarla. Todo lo que cuelga de una tarjeta padre
+     (ocurrencias, o el detalle de Pagado/A pagar) vive dentro de
+     .bill-occurrences: título y monto más chicos y en gris marcan que es un
+     nivel más abajo en la jerarquía, sin repetir la regla en cada caso. */
+  .bill-clickable{cursor:pointer;}
+  .bill-occ-badge{font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;background:var(--paper);color:var(--body-muted);white-space:nowrap;}
+  .bill-toggle{background:none;border:none;color:var(--body-muted);cursor:pointer;font-size:13px;padding:2px;flex-shrink:0;border-radius:6px;transition:transform .15s ease, color .15s ease;}
+  .bill-toggle:hover{color:var(--primary);}
+  .bill-toggle.open{transform:rotate(90deg);}
+  .bill-occurrences{margin:-4px 0 8px;padding-left:16px;border-left:2px solid var(--line);}
+  .bill-occurrences .bill-name{font-size:12.5px;font-weight:500;color:var(--body-muted);}
+  .bill-subtotal-date{font-weight:400;}
+  .bill-occurrences .bill-amt{font-size:12.5px;font-weight:600;color:var(--body-muted);}
+  .bill-occurrences .bill{margin-bottom:6px;padding:8px 12px;}
 
   .settings-row{display:flex;gap:10px;}
   .settings-row > div{flex:1;}
@@ -638,6 +699,15 @@
           <div id="usdDropdownBody" class="usd-dropdown-body">Cargando…</div>
         </div>
       </div>
+      <!-- solo se ve cuando el mes en pantalla está vacío y el anterior tiene
+           algo para copiar — ver updateCopyMonthBtn() -->
+      <button type="button" class="icon-btn" id="copyMonthBtn" onclick="copyPreviousMonth()"
+        aria-label="Copiar mes anterior" title="Copiar los gastos e ingresos del mes anterior" style="display:none;">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      </button>
       <button type="button" class="icon-btn" id="settingsBtn" onclick="switchTab('ajustes')" aria-label="Ajustes">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -710,16 +780,32 @@
       </div>
     </div>
 
-    <!-- BLOQUE 3: presupuesto discrecional -->
+    <!-- BLOQUE 3: presupuesto discrecional. Compra dólares va primero — es el
+         ahorro, tiene prioridad — con lo disponible apenas se pagan fijos y
+         variables; Salidas/Gustos van después, con lo que queda una vez
+         apartado el ahorro. -->
     <div class="card">
       <div class="section-title"><span id="budgetBlockTitle">Gastos posibles</span></div>
       <button type="button" class="btn-add" id="budgetSuggestBtn" onclick="sugerirMontosBudget(currentBudgetTab)">Sugerir montos</button>
       <p class="income-note" id="budgetIdealHint" style="margin-top:8px;"></p>
       <div class="seg sub-seg" id="budgetTabs" style="margin-top:16px;"></div>
-      <div id="budgetList" style="margin-top:14px;"></div>
-      <div class="sld-block">
-        <div class="sld-title">Saldos</div>
-        <div class="sld-grid" id="budgetSaldos"></div>
+
+      <!-- un solo contenedor para los dos listeners de edición de monto
+           (#budgetAllLists) — Compra dólares y Salidas/Gustos son listas
+           separadas para mostrarse, pero comparten el mismo edit-in-place -->
+      <div id="budgetAllLists">
+        <div class="budget-subhead">Compra dólares</div>
+        <div id="dolaresList"></div>
+        <div class="sld-block">
+          <div class="sld-title">Saldos</div>
+          <!-- una sola persona a la vez (la de la sub-pestaña abierta), no
+               todas como en fijos/variables — Gastos posibles no tiene
+               "Compartidos" -->
+          <div class="sld-grid" id="dolaresSaldos" style="--cols:1;--cols-sm:1;"></div>
+        </div>
+
+        <div class="budget-subhead" style="margin-top:22px;">Salidas y gustos</div>
+        <div id="budgetList"></div>
       </div>
     </div>
 
@@ -744,8 +830,11 @@
     </div>
 
     <div class="card">
-      <div class="section-title">Mes a mes</div>
+      <div class="section-title">Ahorro en dólares
+        <button type="button" class="bill-cur-toggle" id="svCurToggle" onclick="toggleSavingsCur()">⇄</button>
+      </div>
       <div id="savingsHistory"></div>
+      <button type="button" class="btn-add" style="margin-top:16px;" onclick="openSavingsModal()">+ Agregar ahorro</button>
     </div>
 
     <div class="card">
@@ -1026,6 +1115,10 @@
           <input type="date" id="fDate">
         </div>
       </div>
+      <div>
+        <label for="fTimes">¿Cuántas veces se repite este mes?</label>
+        <input type="text" inputmode="numeric" id="fTimes" placeholder="1" title="Ej: 3 si viene 3 veces en el mes">
+      </div>
       <!-- estos dos solo importan cuando el gasto es Compartido -->
       <div id="payerField" style="display:none;">
         <label>¿Quién lo paga?</label>
@@ -1136,6 +1229,60 @@
   </div>
 </div>
 
+<!-- ============ MODAL: agregar/editar ahorro en dólares ============ -->
+<div class="modal-backdrop" id="savingsModal" role="dialog" aria-modal="true" aria-labelledby="savingsModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="savingsModalTitle">Agregar ahorro</div>
+      <button type="button" class="modal-close" onclick="closeSavingsModal()" aria-label="Cerrar">✕</button>
+    </div>
+    <form class="add-form" id="savingsForm">
+      <div class="row2">
+        <div>
+          <label for="svAmount">Monto</label>
+          <input type="text" inputmode="numeric" class="ie-money" id="svAmount" placeholder="0" required>
+        </div>
+        <div>
+          <label>Moneda</label>
+          <div class="seg" id="svCurSeg">
+            <button type="button" data-cur="ARS" class="active">ARS</button>
+            <button type="button" data-cur="USD">USD</button>
+          </div>
+        </div>
+      </div>
+      <!-- solo si se carga en pesos: a qué tipo de cambio se compraron, para
+           que el valor en dólares quede fijo con la cotización de ese día y
+           no con la de hoy cada vez que se mira -->
+      <div id="svFxWrap">
+        <label for="svFx">Tipo de cambio</label>
+        <input type="text" inputmode="numeric" class="ie-money" id="svFx" placeholder="Dólar a">
+      </div>
+      <div>
+        <label for="svDate">Fecha</label>
+        <input type="date" id="svDate">
+      </div>
+      <button type="submit" class="btn-primary" id="svSubmitBtn">Agregar</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: confirmar eliminación ============ -->
+<!-- genérico: openConfirmModal(mensaje, accion) lo arma para cualquier borrado
+     (gasto, plantilla de Ajustes, rubro) en vez de un candado por objeto -->
+<div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+  <div class="modal modal-confirm">
+    <div class="modal-head">
+      <div class="modal-title" id="confirmModalTitle">Eliminar</div>
+      <button type="button" class="modal-close" onclick="closeConfirmModal()" aria-label="Cerrar">✕</button>
+    </div>
+    <p class="confirm-text" id="confirmModalText"></p>
+    <div class="confirm-actions">
+      <button type="button" class="btn-cancel" onclick="closeConfirmModal()">Cancelar</button>
+      <button type="button" class="btn-danger" id="confirmModalOk">Eliminar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const STORE_KEY = 'expenses_v1';
 const NAMES_KEY = 'names_v1';
@@ -1150,6 +1297,7 @@ const VAR_EXPENSES_KEY = 'varexpenses_v1';
 // había escrito y no hace falta una columna nueva.
 const BUDGET_TEMPLATES_KEY = 'budgetoverrides_v1';
 const GOALS_KEY = 'goals_v1';
+const SAVINGS_KEY = 'savings_v1';
 
 let expenses = [];
 // ---- quiénes viven en este espacio ----
@@ -1212,6 +1360,18 @@ let budgetTemplates = {};
 // fund: {id, person, name, kind:'total'|'mensual', amount, currency, deadline, saved}
 let goals = [];
 let editingGoalId = null;
+// ahorro en dólares por persona: {A:{items:[...], autoMonths:[...]}, ...}.
+// `items` son las filas que se ven en Ahorro — cargadas a mano o generadas
+// solas por ensureAutoDolaresRows() a partir del rubro Compra dólares —
+// {id, date, currency, amount(USD), pesos?, fx?, auto?}. `autoMonths` es la
+// lista de meses para los que YA se generó (o se intentó generar) una fila
+// automática, exista todavía o no — así, si el usuario la borra porque no
+// era la real, ensureAutoDolaresRows() no la vuelve a crear en el próximo render
+let savings = { A: { items: [], autoMonths: [] }, B: { items: [], autoMonths: [] } };
+let editingSavingsId = null;
+// misma idea que budgetDolaresCur: un switch para ver la lista entera en
+// pesos o en dólares en vez de las dos columnas apiladas — arranca en USD
+let savingsCur = 'USD';
 let currentGoalPerson = 'A';
 let currentGoalKind = 'total';
 let currentGoalCurrency = 'ARS';
@@ -1226,15 +1386,13 @@ let storageMode = 'ninguno';
 const FIXED_SEED = ['Alquiler','Edenor','Aysa','Metrogas','Wifi','Supermercado','Limpieza','Jardinería','Mantenimiento','Deuda'];
 // currency defaults to ARS — set it per row in Ajustes if one of these is in USD
 const FIXED_INCOME_SEED = [
-  { person:'A', label:'Howdy',       amount:0, currency:'ARS', locked:true },
-  { person:'B', label:'Estudio Arq', amount:0, currency:'ARS', locked:true }
+  { person:'A', label:'Howdy',       amount:0, currency:'ARS' },
+  { person:'B', label:'Estudio Arq', amount:0, currency:'ARS' }
 ];
-// one-time: lock the seeded rows on tables created before the padlock existed
-const FIXED_INCOME_LOCK_KEY = 'fixedincome_m1';
 
 // one-time list update for tables that were already seeded with the old set
 const FIXED_MIGRATION_KEY = 'fixed_m1';
-// one-time: Alquiler back at the top and the standard rows protected from deletion
+// one-time: Alquiler back at the top, for tables seeded before that order existed
 const FIXED_LOCK_KEY = 'fixed_m2';
 // one-time: add Deuda to tables seeded before it existed
 const FIXED_DEUDA_KEY = 'fixed_m3';
@@ -1289,7 +1447,8 @@ const COLUMN_FOR_KEY = {
   varestimates_v1: 'variable_estimates',
   varexpenses_v1: 'variable_expenses',
   budgetoverrides_v1: 'budget_overrides',
-  goals_v1: 'goals'
+  goals_v1: 'goals',
+  savings_v1: 'savings'
 };
 const MIGRATION_FLAG_KEYS = new Set(['fixed_m1','fixed_m2','fixed_m3','fixedincome_m1','budget_cats_m1','budget_cats_m3']);
 
@@ -1439,6 +1598,7 @@ function applyCoupleRow(){
   if(Array.isArray(coupleRow.variable_expenses)) varExpenses = coupleRow.variable_expenses;
   if(coupleRow.budget_overrides && typeof coupleRow.budget_overrides === 'object') budgetTemplates = migrateBudgetTemplates(coupleRow.budget_overrides);
   if(Array.isArray(coupleRow.goals)) goals = coupleRow.goals;
+  if(coupleRow.savings && typeof coupleRow.savings === 'object') savings = migrateSavings(coupleRow.savings);
   ensureSharedSlots();
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
@@ -1491,6 +1651,8 @@ function paintFromLocalCache(code){
     if(bt) budgetTemplates = migrateBudgetTemplates(JSON.parse(bt));
     const g = readLocalCache(code, GOALS_KEY);
     if(g) goals = JSON.parse(g);
+    const sv = readLocalCache(code, SAVINGS_KEY);
+    if(sv) savings = migrateSavings(JSON.parse(sv));
     if(normalizeExpenses()){ /* fixed up in-memory; loadAll()'s real save will persist it */ }
     normalizeVarExpenses();
     render();
@@ -1612,16 +1774,18 @@ const store = {
           break;
         }catch(e){
           lastError = e;
-          // 42703 = the column doesn't exist in this project's `couples` table
-          // (a new key shipped before the ALTER TABLE was run). Retrying can
-          // never fix that, and the local cache already has the value.
-          if(e && e.code === '42703') break;
+          // la columna no existe todavía en `couples` (un key nuevo se desplegó
+          // antes de correr el ALTER TABLE). Postgres devolvería 42703, pero
+          // PostgREST lo envuelve como PGRST204 ("column not found in schema
+          // cache") — es el código que realmente llega acá. Reintentar nunca
+          // lo arregla, y el valor ya quedó en la caché local.
+          if(e && (e.code === '42703' || e.code === 'PGRST204')) break;
         }
       }
       if(lastError){
         storageMode = 'error';
         markPendingWrite(coupleCode, key, value);
-        notyf.error(lastError.code === '42703'
+        notyf.error((lastError.code === '42703' || lastError.code === 'PGRST204')
           ? `Falta la columna "${COLUMN_FOR_KEY[key]}" en la tabla couples de Supabase. Tu cambio quedó en este dispositivo y se sincroniza solo cuando la agregues.`
           : 'No se pudo guardar ahora — se reintentará solo apenas vuelva la conexión. Tu cambio no se pierde.');
         return false;
@@ -1739,20 +1903,26 @@ async function renameCoupleCode(){
     errorEl.textContent = `La contraseña tiene que tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
     return;
   }
-  btn.disabled = true;
-  try{
-    const password_hash = await hashPassword(newPassword);
-    const { data, error } = await sb.from('couples').update({ password_hash }).eq('code', coupleCode).select().single();
-    if(error) throw error;
-    coupleRow = data;
-    input.value = '';
-    describeStorage();
-    notyf.success('Contraseña actualizada.');
-  }catch(e){
-    errorEl.textContent = 'No se pudo cambiar la contraseña. Revisá tu conexión e intentá de nuevo.';
-  }finally{
-    btn.disabled = false;
-  }
+  openConfirmModal(
+    'Vas a cambiar la contraseña del espacio. Todos los que usen este espacio van a necesitar la contraseña nueva para entrar.',
+    async ()=>{
+      btn.disabled = true;
+      try{
+        const password_hash = await hashPassword(newPassword);
+        const { data, error } = await sb.from('couples').update({ password_hash }).eq('code', coupleCode).select().single();
+        if(error) throw error;
+        coupleRow = data;
+        input.value = '';
+        describeStorage();
+        notyf.success('Contraseña actualizada.');
+      }catch(e){
+        errorEl.textContent = 'No se pudo cambiar la contraseña. Revisá tu conexión e intentá de nuevo.';
+      }finally{
+        btn.disabled = false;
+      }
+    },
+    { title:'Cambiar contraseña', okLabel:'Cambiar' }
+  );
 }
 
 async function initCouple(){
@@ -1970,6 +2140,10 @@ function todayStr(){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function monthNow(){ return todayStr().slice(0,7); }
+// 'YYYY-MM-DD' -> '04-sept', para mostrar fechas cortas en las tarjetas de gastos
+function shortDate(d){
+  return d ? new Date(d+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'}) : '';
+}
 function monthKey(dateStr){ return dateStr ? dateStr.slice(0,7) : ''; }
 function monthLabel(key){
   const [y,m] = key.split('-');
@@ -1988,6 +2162,78 @@ function shiftMonth(n){
   viewMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   render();
 }
+// 'YYYY-MM' desplazado n meses (n puede ser negativo) — misma cuenta que shiftMonth
+function monthKeyShift(key, n){
+  const [y,m] = key.split('-').map(Number);
+  const d = new Date(y, m-1+n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+// una fecha completa, un mes después — para "Copiar mes anterior": el 31 de
+// un mes de 31 días cae en el último día del mes siguiente si ese no llega a 31
+function addOneMonth(dateStr){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const target = new Date(y, m, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth()+1, 0).getDate();
+  const day = Math.min(d, lastDay);
+  return `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+// ---- "Copiar mes anterior": para cuando el mes en pantalla arranca de cero
+// y va a ser igual al anterior — trae gastos fijos, variables e ingresos de
+// un mes atrás, con la fecha corrida un mes y el pagado reseteado (todavía no
+// se pagó nada de eso este mes nuevo). Las plantillas (Ajustes) no entran acá
+// porque ya se mantienen solas mes a mes, no son "de" ningún mes puntual.
+function monthHasAnyData(key){
+  if(expenses.some(x=>monthKey(x.date) === key)) return true;
+  if(varExpenses.some(x=>monthKey(x.date) === key)) return true;
+  return pids().some(p=>(income.entries[p]||[]).some(e=>monthKey(e.date) === key));
+}
+function updateCopyMonthBtn(){
+  const btn = $('copyMonthBtn');
+  if(!btn) return;
+  const prevKey = monthKeyShift(viewMonth, -1);
+  const show = !monthHasAnyData(viewMonth) && monthHasAnyData(prevKey);
+  btn.style.display = show ? '' : 'none';
+}
+function copyPreviousMonth(){
+  const prevKey = monthKeyShift(viewMonth, -1);
+  openConfirmModal(
+    `¿Copiar los gastos e ingresos de ${monthLabel(prevKey)} a ${monthLabel(viewMonth)}? Se copian los montos, fechas (corridas un mes) y repartos — el pagado arranca sin tildar, porque todavía no se pagó nada este mes.`,
+    ()=>{
+      expenses.filter(x=>monthKey(x.date) === prevKey).forEach(ex=>{
+        const copy = JSON.parse(JSON.stringify(ex));
+        copy.id = genId();
+        copy.date = addOneMonth(ex.date);
+        copy.paid = false;
+        if(Array.isArray(copy.occurrencesPaid)) copy.occurrencesPaid = copy.occurrencesPaid.map(()=>false);
+        expenses.push(copy);
+      });
+      varExpenses.filter(x=>monthKey(x.date) === prevKey).forEach(ex=>{
+        const copy = JSON.parse(JSON.stringify(ex));
+        copy.id = genId();
+        copy.date = addOneMonth(ex.date);
+        copy.paid = false;
+        varExpenses.push(copy);
+      });
+      pids().forEach(p=>{
+        (income.entries[p]||[]).filter(e=>monthKey(e.date) === prevKey).forEach(e=>{
+          const copy = JSON.parse(JSON.stringify(e));
+          copy.id = genId();
+          copy.date = addOneMonth(e.date);
+          income.entries[p].push(copy);
+        });
+      });
+
+      saveExpenses();
+      saveVarExpenses();
+      saveIncome();
+      render();
+      notyf.success(`Se copió ${monthLabel(prevKey)} a ${monthLabel(viewMonth)}`);
+    },
+    { title:'Copiar mes anterior', okLabel:'Copiar', danger:false }
+  );
+}
+
 // ---- today's date + today's blue dollar ----
 // dolarhoy.com is a plain HTML page with no CORS headers, so a browser can't read
 // it directly. dolarapi.com publishes the same blue quote as CORS-enabled JSON.
@@ -2041,6 +2287,7 @@ function setPeople(list){
     if(!income.entries[id]) income.entries[id] = [];
     if(!varEstimates[id]) varEstimates[id] = [];
     if(!budgetTemplates[id]) budgetTemplates[id] = defaultBudgetCats();
+    if(!savings[id]) savings[id] = { items: [], autoMonths: [] };
   });
   ensureSharedSlots();
   // el que estuviera seleccionado en alguna pantalla puede haber desaparecido.
@@ -2138,7 +2385,7 @@ const DEFAULT_BUDGET_CATS = [
   { key:'gustos',  label:'Gustos' },
   { key:'dolares', label:'Compra dólares' }
 ];
-const defaultBudgetCats = () => DEFAULT_BUDGET_CATS.map(c=>({ id: genId(), label: c.label, amount: 0, locked: true }));
+const defaultBudgetCats = () => DEFAULT_BUDGET_CATS.map(c=>({ id: genId(), label: c.label, amount: 0 }));
 
 // Del shape viejo ({A:{salidas:200000}}, sólo los topes que habían tocado) al
 // nuevo: los cinco rubros de siempre, con el monto que ya tenían escrito, más
@@ -2150,7 +2397,7 @@ function migrateBudgetTemplates(raw){
     const v = raw[k];
     if(Array.isArray(v)){ out[k] = v; return; }
     if(!v || typeof v !== 'object'){ out[k] = defaultBudgetCats(); return; }
-    const propios = DEFAULT_BUDGET_CATS.map(c=>({ id: genId(), label: c.label, amount: v[c.key] || 0, locked: true }));
+    const propios = DEFAULT_BUDGET_CATS.map(c=>({ id: genId(), label: c.label, amount: v[c.key] || 0 }));
     const extra = Object.keys(v)
       .filter(cat=>!DEFAULT_BUDGET_CATS.some(c=>c.key === cat) && v[cat] != null)
       .map(cat=>({ id: genId(), label: cat, amount: v[cat] }));
@@ -2173,7 +2420,7 @@ function migrateBudgetCatsToThree(templates){
     if(filtered.length !== list.length) changed = true;
     ['Gustos','Compra dólares'].forEach(label=>{
       if(!filtered.some(c=>c.label === label)){
-        filtered.push({ id: genId(), label, amount: 0, locked: true });
+        filtered.push({ id: genId(), label, amount: 0 });
         changed = true;
       }
     });
@@ -2191,7 +2438,7 @@ function migrateBudgetCatsRestoreDolares(templates){
     const list = templates[k];
     if(!Array.isArray(list)) return;
     if(!list.some(c=>c.label === 'Compra dólares')){
-      list.push({ id: genId(), label: 'Compra dólares', amount: 0, locked: true });
+      list.push({ id: genId(), label: 'Compra dólares', amount: 0 });
       changed = true;
     }
   });
@@ -2221,6 +2468,20 @@ function migrateIncome(raw){
   if(raw && raw.A){ entries.A.push(legacy(raw.A, raw.curA)); }
   if(raw && raw.B){ entries.B.push(legacy(raw.B, raw.curB)); }
   return { fx, entries };
+}
+// admite el shape viejo de `savings` (un array plano por persona, de antes de
+// que existiera ensureAutoDolaresRows) y lo lleva a {items, autoMonths} —
+// los pids que falten los completa setPeople() después
+function migrateSavings(raw){
+  const out = {};
+  if(raw && typeof raw === 'object'){
+    Object.keys(raw).forEach(id=>{
+      const v = raw[id];
+      if(Array.isArray(v)) out[id] = { items: v, autoMonths: [] };
+      else if(v && Array.isArray(v.items)) out[id] = { items: v.items, autoMonths: Array.isArray(v.autoMonths) ? v.autoMonths : [] };
+    });
+  }
+  return out;
 }
 
 // los gastos variables personales guardaban `shares: null` (no hacía falta:
@@ -2282,7 +2543,7 @@ async function loadAll(){
   }catch(e){ fixed = null; }
   if(!Array.isArray(fixed)){
     // first run: lay out the usual suspects so the table isn't empty
-    fixed = FIXED_SEED.map(l=>({ id: genId(), label: l, amount: 0, locked: true }));
+    fixed = FIXED_SEED.map(l=>({ id: genId(), label: l, amount: 0 }));
     saveFixed();
     await store.set(FIXED_MIGRATION_KEY, '1');   // seed is already current
     await store.set(FIXED_LOCK_KEY, '1');
@@ -2300,14 +2561,12 @@ async function loadAll(){
         saveFixed();
       }
     }catch(e){}
-    // Alquiler goes back on top, and the standard rows get the padlock
+    // Alquiler goes back on top, for tables seeded before that order existed
     try{
       if(!(await store.get(FIXED_LOCK_KEY))){
         const at = fixed.findIndex(f=>f.label.toLowerCase() === 'alquiler');
-        if(at < 0) fixed.unshift({ id: genId(), label: 'Alquiler', amount: 0, locked: true });
+        if(at < 0) fixed.unshift({ id: genId(), label: 'Alquiler', amount: 0 });
         else if(at > 0) fixed.unshift(fixed.splice(at, 1)[0]);
-        const std = FIXED_SEED.map(l=>l.toLowerCase());
-        fixed.forEach(f=>{ if(std.includes(f.label.toLowerCase())) f.locked = true; });
         await store.set(FIXED_LOCK_KEY, '1');
         saveFixed();
       }
@@ -2334,16 +2593,6 @@ async function loadAll(){
       id: genId(), ...s, person: isPerson(s.person) ? s.person : firstPid()
     }));
     saveFixedIncome();
-    await store.set(FIXED_INCOME_LOCK_KEY, '1');   // seed is already locked
-  }else{
-    try{
-      if(!(await store.get(FIXED_INCOME_LOCK_KEY))){
-        const std = FIXED_INCOME_SEED.map(s=>s.label.toLowerCase());
-        fixedIncome.forEach(f=>{ if(std.includes(f.label.toLowerCase())) f.locked = true; });
-        await store.set(FIXED_INCOME_LOCK_KEY, '1');
-        saveFixedIncome();
-      }
-    }catch(e){}
   }
 
   try{
@@ -2390,6 +2639,13 @@ async function loadAll(){
     goals = v ? JSON.parse(v) : [];
   }catch(e){ goals = []; }
   if(!Array.isArray(goals)) goals = [];
+
+  // mismo motivo que goals: sin seed write, para no fallar a los gritos en un
+  // couples table que todavía no tiene la columna `savings`
+  try{
+    const v = await store.get(SAVINGS_KEY);
+    savings = v ? migrateSavings(JSON.parse(v)) : {};
+  }catch(e){ savings = {}; }
 
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
@@ -2468,6 +2724,10 @@ async function saveGoals(){
   if(await bailOnMassWipe(prevCol('goals'), goals.length, ()=>{ render(); })) return false;
   return await store.set(GOALS_KEY, JSON.stringify(goals));
 }
+async function saveSavings(){
+  if(await bailOnMassWipe(prevCol('savings'), countItems(savings), ()=>{ renderAhorro(); })) return false;
+  return await store.set(SAVINGS_KEY, JSON.stringify(savings));
+}
 
 // ================= Copias de seguridad =================
 // Cada copia es una fila en la tabla `couple_backups`, aparte de `couples` — así
@@ -2482,7 +2742,7 @@ function currentSnapshot(){
   return {
     expenses, names: people, income, fixed, fixed_income: fixedIncome,
     variable_estimates: varEstimates, variable_expenses: varExpenses,
-    budget_overrides: budgetTemplates, goals,
+    budget_overrides: budgetTemplates, goals, savings,
     migration_flags: (coupleRow && coupleRow.migration_flags) || {}
   };
 }
@@ -2519,13 +2779,14 @@ async function fetchBackupSnapshot(id){
   return data && data.snapshot;
 }
 async function deleteBackup(id){
-  if(!confirm('¿Borrar esta copia de seguridad? Los datos actuales no se tocan.')) return;
-  try{
-    const { error } = await sb.from(BACKUP_TABLE).delete().eq('id', id).eq('code', coupleCode);
-    if(error) throw error;
-    notyf.success('Copia borrada');
-    renderBackups();
-  }catch(e){ showBackupError(backupErrText(e)); }
+  openConfirmModal('¿Borrar esta copia de seguridad? Los datos actuales no se tocan.', async ()=>{
+    try{
+      const { error } = await sb.from(BACKUP_TABLE).delete().eq('id', id).eq('code', coupleCode);
+      if(error) throw error;
+      notyf.success('Copia borrada');
+      renderBackups();
+    }catch(e){ showBackupError(backupErrText(e)); }
+  }, { title:'Borrar copia' });
 }
 
 // aplica un snapshot (de la nube o de un archivo) en UNA escritura atómica a
@@ -2543,6 +2804,7 @@ async function applySnapshot(s){
   if(Array.isArray(s.variable_expenses)) patch.variable_expenses = s.variable_expenses;
   if(s.budget_overrides && typeof s.budget_overrides === 'object') patch.budget_overrides = s.budget_overrides;
   if(Array.isArray(s.goals)) patch.goals = s.goals;
+  if(s.savings && typeof s.savings === 'object') patch.savings = s.savings;
   if(s.migration_flags && typeof s.migration_flags === 'object') patch.migration_flags = s.migration_flags;
   if(!Object.keys(patch).length) throw new Error('La copia no tiene datos reconocibles.');
 
@@ -2551,7 +2813,8 @@ async function applySnapshot(s){
   coupleRow = data;
   [[STORE_KEY,'expenses'],[NAMES_KEY,'names'],[INCOME_KEY,'income'],[FIXED_KEY,'fixed'],
    [FIXED_INCOME_KEY,'fixed_income'],[VAR_ESTIMATES_KEY,'variable_estimates'],
-   [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals']]
+   [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals'],
+   [SAVINGS_KEY,'savings']]
     .forEach(([k,col])=>{ if(data[col] != null) writeLocalCache(coupleCode, k, JSON.stringify(data[col])); });
   // el snapshot puede traer una columna legítimamente vacía; que el guardaespaldas
   // no lo confunda con corrupción durante el refresco posterior
@@ -2564,55 +2827,77 @@ async function applySnapshot(s){
 }
 
 async function doManualBackup(){
-  showBackupError('');
-  try{ await createBackup('Copia manual'); notyf.success('Copia de seguridad creada'); renderBackups(); }
-  catch(e){ showBackupError(backupErrText(e)); }
+  openConfirmModal('¿Crear una copia de seguridad ahora con el estado actual del espacio?', async ()=>{
+    showBackupError('');
+    try{ await createBackup('Copia manual'); notyf.success('Copia de seguridad creada'); renderBackups(); }
+    catch(e){ showBackupError(backupErrText(e)); }
+  }, { title:'Crear copia de seguridad', okLabel:'Crear copia', danger:false });
 }
 async function doCloseMonth(){
-  showBackupError('');
-  try{ await createBackup('Cierre de ' + monthLabel(viewMonth || monthNow())); notyf.success('Mes cerrado y respaldado'); renderBackups(); }
-  catch(e){ showBackupError(backupErrText(e)); }
+  openConfirmModal(`¿Cerrar ${monthLabel(viewMonth || monthNow())} y guardar una copia de seguridad de este momento?`, async ()=>{
+    showBackupError('');
+    try{ await createBackup('Cierre de ' + monthLabel(viewMonth || monthNow())); notyf.success('Mes cerrado y respaldado'); renderBackups(); }
+    catch(e){ showBackupError(backupErrText(e)); }
+  }, { title:'Cerrar mes y respaldar', okLabel:'Cerrar mes', danger:false });
 }
 async function restoreFromCloud(id){
   const row = lastBackupRows.find(r=>r.id === id);
   const when = row ? new Date(row.created_at).toLocaleString('es-AR', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'seleccionada';
-  if(!confirm(`Restaurar la copia del ${when} reemplaza TODOS los datos actuales del espacio por los de esa copia, en todos los dispositivos.\n\nAntes se guarda automáticamente una copia del estado actual, así que se puede volver.\n\n¿Seguir?`)) return;
-  showBackupError('');
-  try{
-    try{ await createBackup('Antes de restaurar (' + when + ')'); }catch(e){ /* no bloquea */ }
-    await applySnapshot(await fetchBackupSnapshot(id));
-    notyf.success('Datos restaurados');
-    renderBackups();
-  }catch(e){ showBackupError(backupErrText(e)); }
+  openConfirmModal(
+    `Restaurar la copia del ${when} reemplaza TODOS los datos actuales del espacio por los de esa copia, en todos los dispositivos. Antes se guarda automáticamente una copia del estado actual, así que se puede volver.`,
+    async ()=>{
+      showBackupError('');
+      try{
+        try{ await createBackup('Antes de restaurar (' + when + ')'); }catch(e){ /* no bloquea */ }
+        await applySnapshot(await fetchBackupSnapshot(id));
+        notyf.success('Datos restaurados');
+        renderBackups();
+      }catch(e){ showBackupError(backupErrText(e)); }
+    },
+    { title:'Restaurar copia', okLabel:'Restaurar' }
+  );
 }
 
 function downloadBackupFile(){
-  const payload = { app:'finanzapp', format:1, code:coupleCode, created_at:new Date().toISOString(), snapshot: currentSnapshot() };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `finanzapp-${coupleCode}-${new Date().toISOString().slice(0,10)}.json`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  openConfirmModal('¿Descargar un archivo .json con una copia de seguridad completa del espacio?', ()=>{
+    const payload = { app:'finanzapp', format:1, code:coupleCode, created_at:new Date().toISOString(), snapshot: currentSnapshot() };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `finanzapp-${coupleCode}-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  }, { title:'Descargar copia', okLabel:'Descargar', danger:false });
 }
 function restoreFromFile(input){
   const file = input.files && input.files[0];
   input.value = '';
   if(!file) return;
   const reader = new FileReader();
-  reader.onload = async () => {
+  reader.onload = () => {
     showBackupError('');
+    let snap;
     try{
       const parsed = JSON.parse(reader.result);
-      const snap = parsed && parsed.snapshot ? parsed.snapshot : parsed;
+      snap = parsed && parsed.snapshot ? parsed.snapshot : parsed;
       if(!snap || typeof snap !== 'object') throw new Error('El archivo no parece una copia de FinanzApp.');
-      if(!confirm('Restaurar desde este archivo reemplaza TODOS los datos actuales del espacio, en todos los dispositivos.\n\nAntes se guarda una copia del estado actual.\n\n¿Seguir?')) return;
-      try{ await createBackup('Antes de restaurar (archivo)'); }catch(e){}
-      await applySnapshot(snap);
-      notyf.success('Datos restaurados desde el archivo');
-      renderBackups();
-    }catch(e){ showBackupError('No se pudo restaurar: ' + (e && e.message ? e.message : 'archivo inválido')); }
+    }catch(e){
+      showBackupError('No se pudo restaurar: ' + (e && e.message ? e.message : 'archivo inválido'));
+      return;
+    }
+    openConfirmModal(
+      'Restaurar desde este archivo reemplaza TODOS los datos actuales del espacio, en todos los dispositivos. Antes se guarda una copia del estado actual.',
+      async ()=>{
+        try{
+          try{ await createBackup('Antes de restaurar (archivo)'); }catch(e){}
+          await applySnapshot(snap);
+          notyf.success('Datos restaurados desde el archivo');
+          renderBackups();
+        }catch(e){ showBackupError('No se pudo restaurar: ' + (e && e.message ? e.message : 'archivo inválido')); }
+      },
+      { title:'Restaurar desde archivo', okLabel:'Restaurar' }
+    );
   };
   reader.onerror = () => showBackupError('No se pudo leer el archivo.');
   reader.readAsText(file);
@@ -2642,7 +2927,12 @@ async function renderBackups(){
         <div class="b-label">${r.label ? escapeHtml(r.label) : 'Copia'}</div>
       </div>
       <button type="button" class="b-restore" onclick="restoreFromCloud('${r.id}')">Restaurar</button>
-      <button type="button" class="b-del" onclick="deleteBackup('${r.id}')" aria-label="Borrar copia" title="Borrar copia">🗑</button>
+      <button type="button" class="b-del" onclick="deleteBackup('${r.id}')" aria-label="Borrar copia" title="Borrar copia">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+      </button>
     </div>`;
   }).join('');
 }
@@ -2739,7 +3029,6 @@ function fixedIncomeRow(f){
       </span>
     </div>`;
   }
-  const locked = !!f.locked;
   const usd = f.currency === 'USD' ? '<span class="cur-badge">US$</span>' : '';
   // tap the name to hand the income to the next person in the list
   const nextOwner = nextPid(owned);
@@ -2751,21 +3040,9 @@ function fixedIncomeRow(f){
     ${amt}
     <span class="fixed-actions">
       <button type="button" class="edit" onclick="startEditFixedIncome('${f.id}')" aria-label="Editar">✎</button>
-      <button type="button" class="lock" onclick="toggleLockFixedIncome('${f.id}')"
-              aria-label="${locked ? 'Desbloquear para poder borrar' : 'Bloquear'}"
-              title="${locked ? 'Protegido: tocá para poder borrarlo' : 'Tocá para protegerlo'}">${locked ? '🔒' : '🔓'}</button>
-      <button type="button" class="del" onclick="removeFixedIncome('${f.id}')"
-              aria-label="Eliminar" ${locked ? 'disabled' : ''}>✕</button>
+      <button type="button" class="del" onclick="removeFixedIncome('${f.id}')" aria-label="Eliminar">✕</button>
     </span>
   </div>`;
-}
-function toggleLockFixedIncome(id){
-  const item = fixedIncome.find(f=>f.id === id);
-  if(!item) return;
-  item.locked = !item.locked;
-  saveFixedIncome();
-  renderFixedIncome();
-  render();
 }
 function toggleFixedIncomeOwner(id){
   const item = fixedIncome.find(f=>f.id === id);
@@ -2812,12 +3089,14 @@ function addFixedIncome(){
 }
 function removeFixedIncome(id){
   const item = fixedIncome.find(f=>f.id === id);
-  if(!item || item.locked) return;   // protected rows need the padlock opened first
-  fixedIncome = fixedIncome.filter(f=>f.id !== id);
-  saveFixedIncome();
-  renderFixedIncome();
-  renderIncomeChips();
-  notyf.success(`"${item.label}" eliminado`);
+  if(!item) return;
+  openConfirmModal(`¿Eliminar "${item.label}"? Esta acción no se puede deshacer.`, ()=>{
+    fixedIncome = fixedIncome.filter(f=>f.id !== id);
+    saveFixedIncome();
+    renderFixedIncome();
+    renderIncomeChips();
+    notyf.success(`"${item.label}" eliminado`);
+  });
 }
 
 // rows are re-stringified on every render, so these live on the panel
@@ -2882,30 +3161,28 @@ function renderFixed(){
         ${handle}
         <input type="text" class="f-label-edit" value="${escapeHtml(f.label)}" aria-label="Concepto">
         ${amt}
+        <input type="text" inputmode="numeric" class="f-times" value="${f.timesPerMonth > 1 ? f.timesPerMonth : ''}"
+           placeholder="1" aria-label="Veces por mes" title="Veces por mes (ej: 3 si viene 3 veces)">
         <span class="fixed-actions two">
           <button type="button" class="ok" onclick="saveEditFixed('${f.id}')" aria-label="Guardar">✓</button>
           <button type="button" class="del" onclick="cancelEditFixed()" aria-label="Cancelar">✕</button>
         </span>
       </div>`;
     }
-    const locked = !!f.locked;
     // igual que en ingresos fijos: tocar la etiqueta cicla el dueño. Acá el
     // ciclo arranca en "Compartido", que es lo que es un gasto fijo por defecto
     const owner = peopleCount() > 1
       ? `<button type="button" class="who-badge" onclick="cycleFixedOwner('${f.id}')"
            title="Tocá para pasarlo a ${escapeHtml(fixedOwnerLabel(nextFixedOwner(f.owner)))}">${escapeHtml(fixedOwnerLabel(f.owner))}</button>`
       : '';
+    const times = f.timesPerMonth > 1 ? `<span class="f-times-badge">×${f.timesPerMonth}</span>` : '';
     return `<div class="fixed-row" data-id="${f.id}">
       ${handle}
-      <span class="f-label">${escapeHtml(f.label)}${owner}</span>
+      <span class="f-label">${escapeHtml(f.label)}${owner}${times}</span>
       ${amt}
       <span class="fixed-actions">
         <button type="button" class="edit" onclick="startEditFixed('${f.id}')" aria-label="Editar">✎</button>
-        <button type="button" class="lock" onclick="toggleLockFixed('${f.id}')"
-                aria-label="${locked ? 'Desbloquear para poder borrar' : 'Bloquear'}"
-                title="${locked ? 'Protegido: tocá para poder borrarlo' : 'Tocá para protegerlo'}">${locked ? '🔒' : '🔓'}</button>
-        <button type="button" class="del" onclick="removeFixed('${f.id}')"
-                aria-label="Eliminar" ${locked ? 'disabled' : ''}>✕</button>
+        <button type="button" class="del" onclick="removeFixed('${f.id}')" aria-label="Eliminar">✕</button>
       </span>
     </div>`;
   }).join('') : `<div class="income-note" style="padding:12px 0;">${escapeHtml(
@@ -3012,14 +3289,6 @@ enableDrag($('fixedIncomeTable'), ()=>{
   renderIncomeChips();   // chips follow this order
 }, renderFixedIncome);
 
-function toggleLockFixed(id){
-  const item = fixed.find(f=>f.id === id);
-  if(!item) return;
-  item.locked = !item.locked;
-  saveFixed();
-  renderFixed();
-  render();
-}
 function startEditFixed(id){ editingFixedId = id; renderFixed(); }
 function cancelEditFixed(){ editingFixedId = null; renderFixed(); }
 function saveEditFixed(id){
@@ -3031,6 +3300,9 @@ function saveEditFixed(id){
   const d = digitsOnly(row.querySelector('.f-amt').value);
   item.label = label;
   item.amount = d ? parseInt(d,10) : 0;
+  const dt = digitsOnly(row.querySelector('.f-times').value);
+  const times = dt ? parseInt(dt,10) : 1;
+  item.timesPerMonth = times > 1 ? times : undefined;   // 1 = comportamiento normal, no hace falta guardarlo
   editingFixedId = null;
   saveFixed();
   renderFixed();
@@ -3064,12 +3336,14 @@ function addFixed(){
 }
 function removeFixed(id){
   const item = fixed.find(f=>f.id === id);
-  if(!item || item.locked) return;   // protected rows need the padlock opened first
-  fixed = fixed.filter(f=>f.id !== id);
-  saveFixed();
-  renderFixed();
-  renderChips();
-  notyf.success(`"${item.label}" eliminado`);
+  if(!item) return;
+  openConfirmModal(`¿Eliminar "${item.label}"? Esta acción no se puede deshacer.`, ()=>{
+    fixed = fixed.filter(f=>f.id !== id);
+    saveFixed();
+    renderFixed();
+    renderChips();
+    notyf.success(`"${item.label}" eliminado`);
+  });
 }
 
 // ---- variable expense estimates (personal budget, not shared, no chips) ----
@@ -3091,17 +3365,12 @@ function renderVarEstimates(){
         </span>
       </div>`;
     }
-    const locked = !!f.locked;
     return `<div class="fixed-row" data-id="${f.id}">
       <span class="f-label">${escapeHtml(f.label)}</span>
       ${amt}
       <span class="fixed-actions">
         <button type="button" class="edit" onclick="startEditVarEstimate('${f.id}')" aria-label="Editar">✎</button>
-        <button type="button" class="lock" onclick="toggleLockVarEstimate('${f.id}')"
-                aria-label="${locked ? 'Desbloquear para poder borrar' : 'Bloquear'}"
-                title="${locked ? 'Protegido: tocá para poder borrarlo' : 'Tocá para protegerlo'}">${locked ? '🔒' : '🔓'}</button>
-        <button type="button" class="del" onclick="removeVarEstimate('${f.id}')"
-                aria-label="Eliminar" ${locked ? 'disabled' : ''}>✕</button>
+        <button type="button" class="del" onclick="removeVarEstimate('${f.id}')" aria-label="Eliminar">✕</button>
       </span>
     </div>`;
   }).join('') : `<div class="income-note" style="padding:12px 0;">${
@@ -3148,22 +3417,16 @@ function saveEditVarEstimate(id){
   renderVarEstimates();
   render();
 }
-function toggleLockVarEstimate(id){
-  const item = (varEstimates[currentVarEstPerson]||[]).find(f=>f.id === id);
-  if(!item) return;
-  item.locked = !item.locked;
-  saveVarEstimates();
-  renderVarEstimates();
-  render();
-}
 function removeVarEstimate(id){
   const item = (varEstimates[currentVarEstPerson]||[]).find(f=>f.id === id);
-  if(!item || item.locked) return;   // el candado abierto es lo que habilita el borrado
-  varEstimates[currentVarEstPerson] = varEstimates[currentVarEstPerson].filter(f=>f.id !== id);
-  saveVarEstimates();
-  renderVarEstimates();
-  render();
-  notyf.success(`"${item.label}" eliminado`);
+  if(!item) return;
+  openConfirmModal(`¿Eliminar "${item.label}"? Esta acción no se puede deshacer.`, ()=>{
+    varEstimates[currentVarEstPerson] = varEstimates[currentVarEstPerson].filter(f=>f.id !== id);
+    saveVarEstimates();
+    renderVarEstimates();
+    render();
+    notyf.success(`"${item.label}" eliminado`);
+  });
 }
 
 // ---- plantillas de gastos posibles ----
@@ -3189,34 +3452,28 @@ function renderBudgetTemplates(){
         </span>
       </div>`;
     }
-    const locked = !!f.locked;
     return `<div class="fixed-row" data-id="${f.id}">
       <span class="f-label">${escapeHtml(f.label)}</span>
       ${amt}
       <span class="fixed-actions">
         <button type="button" class="edit" onclick="startEditBudgetTemplate('${f.id}')" aria-label="Editar">✎</button>
-        <button type="button" class="lock" onclick="toggleLockBudgetTemplate('${f.id}')"
-                aria-label="${locked ? 'Desbloquear para poder borrar' : 'Bloquear'}"
-                title="${locked ? 'Protegido: tocá para poder borrarlo' : 'Tocá para protegerlo'}">${locked ? '🔒' : '🔓'}</button>
-        <button type="button" class="del" onclick="removeBudgetTemplate('${f.id}')"
-                aria-label="Eliminar" ${locked ? 'disabled' : ''}>✕</button>
+        <button type="button" class="del" onclick="removeBudgetTemplate('${f.id}')" aria-label="Eliminar">✕</button>
       </span>
     </div>`;
   }).join('') : `<div class="income-note" style="padding:12px 0;">Todavía no cargaste gastos posibles.</div>`;
 }
 
 // ---- sugerencia de montos para Salidas/Gustos/Compra dólares ----
-// Compra dólares es el 20% del ingreso inicial; el resto del saldo tras
-// gastos fijos y variables (afterVar) se reparte en partes iguales entre
-// Salidas y Gustos. Si afterVar no alcanza para el 20% del ingreso, Compra
-// dólares se achica al saldo disponible y no queda nada para Salidas/Gustos.
+// Compra dólares es el ahorro, tiene prioridad y no lo toca este botón — el
+// usuario lo carga a mano (o queda en lo que ya tenía). "Sugerir montos" solo
+// reparte por mitades, entre Salidas y Gustos, lo que queda de afterVar una
+// vez apartado ese monto — misma cuenta que redistribuirWantsSegunDolares.
 function sugerirMontosBudget(person){
   const list = budgetTemplates[person] || [];
   const salidas = list.find(c=>c.label === 'Salidas');
   const gustos = list.find(c=>c.label === 'Gustos');
-  const dolares = list.find(c=>c.label === 'Compra dólares');
-  if(!salidas || !gustos || !dolares){
-    notyf.error('Necesitás los rubros Salidas, Gustos y Compra dólares para sugerir montos.');
+  if(!salidas || !gustos){
+    notyf.error('Necesitás los rubros Salidas y Gustos para sugerir montos.');
     return;
   }
   const fin = financeFor(person);
@@ -3224,32 +3481,27 @@ function sugerirMontosBudget(person){
     notyf.error('Cargá el ingreso de este mes para poder sugerir montos.');
     return;
   }
-  const afterVar = fin.afterVar;
-  const dolaresAmt = Math.max(0, Math.min(fin.inc * 0.20, afterVar));
-  const wantsTotal = Math.max(0, afterVar - dolaresAmt);
-
-  salidas.amount = Math.round(wantsTotal / 2);
-  gustos.amount = Math.round(wantsTotal / 2);
-  dolares.amount = Math.round(dolaresAmt);
+  redistribuirWantsSegunDolares(person);
 
   saveBudgetTemplates();
   renderBudgetTemplates();
   render();
-  notyf.success(afterVar > 0 ? 'Montos sugeridos aplicados' : 'Sin saldo disponible este mes: los 3 rubros quedaron en $0.');
+  notyf.success(salidas.amount > 0 ? 'Montos sugeridos aplicados' : 'Sin saldo disponible este mes: Salidas y Gustos quedaron en $0.');
 }
 
 // Compra dólares manda: si lo editás a mano, Salidas y Gustos se reacomodan
 // solos por mitades con lo que queda de afterVar, igual que "Sugerir
-// montos" pero arrancando del monto que acabás de escribir en vez del 20%
-// del ingreso.
+// montos" — ninguno de los dos toca el monto de Compra dólares.
 function redistribuirWantsSegunDolares(person){
   const list = budgetTemplates[person] || [];
   const salidas = list.find(c=>c.label === 'Salidas');
   const gustos = list.find(c=>c.label === 'Gustos');
+  if(!salidas || !gustos) return;
+  // sin rubro de Compra dólares no hay nada apartado todavía: se reparte
+  // afterVar entero entre Salidas y Gustos
   const dolares = list.find(c=>c.label === 'Compra dólares');
-  if(!salidas || !gustos || !dolares) return;
   const afterVar = financeFor(person).afterVar;
-  const wantsTotal = Math.max(0, afterVar - (dolares.amount || 0));
+  const wantsTotal = Math.max(0, afterVar - (dolares ? (dolares.amount || 0) : 0));
   salidas.amount = Math.round(wantsTotal / 2);
   gustos.amount = Math.round(wantsTotal / 2);
 }
@@ -3306,22 +3558,16 @@ function saveEditBudgetTemplate(id){
   renderBudgetTemplates();
   render();   // el bloque de Gastos posibles lee estos montos
 }
-function toggleLockBudgetTemplate(id){
-  const item = (budgetTemplates[currentBudgetTplPerson]||[]).find(f=>f.id === id);
-  if(!item) return;
-  item.locked = !item.locked;
-  saveBudgetTemplates();
-  renderBudgetTemplates();
-  render();
-}
 function removeBudgetTemplate(id){
   const item = (budgetTemplates[currentBudgetTplPerson]||[]).find(f=>f.id === id);
-  if(!item || item.locked) return;   // el candado abierto es lo que habilita el borrado
-  budgetTemplates[currentBudgetTplPerson] = budgetTemplates[currentBudgetTplPerson].filter(f=>f.id !== id);
-  saveBudgetTemplates();
-  renderBudgetTemplates();
-  render();   // el bloque de Gastos posibles lee estos montos
-  notyf.success(`"${item.label}" eliminado`);
+  if(!item) return;
+  openConfirmModal(`¿Eliminar "${item.label}"? Esta acción no se puede deshacer.`, ()=>{
+    budgetTemplates[currentBudgetTplPerson] = budgetTemplates[currentBudgetTplPerson].filter(f=>f.id !== id);
+    saveBudgetTemplates();
+    renderBudgetTemplates();
+    render();   // el bloque de Gastos posibles lee estos montos
+    notyf.success(`"${item.label}" eliminado`);
+  });
 }
 async function commitBudgetTemplates(){
   const ok = await saveBudgetTemplates();
@@ -3356,6 +3602,7 @@ function openModal(expenseId){
     $('fDesc').value = ex.desc;
     $('fAmount').value = groupThousands(String(ex.amount));
     $('fDate').value = ex.date;
+    $('fTimes').value = ex.occurrences > 1 ? ex.occurrences : '';
     const owner = expenseOwner(ex);
     setSplit(ex.splitType === 'income' ? 'income' : 'equal');
     setOwner(owner);
@@ -3378,7 +3625,39 @@ document.addEventListener('keydown', (e)=>{
   if($('addModal').classList.contains('open')) closeModal();
   if($('incomeModal').classList.contains('open')) closeIncomeModal();
   if($('varExpenseModal').classList.contains('open')) closeVarExpenseModal();
+  if($('confirmModal').classList.contains('open')) closeConfirmModal();
 });
+
+// ---- confirmar antes de borrar: un solo modal para cualquier borrado (gasto,
+// plantilla de Ajustes, rubro) en vez del candado por objeto de antes — y
+// también para cualquier otra acción que convenga confirmar (ej: copiar mes
+// anterior). `opts` cambia el título y el botón cuando no es un borrado;
+// por defecto queda igual que siempre (Eliminar, en rojo).
+let confirmModalAction = null;
+function openConfirmModal(message, onConfirm, opts){
+  opts = opts || {};
+  $('confirmModalTitle').textContent = opts.title || 'Eliminar';
+  $('confirmModalText').textContent = message;
+  const ok = $('confirmModalOk');
+  ok.textContent = opts.okLabel || 'Eliminar';
+  const danger = opts.danger !== false;
+  ok.classList.toggle('btn-danger', danger);
+  ok.classList.toggle('btn-confirm', !danger);
+  confirmModalAction = onConfirm;
+  $('confirmModal').classList.add('open');
+  document.body.classList.add('modal-open');
+}
+function closeConfirmModal(){
+  $('confirmModal').classList.remove('open');
+  document.body.classList.remove('modal-open');
+  confirmModalAction = null;
+}
+$('confirmModalOk').addEventListener('click', ()=>{
+  const action = confirmModalAction;
+  closeConfirmModal();
+  if(action) action();
+});
+$('confirmModal').addEventListener('click', (e)=>{ if(e.target === $('confirmModal')) closeConfirmModal(); });
 
 // ---- real, dated, personal variable expenses (mirrors openModal/closeModal/
 // resetForm above, minus the split block) ----
@@ -3513,10 +3792,14 @@ function toggleVarExpensePaid(id){
 }
 
 function deleteVarExpense(id){
-  varExpenses = varExpenses.filter(x=>x.id!==id);
-  saveVarExpenses();
-  render();
-  notyf.success('Gasto variable eliminado');
+  const ex = varExpenses.find(x=>x.id === id);
+  if(!ex) return;
+  openConfirmModal(`¿Eliminar "${ex.desc}"? Esta acción no se puede deshacer.`, ()=>{
+    varExpenses = varExpenses.filter(x=>x.id!==id);
+    saveVarExpenses();
+    render();
+    notyf.success('Gasto variable eliminado');
+  });
 }
 
 
@@ -3579,10 +3862,26 @@ $('gKindSeg').addEventListener('click', (e)=>{
   currentGoalKind = btn.dataset.kind;
   syncGoalSegs();
 });
+// al cambiar de moneda, lo ya tipeado en Monto y Ya juntaste se convierte a la
+// nueva moneda en vez de quedar con los mismos dígitos significando otra cosa
+// (50000 pesos no puede pasar a leerse como 50000 dólares con solo tocar el toggle)
+function convertGoalAmounts(fromCur, toCur){
+  if(fromCur === toCur) return;
+  const rate = usdRate();
+  if(!(rate > 0)) return;
+  ['gAmount','gSaved'].forEach(id=>{
+    const v = numVal(id);
+    if(!v) return;
+    const converted = toCur === 'USD' ? v / rate : v * rate;
+    $(id).value = groupThousands(String(Math.round(converted)));
+  });
+}
 $('gCurSeg').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
   if(!btn) return;
+  const prevCur = currentGoalCurrency;
   currentGoalCurrency = btn.dataset.cur;
+  convertGoalAmounts(prevCur, currentGoalCurrency);
   syncGoalSegs();
 });
 $('goalForm').addEventListener('submit', (e)=>{
@@ -3621,6 +3920,117 @@ function deleteGoal(id){
   notyf.success('Meta eliminada');
 }
 
+// ---- ahorro en dólares: modal para agregar/editar una entrada manual ----
+// en ARS pide también el tipo de cambio de esa fecha, así el valor en dólares
+// queda fijo con la cotización real de la compra y no con la de hoy (que es
+// lo que hacía que, por ejemplo, agosto y septiembre mostraran el mismo
+// monto en dólares aunque el dólar valiera distinto cada mes)
+// accessor perezoso: nunca asume que el casillero de esta persona ya existe
+// (setPeople() lo crea, pero un fetch de Supabase puede pisar `savings` entero
+// con un objeto que todavía no tiene todos los pids)
+function savingsSlot(person){
+  if(!savings[person] || !Array.isArray(savings[person].items)) savings[person] = { items: [], autoMonths: [] };
+  return savings[person];
+}
+let svModalCur = 'ARS';
+function syncSavingsFxVisibility(){
+  $('svFxWrap').style.display = svModalCur === 'ARS' ? '' : 'none';
+}
+// al cambiar de moneda, lo ya tipeado en Monto se convierte a la nueva moneda
+// (con el tipo de cambio ya cargado, o el de hoy si todavía no hay uno) en
+// vez de quedar con los mismos dígitos significando otra cosa
+function convertSavingsAmount(fromCur, toCur){
+  if(fromCur === toCur) return;
+  const v = numVal('svAmount');
+  if(!v) return;
+  const fx = numVal('svFx') || usdRate();
+  if(!(fx > 0)) return;
+  $('svAmount').value = groupThousands(String(Math.round(toCur === 'USD' ? v / fx : v * fx)));
+  if(toCur === 'ARS' && !numVal('svFx')) $('svFx').value = groupThousands(String(fx));
+}
+$('svCurSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const prevCur = svModalCur;
+  svModalCur = btn.dataset.cur;
+  convertSavingsAmount(prevCur, svModalCur);
+  document.querySelectorAll('#svCurSeg button').forEach(b=>b.classList.toggle('active', b === btn));
+  syncSavingsFxVisibility();
+});
+function openSavingsModal(entryId, prefill){
+  const list = savingsSlot(currentAhorroPerson).items;
+  const entry = entryId ? list.find(e=>e.id === entryId) : null;
+  editingSavingsId = entry ? entry.id : null;
+  $('savingsForm').reset();
+  svModalCur = entry ? (entry.currency || 'ARS') : ((prefill && prefill.currency) || 'ARS');
+  document.querySelectorAll('#svCurSeg button').forEach(b=>b.classList.toggle('active', b.dataset.cur === svModalCur));
+  if(entry){
+    const shown = entry.currency === 'USD' ? entry.amount : entry.pesos;
+    $('svAmount').value = shown ? groupThousands(String(shown)) : '';
+    $('svFx').value = entry.fx ? groupThousands(String(entry.fx)) : '';
+    $('svDate').value = entry.date;
+  }else{
+    $('svAmount').value = prefill && prefill.amount ? groupThousands(String(prefill.amount)) : '';
+    const fx = (prefill && prefill.fx) || usdRate();
+    $('svFx').value = fx ? groupThousands(String(fx)) : '';
+    $('svDate').value = defaultDate();
+  }
+  syncSavingsFxVisibility();
+  $('savingsModalTitle').textContent = entry ? 'Editar ahorro' : 'Agregar ahorro';
+  $('svSubmitBtn').textContent = entry ? 'Guardar cambios' : 'Agregar';
+  $('savingsModal').classList.add('open');
+  document.body.classList.add('modal-open');
+  $('svAmount').focus();
+}
+function closeSavingsModal(){
+  $('savingsModal').classList.remove('open');
+  document.body.classList.remove('modal-open');
+  editingSavingsId = null;
+}
+$('savingsModal').addEventListener('click', (e)=>{ if(e.target === $('savingsModal')) closeSavingsModal(); });
+
+$('savingsForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const amount = numVal('svAmount');
+  if(!amount) return;
+  const date = $('svDate').value || defaultDate();
+  let fields;
+  if(svModalCur === 'USD'){
+    fields = { currency:'USD', amount, date };
+  }else{
+    const fx = numVal('svFx') || usdRate();
+    if(!(fx > 0)) return;
+    fields = { currency:'ARS', pesos: amount, fx, amount: Math.round(amount / fx), date };
+  }
+  const slot = savingsSlot(currentAhorroPerson);
+  if(editingSavingsId){
+    const item = slot.items.find(x=>x.id === editingSavingsId);
+    if(item){
+      Object.keys(item).forEach(k=>{ if(k !== 'id') delete item[k]; });
+      Object.assign(item, fields);
+    }
+  }else{
+    slot.items.push({ id: genId(), ...fields });
+  }
+  saveSavings();
+  closeSavingsModal();
+  renderAhorro();
+});
+
+function deleteSavingsEntry(id){
+  const slot = savingsSlot(currentAhorroPerson);
+  if(!slot.items.some(x=>x.id === id)) return;
+  openConfirmModal('¿Eliminar este ahorro en dólares? Esta acción no se puede deshacer.', ()=>{
+    slot.items = slot.items.filter(x=>x.id !== id);
+    saveSavings();
+    renderAhorro();
+  }, { title:'Eliminar ahorro' });
+}
+function toggleSavingsCur(){
+  savingsCur = savingsCur === 'USD' ? 'ARS' : 'USD';
+  renderAhorro();
+}
+
 // one chip per fixed expense; tapping it fills the description AND its current amount
 // mismo criterio que renderVxChips(): los chips muestran solo las plantillas
 // de quien esté elegido en "¿De quién es?" — de a uno no hay "de quién es"
@@ -3643,6 +4053,7 @@ $('descChips').addEventListener('click', (e)=>{
   if(!f) return;
   $('fDesc').value = f.label;
   $('fAmount').value = f.amount ? groupThousands(String(f.amount)) : '';
+  $('fTimes').value = f.timesPerMonth > 1 ? f.timesPerMonth : '';
   // la plantilla ya sabe si el gasto es del hogar o de alguien en particular
   setOwner(isPerson(f.owner) ? f.owner : (peopleCount() > 1 ? SHARED_PAY : firstPid()));
   syncChips();
@@ -3805,27 +4216,38 @@ function setPeopleCount(n){
   if(n < peopleCount()){
     const going = people.slice(n);
     const label = going.map(p=>p.name).join(', ');
-    const msg = `Vas a quedarte con ${n} ${n === 1 ? 'persona' : 'personas'}.\n\n` +
+    const msg = `Vas a quedarte con ${n} ${n === 1 ? 'persona' : 'personas'}. ` +
       `Se borran los ingresos, gastos variables, presupuesto y metas de ${label}. ` +
-      `Su parte de los gastos compartidos se reparte entre quienes quedan.\n\n¿Seguimos?`;
-    if(!confirm(msg)) { refreshPeopleUI(); return; }
-    const goneIds = going.map(p=>p.id);
-    goneIds.forEach(dropPersonData);
-    setPeople(people.slice(0, n));
-    redistributeShares(goneIds);
-  }else{
-    // sumar a alguien no toca los gastos ya cargados: esos meses se repartieron
-    // entre quienes estaban, y así deben quedar. Los nuevos gastos ya salen
-    // divididos entre todos.
-    const next = people.slice();
-    while(next.length < n){
-      const id = PERSON_IDS[next.length];
-      next.push({ id, name: defaultPersonName(id) });
-    }
-    setPeople(next);
+      `Su parte de los gastos compartidos se reparte entre quienes quedan.`;
+    openConfirmModal(msg, ()=>{
+      const goneIds = going.map(p=>p.id);
+      goneIds.forEach(dropPersonData);
+      setPeople(people.slice(0, n));
+      redistributeShares(goneIds);
+      commitPeopleCountChange();
+    }, { title:'Quitar persona', okLabel:'Continuar' });
+    return;
   }
-  // quitar una persona borra sus datos a propósito (ya se avisó con el confirm):
-  // el guardaespaldas anti-borrado-masivo no debe pelear contra esto
+  openConfirmModal(
+    `Vas a pasar a ${n} ${n === 1 ? 'persona' : 'personas'}. Los meses ya cargados no cambian — la persona nueva entra sin gastos ni ingresos previos, y los gastos compartidos futuros se dividen entre todos.`,
+    ()=>{
+      // sumar a alguien no toca los gastos ya cargados: esos meses se repartieron
+      // entre quienes estaban, y así deben quedar. Los nuevos gastos ya salen
+      // divididos entre todos.
+      const next = people.slice();
+      while(next.length < n){
+        const id = PERSON_IDS[next.length];
+        next.push({ id, name: defaultPersonName(id) });
+      }
+      setPeople(next);
+      commitPeopleCountChange();
+    },
+    { title:'Agregar persona', okLabel:'Continuar', danger:false }
+  );
+}
+function commitPeopleCountChange(){
+  // quitar una persona borra sus datos a propósito (ya se avisó con el modal
+  // de confirmación): el guardaespaldas anti-borrado-masivo no debe pelear con esto
   allowBulkClear = true;
   try{
     saveNames();
@@ -3837,6 +4259,7 @@ function setPeopleCount(n){
     saveVarExpenses();
     saveBudgetTemplates();
     saveGoals();
+    saveSavings();
   }finally{ allowBulkClear = false; }
   refreshPeopleUI();
   renderFixed();
@@ -3852,6 +4275,7 @@ function dropPersonData(id){
   delete income.entries[id];
   delete varEstimates[id];
   delete budgetTemplates[id];
+  delete savings[id];
   goals = goals.filter(g=>g.person !== id);
   // siempre se saca del final de la lista, así que la primera persona sigue ahí
   // y hereda los gastos compartidos que pagaba el que se va (si no, el gasto
@@ -4153,18 +4577,27 @@ $('addForm').addEventListener('submit', (e)=>{
   const amount = numVal('fAmount');
   if(!desc || !amount) return;
   const shared = isSharedPay(currentOwner);
+  const timesRaw = numVal('fTimes');
+  const occurrences = timesRaw > 1 ? Math.round(timesRaw) : undefined;
   const fields = {
     desc, amount,
     date: $('fDate').value || defaultDate(),
     category: categoryOf(desc),
     shares: shared ? sharesFor(currentSplit) : soloShares(currentOwner),
     splitType: shared ? currentSplit : undefined,
-    paidBy: shared ? currentPaidBy : currentOwner
+    paidBy: shared ? currentPaidBy : currentOwner,
+    occurrences
   };
 
   const existing = editingExpenseId ? expenses.find(x=>x.id === editingExpenseId) : null;
-  if(existing) Object.assign(existing, fields);
-  else expenses.push({ id: genId(), ...fields });
+  if(existing){
+    // si cambia la cantidad de veces, el desglose de pagado que ya había no
+    // tiene cómo mapearse prolijo a la nueva cantidad — arranca de nuevo
+    if(existing.occurrences !== occurrences) existing.occurrencesPaid = occurrences ? new Array(occurrences).fill(null) : undefined;
+    Object.assign(existing, fields);
+  }else{
+    expenses.push({ id: genId(), ...fields, occurrencesPaid: occurrences ? new Array(occurrences).fill(null) : undefined });
+  }
 
   saveExpenses();
   closeModal();
@@ -4183,15 +4616,12 @@ function toggleExpensePaid(id){
 function deleteExpense(id){
   const ex = expenses.find(x=>x.id === id);
   if(!ex) return;
-  const locked = lockedTemplateFor(ex);
-  if(locked){   // el botón ya viene deshabilitado; esto cubre el resto de las vías
-    notyf.error(`"${locked.label}" está protegido. Abrí el candado en Ajustes para poder borrarlo.`);
-    return;
-  }
-  expenses = expenses.filter(x=>x.id!==id);
-  saveExpenses();
-  render();
-  notyf.success('Gasto eliminado');
+  openConfirmModal(`¿Eliminar "${ex.desc}"? Esta acción no se puede deshacer.`, ()=>{
+    expenses = expenses.filter(x=>x.id!==id);
+    saveExpenses();
+    render();
+    notyf.success('Gasto eliminado');
+  });
 }
 
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
@@ -4209,12 +4639,22 @@ function splitLabelOf(ex){
   return ids.map(id=>`${nameOf(id).charAt(0).toUpperCase()} ${fmt(personShareOf(ex, id))}`).join(' / ');
 }
 
-// El candado de Ajustes protege la plantilla y también el gasto cargado: si
-// está cerrado, la card no se puede borrar desde Gastos. Editarla sí, que es
-// para lo que está el lápiz — lo que el candado evita es perderla de un toque.
-function lockedTemplateFor(ex){
-  const d = (ex.desc||'').trim().toLowerCase();
-  return fixed.find(f=>f.locked && f.label.toLowerCase() === d) || null;
+// "partes iguales" es corto y va directo en la línea; el detalle por persona
+// (ej: "N $34.610 / V $15.390") ocupaba mucho lugar en la tarjeta, así que
+// ahora se ve como la etiqueta del modal ("Según ingresos") y el detalle solo
+// aparece al pasar el mouse (puro CSS :hover, sin click).
+function splitInfoHtml(splitLabel){
+  if(!splitLabel) return '';
+  if(splitLabel === 'partes iguales') return `<span>·</span><span>${splitLabel}</span>`;
+  const label = escapeHtml(splitLabel);
+  // el texto visible es la opción tal cual está en el modal ("Según
+  // ingresos"), no un ícono suelto — el detalle por persona solo aparece al
+  // pasar el mouse (sin click, es puro CSS :hover), así no ocupa toda la
+  // línea con "N $X / V $Y"
+  return `<span>·</span><span class="bill-info-wrap" tabindex="0" title="${label}" aria-label="División: ${label}">
+    <span class="bill-info-btn">Según ingresos</span>
+    <span class="bill-info-pop">${label}</span>
+  </span><span>·</span>`;
 }
 
 // en un gasto propio decir quién paga sobra... salvo que lo haya puesto otro,
@@ -4228,15 +4668,61 @@ function payerTagHtml(ex){
   return showPayer ? `<span class="tag ${personTagClass(ex.paidBy)}">Paga ${escapeHtml(nameOf(ex.paidBy))}</span>` : '';
 }
 
+// Un gasto fijo puede repetirse varias veces en el mes (ej: limpieza, viene 3
+// veces) — `ex.occurrences` guarda cuántas, `ex.occurrencesPaid` si cada una
+// está pagada (true/false). Sin `occurrences` (o 1), un gasto se comporta
+// exacto como siempre: una sola fila con `ex.paid`. El reparto entre
+// ocurrencias es en partes iguales; el redondeo se acepta tal cual.
+function occurrenceCount(ex){
+  return Number.isInteger(ex.occurrences) && ex.occurrences > 1 ? ex.occurrences : 1;
+}
+function occurrenceAmount(ex){
+  return (ex.amount || 0) / occurrenceCount(ex);
+}
+// pagado de cada ocurrencia (true/false). Solo tiene sentido cuando
+// occurrenceCount(ex) > 1 — todas comparten la fecha del gasto (`ex.date`),
+// tildar el checkbox no la toca.
+function occurrencesPaidArr(ex){
+  const n = occurrenceCount(ex);
+  const arr = Array.isArray(ex.occurrencesPaid) ? ex.occurrencesPaid : [];
+  return Array.from({length:n}, (_, i)=> !!arr[i]);
+}
+function expensePaidAmount(ex){
+  const n = occurrenceCount(ex);
+  if(n <= 1) return ex.paid ? (ex.amount||0) : 0;
+  const per = occurrenceAmount(ex);
+  return occurrencesPaidArr(ex).reduce((s,p)=>s+(p?per:0), 0);
+}
+function expenseUnpaidAmount(ex){
+  return (ex.amount||0) - expensePaidAmount(ex);
+}
+let expandedExpenseIds = new Set();
+function toggleExpenseExpanded(id){
+  if(expandedExpenseIds.has(id)) expandedExpenseIds.delete(id);
+  else expandedExpenseIds.add(id);
+  render();
+}
+function toggleExpenseOccurrencePaid(id, idx){
+  const ex = expenses.find(x=>x.id === id);
+  if(!ex) return;
+  const arr = occurrencesPaidArr(ex);
+  arr[idx] = !arr[idx];
+  ex.occurrencesPaid = arr;
+  ex.paid = arr.every(Boolean);   // por si algo todavía lee ex.paid directamente
+  saveExpenses();
+  render();
+}
+
 function billRow(ex){
   const dateStr = new Date(ex.date+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'});
   const splitLabel = splitLabelOf(ex);
-  const locked = lockedTemplateFor(ex);
+  const n = occurrenceCount(ex);
+  if(n > 1) return billRowRepeating(ex, n, dateStr, splitLabel);
   return `<div class="bill">
     <div class="bill-main">
       <div class="bill-name">${escapeHtml(ex.desc)}</div>
       <div class="bill-meta">
-        <span>${dateStr}</span>${splitLabel ? `<span>·</span><span>${escapeHtml(splitLabel)}</span>` : ''}
+        <span>${dateStr}</span>${splitInfoHtml(splitLabel)}
         ${payerTagHtml(ex)}
         <label class="bill-paid" title="${ex.paid ? 'Pagado' : 'Marcar como pagado'}">
           <input type="checkbox" ${ex.paid ? 'checked' : ''} onchange="toggleExpensePaid('${ex.id}')">
@@ -4245,9 +4731,52 @@ function billRow(ex){
     </div>
     <div class="bill-amt">${fmt(ex.amount)}</div>
     <button class="bill-edit" onclick="openModal('${ex.id}')" aria-label="Editar">✎</button>
-    <button class="bill-del" onclick="deleteExpense('${ex.id}')" aria-label="Eliminar"
-      ${locked ? `disabled title="Protegido por el candado de ${escapeHtml(locked.label)} en Ajustes"` : ''}>✕</button>
+    <button class="bill-del" onclick="deleteExpense('${ex.id}')" aria-label="Eliminar">✕</button>
   </div>`;
+}
+
+// tarjeta padre con el total (mismo look que cualquier gasto, misma columna de
+// ✎/✕ que todas las demás filas) + acordeón con una fila por ocurrencia. La
+// flecha vive junto al nombre y toda la tarjeta abre/cierra al tocarla; ✎/✕
+// cortan la propagación para no disparar el toggle.
+function billRowRepeating(ex, n, dateStr, splitLabel){
+  const paidArr = occurrencesPaidArr(ex);
+  const paidCount = paidArr.filter(Boolean).length;
+  const expanded = expandedExpenseIds.has(ex.id);
+  const per = occurrenceAmount(ex);
+  const parent = `<div class="bill bill-clickable" onclick="toggleExpenseExpanded('${ex.id}')">
+    <div class="bill-main">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${expanded ? ' open' : ''}" tabindex="-1"
+          aria-label="${expanded ? 'Ocultar' : 'Ver'} las ${n} veces">▸</button>
+        <div class="bill-name">${escapeHtml(ex.desc)}</div>
+      </div>
+      <div class="bill-meta">
+        <span>${dateStr}</span>${splitInfoHtml(splitLabel)}
+        ${payerTagHtml(ex)}
+        <span class="bill-occ-badge">${paidCount} de ${n} pagadas</span>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(ex.amount)}</div>
+    <button class="bill-edit" onclick="event.stopPropagation(); openModal('${ex.id}')" aria-label="Editar">✎</button>
+    <button class="bill-del" onclick="event.stopPropagation(); deleteExpense('${ex.id}')" aria-label="Eliminar">✕</button>
+  </div>`;
+  if(!expanded) return parent;
+  const items = paidArr.map((paid,i)=>`<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">${escapeHtml(ex.desc)}</div>
+      <div class="bill-meta">
+        <span>${dateStr}</span>
+        <label class="bill-paid" title="${paid ? 'Pagado' : 'Marcar como pagado'}">
+          <input type="checkbox" ${paid ? 'checked' : ''} onchange="toggleExpenseOccurrencePaid('${ex.id}', ${i})">
+        </label>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(per)}</div>
+    <button class="bill-edit" onclick="openModal('${ex.id}')" aria-label="Editar">✎</button>
+    <button class="bill-del" onclick="deleteExpense('${ex.id}')" aria-label="Eliminar">✕</button>
+  </div>`).join('');
+  return parent + `<div class="bill-occurrences">${items}</div>`;
 }
 
 // Un gasto variable o posible es de una persona (sale entero de su saldo) o
@@ -4269,7 +4798,7 @@ function varExpenseBillRow(ex){
     <div class="bill-main">
       <div class="bill-name">${escapeHtml(ex.desc)}</div>
       <div class="bill-meta">
-        <span>${dateStr}</span>${splitLabel ? `<span>·</span><span>${escapeHtml(splitLabel)}</span>` : ''}
+        <span>${dateStr}</span>${splitInfoHtml(splitLabel)}
         ${payerTagHtml(ex)}
         <label class="bill-paid" title="${ex.paid ? 'Pagado' : 'Marcar como pagado'}">
           <input type="checkbox" ${ex.paid ? 'checked' : ''} onchange="toggleVarExpensePaid('${ex.id}')">
@@ -4351,18 +4880,85 @@ function renderFixedTabs(list, mes){
 // cierre de cualquier lista de gastos: la suma real de lo que se está
 // mostrando (respeta el filtro Compartidos/persona activo). No es un saldo
 // de la cadena de plata — eso lo muestra el bloque "Saldos" de más abajo.
-function billTotalRow(list){
+// `showPaidSplit` hace que "Totales" mismo se pueda desplegar para ver
+// "Pagado" / "A pagar" adentro — así por defecto se ve un solo número, no
+// tres — y cada una de esas dos, a su vez, se puede desplegar en el detalle
+// de qué gastos la componen. Solo tiene sentido en listas de gastos reales
+// (fijos/variables, con `paid`), no en Gastos posibles (sin concepto de
+// pagado). `opts.key` separa el estado de "abierto/cerrado" entre bloques.
+let expandedTotalsMain = new Set();
+function toggleTotalsMain(key){
+  if(expandedTotalsMain.has(key)) expandedTotalsMain.delete(key);
+  else expandedTotalsMain.add(key);
+  render();
+}
+let expandedTotalRows = new Set();
+function toggleTotalRow(key){
+  if(expandedTotalRows.has(key)) expandedTotalRows.delete(key);
+  else expandedTotalRows.add(key);
+  render();
+}
+function subtotalRowHtml(label, amount, items, key, isPaidRow, amountFn){
+  const open = expandedTotalRows.has(key);
+  const clickable = items.length > 0;
+  const header = `<div class="bill bill-subtotal${isPaidRow ? ' is-paid' : ''}${clickable ? ' bill-clickable' : ''}"
+      ${clickable ? `onclick="toggleTotalRow('${key}')"` : ''}>
+    <div class="bill-main">
+      <div class="bill-name-row">
+        ${clickable ? `<button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+          aria-label="${open ? 'Ocultar' : 'Ver'} el detalle">▸</button>` : ''}
+        <div class="bill-name">${label}</div>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(amount)}</div>
+  </div>`;
+  if(!open || !clickable) return header;
+  // en Pagado interesa saber de qué día es cada uno; en A pagar no hay fecha
+  // de pago que mostrar todavía, así que no se agrega nada.
+  const rows = items.map(x=>{
+    const dateLabel = isPaidRow ? `<span class="bill-subtotal-date"> · ${shortDate(x.date)}</span>` : '';
+    return `<div class="bill bill-subtotal-item">
+    <div class="bill-main"><div class="bill-name">${escapeHtml(x.desc)}${dateLabel}</div></div>
+    <div class="bill-amt">${fmt(amountFn(x))}</div>
+  </div>`;
+  }).join('');
+  return header + `<div class="bill-occurrences">${rows}</div>`;
+}
+function billTotalRow(list, opts){
   if(!list.length) return '';
   const total = list.reduce((s,x)=>s+(x.amount||0), 0);
-  return `<div class="bill bill-total">
-    <div class="bill-main"><div class="bill-name">Totales</div></div>
+  if(!opts || !opts.showPaidSplit){
+    // Gastos posibles: sin Pagado/A pagar, Totales queda fijo, sin flecha
+    return `<div class="bill bill-total">
+      <div class="bill-main"><div class="bill-name">Totales</div></div>
+      <div class="bill-amt">${fmt(total)}</div>
+    </div>`;
+  }
+  const key = opts.key || 'list';
+  const open = expandedTotalsMain.has(key);
+  const header = `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
+    <div class="bill-main">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+          aria-label="${open ? 'Ocultar' : 'Ver'} Pagado y A pagar">▸</button>
+        <div class="bill-name">Totales</div>
+      </div>
+    </div>
     <div class="bill-amt">${fmt(total)}</div>
   </div>`;
+  if(!open) return header;
+
+  const paidItems = list.filter(x=>expensePaidAmount(x) > 0);
+  const unpaidItems = list.filter(x=>expenseUnpaidAmount(x) > 0);
+  const paidTotal = paidItems.reduce((s,x)=>s+expensePaidAmount(x), 0);
+  const extra = subtotalRowHtml('Pagado', paidTotal, paidItems, key+':paid', true, expensePaidAmount)
+              + subtotalRowHtml('A pagar', total - paidTotal, unpaidItems, key+':unpaid', false, expenseUnpaidAmount);
+  return header + `<div class="bill-occurrences">${extra}</div>`;
 }
 
 function expenseListHtml(list, mes, vacio){
   return list.length
-    ? list.map(billRow).join('') + billTotalRow(list)
+    ? list.map(billRow).join('') + billTotalRow(list, {showPaidSplit:true, key:'fixed'})
     : `<div class="empty">${escapeHtml(vacio)}<br>Agregá el primero con el botón de arriba.</div>`;
 }
 
@@ -4376,6 +4972,7 @@ $('fixedTabs').addEventListener('click', (e)=>{
 function render(){
   if(!viewMonth) viewMonth = monthNow();
   $('monthLabel').textContent = monthLabel(viewMonth);
+  updateCopyMonthBtn();
   renderIncomeLists();
 
   const list = expenses.filter(x=>inViewMonth(x.date))
@@ -4457,30 +5054,26 @@ function renderBlockSaldos(fin){
   renderSaldos('startSaldos', fin, f=>f.inc);
   renderSaldos('fixedSaldos', fin, f=>f.afterFijos);
   renderSaldos('varSaldos', fin, f=>f.afterVar);
-  renderBudgetSaldos();
+  renderDolaresSaldos(fin);
 }
 
-// lo presupuestado en el rubro "Compra dólares" de cada persona, en pesos y
-// convertido a dólares con la cotización del día (o el fx cargado a mano si
-// todavía no se consultó la cotización) — es el saldo que cierra el bloque
-// de Gastos posibles, la última parada antes de Ahorro
-function saldoDolarCell(label, pesos){
-  const rate = usdRate();
-  return `<div class="sld-cell ${pesos < 0 ? 'tone-bad' : 'tone-good'}">
-    <div class="sld-who">${escapeHtml(label)}</div>
-    <div class="sld-amt">${fmt(pesos)}</div>
-    <div class="sld-sub">${rate > 0 ? fmtUsd(pesos / rate) : '—'}</div>
-  </div>`;
+// lo que ya está cargado en el rubro "Compra dólares" de esa persona
+function dolaresAmountFor(person){
+  const c = (budgetTemplates[person] || []).find(x=>x.label === 'Compra dólares');
+  return c ? (c.amount || 0) : 0;
 }
-function renderBudgetSaldos(){
-  const el = $('budgetSaldos');
+// Saldos que cierra "Compra dólares": el saldo anterior de la cadena
+// (afterVar, apenas se pagan fijos y variables) menos lo que ya se apartó
+// para dólares — cuánto queda disponible después de esa compra. Gastos
+// posibles no tiene nada compartido (a diferencia de fijos/variables) — es
+// siempre de una persona — así que acá se muestra solo la de la sub-pestaña
+// abierta (currentBudgetTab), no las de todos a la vez.
+function renderDolaresSaldos(fin){
+  const el = $('dolaresSaldos');
   if(!el) return;
-  el.innerHTML = pids().map(p=>{
-    const c = (budgetTemplates[p] || []).find(x=>x.label === 'Compra dólares');
-    return saldoDolarCell(names[p], c ? (c.amount || 0) : 0);
-  }).join('');
+  const p = currentBudgetTab;
+  el.innerHTML = saldoCell(names[p], fin[p].afterVar - dolaresAmountFor(p));
 }
-
 
 // ---- Gastos posibles ----
 // Los rubros de cada persona (Salidas, Gustos, Compra dólares, y los que
@@ -4492,9 +5085,12 @@ const ownBudgetTotal = (person) => budgetTotalOf(person);
 
 let currentBudgetTab = 'A';
 
+// Compra dólares se separa del resto — es el ahorro, con prioridad sobre
+// Salidas/Gustos (ver redistribuirWantsSegunDolares) — y se muestra primero,
+// arriba de los demás rubros.
 function renderBudgetTabs(){
-  const tabs = $('budgetTabs'), box = $('budgetList');
-  if(!tabs || !box) return;
+  const tabs = $('budgetTabs'), box = $('budgetList'), dolaresBox = $('dolaresList');
+  if(!tabs || !box || !dolaresBox) return;
   const solo = peopleCount() < 2;
   if(!isPerson(currentBudgetTab)) currentBudgetTab = firstPid();
 
@@ -4508,12 +5104,17 @@ function renderBudgetTabs(){
   }
 
   const cats = budgetTemplates[currentBudgetTab] || [];
-  const rows = cats.length
-    ? cats.map(budgetRubroRow).join('') + billTotalRow(cats)
+  const dolaresCat = cats.find(c=>c.label === 'Compra dólares');
+  const restCats = cats.filter(c=>c.label !== 'Compra dólares');
+
+  dolaresBox.innerHTML = dolaresCat ? budgetRubroRow(dolaresCat)
+    : `<div class="empty">Sin rubro de Compra dólares.<br>
+       <button type="button" class="btn-link" onclick="switchTab('ajustes')">Cargalo en Ajustes</button></div>`;
+
+  box.innerHTML = restCats.length
+    ? restCats.map(budgetRubroRow).join('') + billTotalRow(restCats)
     : `<div class="empty">${escapeHtml(nameOf(currentBudgetTab))} no tiene rubros cargados.<br>
        <button type="button" class="btn-link" onclick="switchTab('ajustes')">Cargalos en Ajustes</button></div>`;
-
-  box.innerHTML = rows;
 
   const ingreso = financeFor(currentBudgetTab).inc;
   $('budgetIdealHint').textContent = ingreso > 0
@@ -4524,11 +5125,13 @@ function renderBudgetTabs(){
 // misma card que un gasto fijo (texto + ✎ + ✕), igual que los demás
 // bloques de Gastos. El lápiz habilita el monto para editarlo ahí mismo;
 // tocar Compra dólares reacomoda Salidas y Gustos solo, igual que en
-// Ajustes — ver el listener de #budgetList.
+// Ajustes — ver el listener de #budgetAllLists.
 let editingBudgetAmtId = null;
 // Compra dólares se puede ver/editar en pesos o en dólares — el icono ⇄
-// alterna cuál de los dos, no hay dos campos a la vez (se veía raro apilado)
-let budgetDolaresCur = 'ARS';
+// alterna cuál de los dos, no hay dos campos a la vez (se veía raro apilado).
+// Arranca en USD (si hay cotización); sin cotización cargada, showUsd cae a
+// ARS solo, así nunca se ve vacío.
+let budgetDolaresCur = 'USD';
 function budgetRubroRow(c){
   const editing = editingBudgetAmtId === c.id;
   const isDolares = c.label === 'Compra dólares';
@@ -4551,15 +5154,36 @@ function budgetRubroRow(c){
     amt = `<div class="bill-amt">${showUsd ? fmtUsd((c.amount || 0) / rate) : fmt(c.amount || 0)}</div>`;
   }
 
+  // Compra dólares también ofrece "registrar" — carga la compra de este mes
+  // en Ahorro en dólares con su propia fecha y cotización, en vez de que ese
+  // historial dependa de recalcular la plantilla con la cotización de hoy
+  const registerBtn = isDolares
+    ? `<button class="bill-edit" onclick="registerDolaresPurchase('${c.id}')" aria-label="Registrar compra de dólares" title="Registrar compra de dólares">
+         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+           <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/><path d="M12 14v6M9 17h6"/>
+         </svg>
+       </button>`
+    : '';
+
   return `<div class="bill">
     <div class="bill-main">
       ${nameHtml}
     </div>
     ${amt}
+    ${registerBtn}
     <button class="bill-edit" onclick="toggleBudgetAmtEdit('${c.id}')" aria-label="Editar">✎</button>
-    <button class="bill-del" onclick="deleteBudgetRubro('${c.id}')" aria-label="Eliminar"
-      ${c.locked ? 'disabled title="Protegido por el candado en Ajustes"' : ''}>✕</button>
+    <button class="bill-del" onclick="deleteBudgetRubro('${c.id}')" aria-label="Eliminar">✕</button>
   </div>`;
+}
+function registerDolaresPurchase(id){
+  const c = (budgetTemplates[currentBudgetTab] || []).find(x=>x.id === id);
+  if(!c) return;
+  currentAhorroPerson = currentBudgetTab;
+  // si el mes que se está viendo ya tiene una entrada (a mano o autogenerada),
+  // la abre para editarla en vez de duplicarla
+  const existing = savingsSlot(currentAhorroPerson).items.find(e=>monthKey(e.date) === viewMonth);
+  if(existing) openSavingsModal(existing.id);
+  else openSavingsModal(null, { amount: c.amount || 0, fx: usdRate(), currency: 'ARS' });
 }
 function toggleBudgetDolaresCur(){
   budgetDolaresCur = budgetDolaresCur === 'ARS' ? 'USD' : 'ARS';
@@ -4570,13 +5194,13 @@ function toggleBudgetAmtEdit(id){
   editingBudgetAmtId = editingBudgetAmtId === id ? null : id;
   renderBudgetTabs();
   if(editingBudgetAmtId !== id) return;
-  const input = document.querySelector(`#budgetList input.f-amt[data-id="${id}"]`);
+  const input = document.querySelector(`#budgetAllLists input.f-amt[data-id="${id}"]`);
   if(input){ input.focus(); input.select(); }
 }
-$('budgetList').addEventListener('keydown', (e)=>{
+$('budgetAllLists').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter' && e.target.classList.contains('f-amt')) e.target.blur();
 });
-$('budgetList').addEventListener('change', (e)=>{
+$('budgetAllLists').addEventListener('change', (e)=>{
   const el = e.target;
   if(!el.classList.contains('f-amt')) return;
   const item = (budgetTemplates[currentBudgetTab]||[]).find(f=>f.id === el.dataset.id);
@@ -4603,15 +5227,13 @@ function deleteBudgetRubro(id){
   const who = currentBudgetTab;
   const c = (budgetTemplates[who]||[]).find(x=>x.id === id);
   if(!c) return;
-  if(c.locked){
-    notyf.error(`"${c.label}" está protegido. Abrí el candado en Ajustes para poder borrarlo.`);
-    return;
-  }
-  budgetTemplates[who] = budgetTemplates[who].filter(x=>x.id !== id);
-  saveBudgetTemplates();
-  renderBudgetTemplates();
-  render();
-  notyf.success(`"${c.label}" eliminado`);
+  openConfirmModal(`¿Eliminar "${c.label}"? Esta acción no se puede deshacer.`, ()=>{
+    budgetTemplates[who] = budgetTemplates[who].filter(x=>x.id !== id);
+    saveBudgetTemplates();
+    renderBudgetTemplates();
+    render();
+    notyf.success(`"${c.label}" eliminado`);
+  });
 }
 
 $('budgetTabs').addEventListener('click', (e)=>{
@@ -4619,6 +5241,7 @@ $('budgetTabs').addEventListener('click', (e)=>{
   if(!btn) return;
   currentBudgetTab = btn.dataset.tab;
   renderBudgetTabs();
+  renderDolaresSaldos(monthFinance(viewMonth));   // el saldo también es por persona
 });
 
 
@@ -4657,7 +5280,7 @@ function renderVarExpenseTabs(){
 
 function varListHtml(list, vacio){
   return list.length
-    ? list.map(varExpenseBillRow).join('') + billTotalRow(list)
+    ? list.map(varExpenseBillRow).join('') + billTotalRow(list, {showPaidSplit:true, key:'variable'})
     : `<div class="empty">${escapeHtml(vacio)}<br>Agregá el primero con el botón de arriba.</div>`;
 }
 
@@ -4738,6 +5361,11 @@ function usdRate(){ return todayUsdRate || income.fx || 0; }
 function goalTargetArs(g){
   return g.currency === 'USD' ? (g.amount||0) * usdRate() : (g.amount||0);
 }
+// "Ya juntaste" se carga en la misma moneda que el monto de la meta, así que
+// se convierte igual que el target antes de compararlo contra nada en pesos
+function goalSavedArs(g){
+  return g.currency === 'USD' ? (g.saved||0) * usdRate() : (g.saved||0);
+}
 // months between this month and a 'YYYY-MM' deadline, 0 if it's already past
 function monthsUntil(key){
   if(!key) return null;
@@ -4791,7 +5419,7 @@ function renderGoals(monthlySaving, person){
         pct, detail, extra, acts, 'por mes');
     }
 
-    const gSaved = Math.max(0, g.saved || 0);
+    const gSaved = Math.max(0, goalSavedArs(g));
     const pct = targetArs > 0 ? Math.min(100, gSaved/targetArs*100) : 0;
     const falta = Math.max(0, targetArs - gSaved);
     const detail = pct >= 100
@@ -4858,6 +5486,37 @@ function renderRule5030(person){
     row('Ahorro', Math.max(0, saved), 20, false);
 }
 
+// genera, una sola vez por mes con datos, una fila de Ahorro en dólares a
+// partir del rubro Compra dólares — así el usuario ve algo sin tener que
+// cargarlo a mano cada mes. El tipo de cambio se fija con la cotización del
+// momento en que el mes se ve por primera vez (no con la de "hoy" cada vez
+// que se renderiza), así dos meses vistos en días distintos no terminan
+// mostrando el mismo valor en dólares. `autoMonths` recuerda qué meses ya se
+// consideraron aunque el usuario haya borrado la fila generada, para que
+// borrarla no la vuelva a crear en el próximo render.
+function ensureAutoDolaresRows(person){
+  const slot = savingsSlot(person);
+  // solo hasta el mes que se está viendo — los gastos fijos ya tienen cargado
+  // el mes que viene apenas se marca uno pagado, así que sin este corte
+  // aparecía ahorro "del futuro" (octubre) mirando un mes anterior (septiembre)
+  const months = [...new Set([
+    ...expenses.map(e=>monthKey(e.date)),
+    ...(income.entries[person]||[]).map(e=>monthKey(e.date))
+  ].filter(m=>m && m <= viewMonth))];
+  const pending = months.filter(m=>!slot.autoMonths.includes(m));
+  if(!pending.length) return;
+  const rate = usdRate();
+  const dolares = (budgetTemplates[person] || []).find(c => c.label === 'Compra dólares');
+  const pesos = dolares ? (dolares.amount || 0) : 0;
+  if(!(pesos > 0) || !(rate > 0)) return;   // sin monto o sin cotización, se reintenta en el próximo render
+  pending.forEach(m=>{
+    slot.autoMonths.push(m);
+    if(!slot.items.some(e=>monthKey(e.date) === m)){
+      slot.items.push({ id: genId(), currency:'ARS', pesos, fx: rate, amount: Math.round(pesos/rate), date: m+'-01', auto: true });
+    }
+  });
+  saveSavings();
+}
 function renderAhorro(){
   const person = currentAhorroPerson;
   const ingreso = incomeTotalArs(person);
@@ -4879,31 +5538,46 @@ function renderAhorro(){
   renderPlan(person);
   renderRule5030(person);
 
-  // ---- month by month ----
-  // a month can have income logged with no expenses yet, or vice versa — union both
-  const months = [...new Set([
-    ...expenses.map(e=>monthKey(e.date)),
-    ...(income.entries[person]||[]).map(e=>monthKey(e.date))
-  ].filter(Boolean))].sort();
-  // el ahorro es el rubro Compra dólares — es una plantilla recurrente, no
-  // cambia mes a mes, así que es el mismo número de la tarjeta de arriba
-  // repetido en cada mes con datos cargados
-  const dolaresC = (budgetTemplates[person] || []).find(c => c.label === 'Compra dólares');
-  const dolaresAmt = dolaresC ? (dolaresC.amount || 0) : 0;
-  const rows = months.map(m=>({ m, ahorro: dolaresAmt }));
-  const peak = Math.max(1, ...rows.map(r=>Math.abs(r.ahorro)));
-  const acumulado = rows.reduce((s,r)=>s+r.ahorro, 0);
+  // ---- ahorro en dólares: registro real de cada compra/ingreso de dólares,
+  // cargado a mano (con el botón de abajo, o desde la card de Compra dólares
+  // en Gastos). Cada entrada guarda su propio tipo de cambio si se cargó en
+  // pesos, así el valor en dólares queda fijo con la cotización real de ese
+  // día — nunca recalculado con la cotización de hoy, que es lo que hacía
+  // que dos meses con la misma plantilla mostraran el mismo monto en dólares
+  // aunque el dólar valiera distinto en cada uno
+  ensureAutoDolaresRows(person);
+  const rate = todayUsdRate;
+  const svMonthLabel = (key) => { const s = monthShort(key); return s.charAt(0).toUpperCase() + s.slice(1); };
+  // acumulado hasta el mes que se está viendo, nada del futuro — igual que el
+  // corte de ensureAutoDolaresRows, por si quedó una fila generada antes de
+  // ese ajuste o el usuario cargó una a mano por adelantado
+  const svRows = savingsSlot(person).items
+    .filter(e=>monthKey(e.date) <= viewMonth)
+    .map(e=>({
+      label: svMonthLabel(monthKey(e.date)), sortKey: e.date,
+      pesos: e.pesos != null ? e.pesos : (rate ? e.amount * rate : null),
+      usd: e.amount, id: e.id
+    })).sort((a,b)=> (a.sortKey||'').localeCompare(b.sortKey||''));
+  const totalPesos = svRows.reduce((s,r)=>s + (r.pesos||0), 0);
+  const totalUsd = svRows.reduce((s,r)=>s + (r.usd||0), 0);
 
-  $('savingsHistory').innerHTML = rows.length ? rows.map(r=>{
-    const w = Math.round(Math.abs(r.ahorro)/peak*100);
-    const neg = r.ahorro < 0;
-    return `<div class="sv-row">
-      <span class="sv-m">${monthLabel(r.m)}</span>
-      <span class="sv-bar"><i class="${neg?'neg':''}" style="width:${w}%"></i></span>
-      <span class="sv-v ${neg?'neg':''}">${fmt(r.ahorro)}</span>
-    </div>`;
-  }).join('') + `<div class="sv-total"><span>Acumulado</span><span class="v ${acumulado<0?'neg':''}">${fmt(acumulado)}</span></div>`
-    : '<div class="empty">Todavía no hay gastos cargados en ningún mes.</div>';
+  const showUsd = savingsCur === 'USD';
+  const svCurBtn = $('svCurToggle');
+  if(svCurBtn){
+    svCurBtn.setAttribute('aria-label', `Ver en ${showUsd ? 'pesos' : 'dólares'}`);
+    svCurBtn.setAttribute('title', `Ver en ${showUsd ? 'pesos' : 'dólares'}`);
+  }
+  const svVal = (r) => showUsd ? (r.usd != null ? fmtUsd(r.usd) : '—') : (r.pesos != null ? fmt(r.pesos) : '—');
+
+  $('savingsHistory').innerHTML = svRows.length ? svRows.map(r=>`<div class="sv-row">
+      <span class="sv-m">${r.label}</span>
+      <span class="sv-v">${svVal(r)}</span>
+      <span class="goal-acts">
+        <button type="button" onclick="openSavingsModal('${r.id}')" aria-label="Editar">✎</button>
+        <button type="button" onclick="deleteSavingsEntry('${r.id}')" aria-label="Eliminar">✕</button>
+      </span>
+    </div>`).join('') + `<div class="sv-total"><span>Total</span><span class="v">${showUsd ? fmtUsd(totalUsd) : fmt(totalPesos)}</span></div>`
+    : '<div class="empty">Todavía no cargaste ahorro en dólares.</div>';
 
   renderGoals(ahorro, person);
 }
