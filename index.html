@@ -39,9 +39,9 @@
   .wrap{max-width:900px;margin:0 auto;padding:32px 20px 64px;}
   @media(max-width:540px){.wrap{padding:20px 10px 48px;}}
   h1{font-weight:600;font-size:34px;margin:0;letter-spacing:-0.374px;line-height:1.15;}
-  .app-head{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;margin-bottom:20px;}
+  .app-head{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:16px;margin-bottom:20px;}
   .app-head h1{justify-self:start;}
-  .app-head .month-nav{justify-self:center;}
+  .app-head .month-nav{justify-self:start;}
   .head-right{display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
 
   .session-menu,.popover-menu{position:relative;flex:0 0 auto;}
@@ -115,6 +115,7 @@
   /* ---- month totals strip ---- */
   .totals{display:grid;grid-template-columns:repeat(3,1fr);background:var(--card);
     border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:12px;}
+  .totals.totals-2{grid-template-columns:repeat(2,1fr);}
   .totals-cell{padding:16px 12px;text-align:center;border-right:1px solid var(--line);}
   .totals-cell:last-child{border-right:none;}
   .totals-k{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--body-muted);font-weight:600;}
@@ -512,6 +513,10 @@
   @media(max-width:540px){.sub-seg button{font-size:12.5px;padding:7px 6px;}}
 
   .income-note{font-size:12px;color:var(--body-muted);margin-top:2px;line-height:1.43;letter-spacing:-0.224px;}
+  /* "***" que reemplaza un monto en modo privado: el asterisco se dibuja
+     pegado arriba de la línea en casi cualquier fuente, así que sin este
+     ajuste queda flotando por encima de los números y símbolos vecinos */
+  .amt-mask{position:relative;top:0.15em;letter-spacing:1px;}
   .income-preview{display:flex;justify-content:space-between;font-variant-numeric:tabular-nums;font-size:13px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);}
   .btn-primary{margin-top:4px;background:var(--primary);color:#fff;border:none;border-radius:9999px;padding:12px 22px;font-size:15px;font-weight:500;cursor:pointer;font-family:'Inter',system-ui,sans-serif;transition:background-color .15s ease, transform .1s ease;}
   .btn-primary:hover{background:var(--primary-active);}
@@ -693,6 +698,9 @@
     <div class="head-right">
       <!-- la fecha de hoy, a la vista: antes vivía detrás de un ícono de calendario -->
       <div class="today-chip" id="todayDate"></div>
+      <!-- oculta todos los montos de la app con •••, para mostrar la pantalla
+           sin exponer cifras — ver toggleAmountsHidden() -->
+      <button type="button" class="icon-btn" id="hideAmountsBtn" onclick="toggleAmountsHidden()" aria-pressed="false"></button>
       <div class="popover-menu">
         <button type="button" class="icon-btn" id="usdBtn" onclick="toggleUsdPopover()" aria-label="Cotización del dólar blue" aria-haspopup="true" aria-expanded="false">$</button>
         <div class="session-dropdown" id="usdDropdown">
@@ -726,6 +734,7 @@
   <div class="tabs" id="tabs" role="tablist">
     <button type="button" data-tab="ingresos" class="active" role="tab">Ingresos</button>
     <button type="button" data-tab="gastos" role="tab">Gastos</button>
+    <button type="button" data-tab="deudas" role="tab">Deudas</button>
     <button type="button" data-tab="ahorro" role="tab">Ahorro</button>
     <button type="button" data-tab="resumen" role="tab">Resumen</button>
   </div>
@@ -763,7 +772,6 @@
         <div class="sld-title">Saldos</div>
         <div class="sld-grid" id="fixedSaldos"></div>
       </div>
-      <div class="bal-line" id="balanceResult"></div>
     </div>
 
     <!-- BLOQUE 2: gastos variables del mes -->
@@ -778,6 +786,14 @@
         <div class="sld-title">Saldos</div>
         <div class="sld-grid" id="varSaldos"></div>
       </div>
+    </div>
+
+    <!-- quién le debe a quién, panorama completo (fijos + variables de todos
+         los meses) — fuera de los bloques de gastos, después de variables.
+         El card se oculta entero cuando no hay deuda (balanceResult vacío),
+         para no dejar una caja vacía con padding. -->
+    <div class="card" id="balanceCard">
+      <div class="bal-line" id="balanceResult"></div>
     </div>
 
     <!-- BLOQUE 3: presupuesto discrecional. Compra dólares va primero — es el
@@ -809,6 +825,21 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- ============ TAB: DEUDAS ============ -->
+  <div class="tab-panel" id="panel-deudas" role="tabpanel">
+    <div class="seg" id="deudasPersonSeg" style="margin-bottom:14px;"></div>
+    <div class="card">
+      <div class="section-title" id="deudasTitle">Deudas</div>
+      <div class="totals totals-2" id="deudasStrip"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Tus deudas</div>
+      <button type="button" class="btn-add" onclick="openDebtModal()">+ Agregar deuda</button>
+      <div id="debtsBox" style="margin-top:14px;"></div>
+    </div>
   </div>
 
   <!-- ============ TAB: AHORRO ============ -->
@@ -933,7 +964,8 @@
     </div>
 
     <div class="card">
-      <div class="section-title">Gastos posibles</div>
+      <div class="section-title"><span id="bTplBlockTitle">Gastos posibles</span></div>
+      <p class="income-note" style="margin-top:-4px;">Los montos son propios de cada mes — para ver o cambiar los de otro mes, primero cambiá el mes en la pestaña Gastos.</p>
       <div class="seg" id="bTplPersonSeg" style="margin-bottom:14px;"></div>
       <div class="fixed-head">
         <span class="h1c">Concepto</span>
@@ -947,6 +979,24 @@
         <button type="button" onclick="addBudgetTemplate()" aria-label="Agregar gasto posible">+</button>
       </div>
       <button type="button" class="btn-primary fixed-save-btn" onclick="commitBudgetTemplates()">Guardar gastos posibles</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Deudas</div>
+      <p class="income-note" style="margin-top:-4px;">Deudas recurrentes con nombre y monto de siempre, para tenerlas a un toque al agregar una deuda. Sin "Compartido" — cada deuda es de una sola persona.</p>
+      <div class="seg" id="dTplPersonSeg" style="margin-bottom:14px;"></div>
+      <div class="fixed-head">
+        <span class="h1c">Concepto</span>
+        <span class="h2c">Monto</span>
+        <span class="h3c"></span>
+      </div>
+      <div id="dTplTable"></div>
+      <div class="fixed-add">
+        <input type="text" id="dTplLabelInput" placeholder="Ej: Tarjeta, Préstamo auto">
+        <input type="text" class="f-new-amt ie-money" inputmode="numeric" id="dTplAmountInput" placeholder="0">
+        <button type="button" onclick="addDebtTemplate()" aria-label="Agregar deuda recurrente">+</button>
+      </div>
+      <button type="button" class="btn-primary fixed-save-btn" onclick="commitDebtTemplates()">Guardar deudas</button>
     </div>
 
     <div class="card">
@@ -1229,6 +1279,60 @@
   </div>
 </div>
 
+<!-- ============ MODAL: agregar/editar deuda ============ -->
+<div class="modal-backdrop" id="debtModal" role="dialog" aria-modal="true" aria-labelledby="debtModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="debtModalTitle">Agregar deuda</div>
+      <button type="button" class="modal-close" onclick="closeDebtModal()" aria-label="Cerrar">✕</button>
+    </div>
+    <form class="add-form" id="debtForm">
+      <div>
+        <label>¿De quién es?</label>
+        <div class="seg" id="dWhoSeg"></div>
+      </div>
+      <div>
+        <label for="dName">¿Qué deuda tenés que pagar?</label>
+        <input type="text" id="dName" placeholder="Ej: Tarjeta, Préstamo auto" required>
+        <!-- una ficha por deuda recurrente cargada en Ajustes; tocarla completa
+             nombre y monto -->
+        <div class="chips" id="dDescChips"></div>
+      </div>
+      <div>
+        <label>¿Cómo pagarlo?</label>
+        <div class="seg" id="dKindSeg">
+          <button type="button" data-kind="total" class="active">Todo junto</button>
+          <button type="button" data-kind="plan">En cuotas</button>
+        </div>
+      </div>
+      <div class="row2" id="dMonthsField" style="display:none;">
+        <div>
+          <label for="dMonths">¿En cuántos meses?</label>
+          <input type="text" inputmode="numeric" id="dMonths" placeholder="Ej: 6">
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="dAmount">Monto</label>
+          <input type="text" inputmode="numeric" class="ie-money" id="dAmount" placeholder="0" required>
+        </div>
+        <div>
+          <label>Moneda</label>
+          <div class="seg" id="dCurSeg">
+            <button type="button" data-cur="ARS" class="active">ARS</button>
+            <button type="button" data-cur="USD">USD</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label for="dSaved">Ya juntaste (opcional)</label>
+        <input type="text" inputmode="numeric" class="ie-money" id="dSaved" placeholder="0">
+      </div>
+      <button type="submit" class="btn-primary" id="dSubmitBtn">Agregar deuda</button>
+    </form>
+  </div>
+</div>
+
 <!-- ============ MODAL: agregar/editar ahorro en dólares ============ -->
 <div class="modal-backdrop" id="savingsModal" role="dialog" aria-modal="true" aria-labelledby="savingsModalTitle">
   <div class="modal">
@@ -1297,6 +1401,8 @@ const VAR_EXPENSES_KEY = 'varexpenses_v1';
 // había escrito y no hace falta una columna nueva.
 const BUDGET_TEMPLATES_KEY = 'budgetoverrides_v1';
 const GOALS_KEY = 'goals_v1';
+const DEBTS_KEY = 'debts_v1';
+const DEBT_TEMPLATES_KEY = 'debttemplates_v1';
 const SAVINGS_KEY = 'savings_v1';
 
 let expenses = [];
@@ -1360,6 +1466,15 @@ let budgetTemplates = {};
 // fund: {id, person, name, kind:'total'|'mensual', amount, currency, deadline, saved}
 let goals = [];
 let editingGoalId = null;
+// deudas personales, sin nada compartido: {id, person, name, kind:'total'|'plan',
+// months (solo si es plan), amount, currency, saved} — mismo molde que goals,
+// "saldada" se deriva de saved >= amount en vez de guardarse aparte
+let debts = [];
+let editingDebtId = null;
+// deudas recurrentes de Ajustes, solo nombre y monto de siempre — {personId:
+// [{id,label,amount}]}, mismo molde (plano, sin mes) que varEstimates. Es lo
+// que sale como ficha rápida en el modal de "Agregar deuda"; no toca `debts`.
+let debtTemplates = {};
 // ahorro en dólares por persona: {A:{items:[...], autoMonths:[...]}, ...}.
 // `items` son las filas que se ven en Ahorro — cargadas a mano o generadas
 // solas por ensureAutoDolaresRows() a partir del rubro Compra dólares —
@@ -1375,10 +1490,15 @@ let savingsCur = 'USD';
 let currentGoalPerson = 'A';
 let currentGoalKind = 'total';
 let currentGoalCurrency = 'ARS';
+let currentDebtPerson = 'A';
+let currentDebtKind = 'total';
+let currentDebtCurrency = 'ARS';
 let currentSplit = 'equal';
 let currentPaidBy = 'A';
 let currentOwner = 'A';
 let currentAhorroPerson = 'A';   // which person's individual breakdown Ahorro shows
+let currentDeudasPerson = 'A';   // which person's debts the Deudas tab shows
+let currentDebtTplPerson = 'A';  // which person's recurring debts Ajustes shows
 let viewMonth = '';           // 'YYYY-MM' — the month being planned
 let storageMode = 'ninguno';
 
@@ -1418,8 +1538,19 @@ function catColor(cat){
 }
 
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-const fmt = (n) => new Intl.NumberFormat('es-AR', {style:'currency', currency:'ARS', maximumFractionDigits:0}).format(Math.round(n||0));
-const fmtNum = (n) => new Intl.NumberFormat('es-AR', {maximumFractionDigits:0}).format(Math.round(n||0));
+
+// ---- modo privado: oculta todos los montos con ••• para poder mostrar la
+// pantalla sin exponer cifras reales. Es una preferencia de este dispositivo,
+// no un dato de la pareja, así que vive en localStorage y no en `store`/Supabase.
+// Se resuelve acá adentro, en el único lugar por el que pasan todos los
+// montos de la app (fmt/fmtNum, y fmtUsd/fmtCur que llaman a esos dos), así
+// ningún call site tiene que enterarse de que existe.
+const AMOUNTS_HIDDEN_KEY = 'amounts_hidden';
+let amountsHidden = false;
+try{ amountsHidden = localStorage.getItem(AMOUNTS_HIDDEN_KEY) === '1'; }catch(e){}
+const MASKED_AMOUNT = '<span class="amt-mask">***</span>';
+const fmt = (n) => amountsHidden ? ('$ ' + MASKED_AMOUNT) : new Intl.NumberFormat('es-AR', {style:'currency', currency:'ARS', maximumFractionDigits:0}).format(Math.round(n||0));
+const fmtNum = (n) => amountsHidden ? MASKED_AMOUNT : new Intl.NumberFormat('es-AR', {maximumFractionDigits:0}).format(Math.round(n||0));
 const fmtUsd = (n) => 'US$ ' + fmtNum(n);
 const fmtCur = (n,cur) => cur === 'USD' ? fmtUsd(n) : fmt(n);
 const $ = (id) => document.getElementById(id);
@@ -1448,6 +1579,8 @@ const COLUMN_FOR_KEY = {
   varexpenses_v1: 'variable_expenses',
   budgetoverrides_v1: 'budget_overrides',
   goals_v1: 'goals',
+  debts_v1: 'debts',
+  debttemplates_v1: 'debt_templates',
   savings_v1: 'savings'
 };
 const MIGRATION_FLAG_KEYS = new Set(['fixed_m1','fixed_m2','fixed_m3','fixedincome_m1','budget_cats_m1','budget_cats_m3']);
@@ -1598,6 +1731,8 @@ function applyCoupleRow(){
   if(Array.isArray(coupleRow.variable_expenses)) varExpenses = coupleRow.variable_expenses;
   if(coupleRow.budget_overrides && typeof coupleRow.budget_overrides === 'object') budgetTemplates = migrateBudgetTemplates(coupleRow.budget_overrides);
   if(Array.isArray(coupleRow.goals)) goals = coupleRow.goals;
+  if(Array.isArray(coupleRow.debts)) debts = coupleRow.debts;
+  if(coupleRow.debt_templates && typeof coupleRow.debt_templates === 'object') debtTemplates = coupleRow.debt_templates;
   if(coupleRow.savings && typeof coupleRow.savings === 'object') savings = migrateSavings(coupleRow.savings);
   ensureSharedSlots();
   if(normalizeExpenses()) saveExpenses();
@@ -1651,6 +1786,10 @@ function paintFromLocalCache(code){
     if(bt) budgetTemplates = migrateBudgetTemplates(JSON.parse(bt));
     const g = readLocalCache(code, GOALS_KEY);
     if(g) goals = JSON.parse(g);
+    const dt = readLocalCache(code, DEBTS_KEY);
+    if(dt) debts = JSON.parse(dt);
+    const dtpl = readLocalCache(code, DEBT_TEMPLATES_KEY);
+    if(dtpl) debtTemplates = JSON.parse(dtpl);
     const sv = readLocalCache(code, SAVINGS_KEY);
     if(sv) savings = migrateSavings(JSON.parse(sv));
     if(normalizeExpenses()){ /* fixed up in-memory; loadAll()'s real save will persist it */ }
@@ -1660,6 +1799,7 @@ function paintFromLocalCache(code){
     renderFixedIncome();
     renderVarEstimates();
     renderBudgetTemplates();
+    renderDebtTemplates();
   }catch(e){}
 }
 
@@ -2026,6 +2166,30 @@ function toggleUsdPopover(force){
   dropdown.classList.toggle('open', open);
   btn.setAttribute('aria-expanded', open);
 }
+
+const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-6.06"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.6 20.6 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
+function renderHideAmountsBtn(){
+  const btn = $('hideAmountsBtn');
+  if(!btn) return;
+  btn.innerHTML = amountsHidden ? EYE_OFF_SVG : EYE_OPEN_SVG;
+  btn.setAttribute('aria-pressed', amountsHidden ? 'true' : 'false');
+  const label = amountsHidden ? 'Mostrar montos' : 'Ocultar montos';
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+}
+// preferencia de este dispositivo (localStorage), no dato de la pareja: no
+// pasa por store.set ni toca Supabase
+function toggleAmountsHidden(){
+  amountsHidden = !amountsHidden;
+  try{ localStorage.setItem(AMOUNTS_HIDDEN_KEY, amountsHidden ? '1' : '0'); }catch(e){}
+  renderHideAmountsBtn();
+  // mismo combo de renders que usa el resto de la app para refrescar todas
+  // las pestañas a la vez (ver applySnapshot/commitPeopleCountChange)
+  render();
+  renderFixed(); renderChips(); renderFixedIncome(); renderIncomeChips(); renderIncomeLists();
+  renderVarEstimates(); renderBudgetTemplates(); renderDebtTemplates();
+}
 document.addEventListener('click', (e)=>{
   const sessionMenu = document.querySelector('.session-menu');
   if(sessionMenu && !sessionMenu.contains(e.target)) toggleSessionMenu(false);
@@ -2181,8 +2345,12 @@ function addOneMonth(dateStr){
 // ---- "Copiar mes anterior": para cuando el mes en pantalla arranca de cero
 // y va a ser igual al anterior — trae gastos fijos, variables e ingresos de
 // un mes atrás, con la fecha corrida un mes y el pagado reseteado (todavía no
-// se pagó nada de eso este mes nuevo). Las plantillas (Ajustes) no entran acá
-// porque ya se mantienen solas mes a mes, no son "de" ningún mes puntual.
+// se pagó nada de eso este mes nuevo). Gastos posibles (Compra dólares,
+// Salidas, Gustos) no entra acá explícitamente: budgetTemplatesForMonth() ya
+// clona el mes anterior más cercano la primera vez que se pide uno nuevo, así
+// que apenas se ve el mes ya aparece con lo mismo que tenía el anterior —
+// pero desde ese clon en adelante es independiente, editarlo no vuelve a
+// tocar el mes de origen.
 function monthHasAnyData(key){
   if(expenses.some(x=>monthKey(x.date) === key)) return true;
   if(varExpenses.some(x=>monthKey(x.date) === key)) return true;
@@ -2286,7 +2454,9 @@ function setPeople(list){
   pids().forEach(id=>{
     if(!income.entries[id]) income.entries[id] = [];
     if(!varEstimates[id]) varEstimates[id] = [];
-    if(!budgetTemplates[id]) budgetTemplates[id] = defaultBudgetCats();
+    if(!debtTemplates[id]) debtTemplates[id] = [];
+    // el casillero de gastos posibles es por mes — budgetTemplatesForMonth()
+    // lo crea al vuelo la primera vez que se pide, no hace falta acá
     if(!savings[id]) savings[id] = { items: [], autoMonths: [] };
   });
   ensureSharedSlots();
@@ -2301,6 +2471,9 @@ function setPeople(list){
   if(!vale(currentVarEstPerson)) currentVarEstPerson = firstPid();
   if(!isPerson(currentAhorroPerson)) currentAhorroPerson = firstPid();
   if(!isPerson(currentGoalPerson)) currentGoalPerson = firstPid();
+  if(!isPerson(currentDebtPerson)) currentDebtPerson = firstPid();
+  if(!isPerson(currentDeudasPerson)) currentDeudasPerson = firstPid();
+  if(!isPerson(currentDebtTplPerson)) currentDebtTplPerson = firstPid();
 }
 
 async function loadUsdToday(){
@@ -2389,8 +2562,8 @@ const defaultBudgetCats = () => DEFAULT_BUDGET_CATS.map(c=>({ id: genId(), label
 
 // Del shape viejo ({A:{salidas:200000}}, sólo los topes que habían tocado) al
 // nuevo: los cinco rubros de siempre, con el monto que ya tenían escrito, más
-// cualquier otro que hubiera guardado.
-function migrateBudgetTemplates(raw){
+// cualquier otro que hubiera guardado. Devuelve {personId: [...]}, sin mes.
+function migrateBudgetTemplatesPersonMap(raw){
   if(!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const out = {};
   Object.keys(raw).forEach(k=>{
@@ -2405,16 +2578,80 @@ function migrateBudgetTemplates(raw){
   });
   return out;
 }
+const clonePersonBudgetMap = (map) =>
+  Object.fromEntries(Object.keys(map).map(id=>[id, (map[id]||[]).map(c=>({ ...c, id: genId() }))]));
+
+// `budgetTemplates` guarda {mes: {personId: [...]}} — cada mes tiene sus
+// propios rubros y montos, así editar octubre nunca toca septiembre. La
+// columna vieja `budget_overrides` guardaba un único {personId: [...]} sin
+// mes, compartido por todos los meses a la vez (la causa de que cambiar
+// "Compra dólares" en un mes se viera reflejado en todos los demás). Al migrar
+// esa forma vieja, se la copia (no se comparte la referencia) a todos los
+// meses que ya tienen actividad real, así ningún mes existente cambia de
+// número el día del upgrade; de ahí en más cada mes vive por su cuenta.
+// un mes real siempre tiene forma "YYYY-MM" (monthKey()); si ninguna clave
+// de nivel superior tiene esa forma, lo guardado es la forma vieja sin mes —
+// más robusto que solo mirar si son ids de persona: espacios viejos podían
+// traer además una clave suelta "shared" (u otra) de una limpieza anterior,
+// y contarla como "es un mes" corrompía la migración
+function isLegacyBudgetShape(raw){
+  return !Object.keys(raw).some(k=>/^\d{4}-\d{2}$/.test(k));
+}
+function migrateBudgetTemplates(raw){
+  if(!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  if(!isLegacyBudgetShape(raw)){
+    const out = {};
+    // ya viene con al menos un mes real — cualquier otra clave suelta que no
+    // tenga forma de mes es basura de una migración vieja (p. ej. un
+    // "shared" que quedó de cuando gastos posibles todavía lo tenía) y se
+    // descarta en vez de arrastrarla para siempre
+    Object.keys(raw).forEach(month=>{
+      if(!/^\d{4}-\d{2}$/.test(month)) return;
+      out[month] = migrateBudgetTemplatesPersonMap(raw[month] || {});
+    });
+    return out;
+  }
+  const legacy = migrateBudgetTemplatesPersonMap(raw);
+  const months = new Set([viewMonth || monthNow()]);
+  (expenses||[]).forEach(x=>months.add(monthKey(x.date)));
+  (varExpenses||[]).forEach(x=>months.add(monthKey(x.date)));
+  Object.values((income && income.entries) || {}).forEach(list=>(list||[]).forEach(e=>months.add(monthKey(e.date))));
+  const out = {};
+  months.forEach(m=>{ if(m) out[m] = clonePersonBudgetMap(legacy); });
+  return out;
+}
+
+// accessor perezoso: crea (y cachea en `budgetTemplates`) los rubros de un mes
+// la primera vez que se pide, clonándolos del mes anterior más cercano que ya
+// tenga datos (o de los rubros por defecto si es el primer mes de todos) —
+// así un mes nuevo arranca con lo mismo que el anterior en vez de vacío, pero
+// desde ese clon en adelante son montos completamente independientes.
+function budgetTemplatesForMonth(key){
+  if(!budgetTemplates[key]) budgetTemplates[key] = seedBudgetTemplatesForMonth(key);
+  pids().forEach(id=>{ if(!budgetTemplates[key][id]) budgetTemplates[key][id] = defaultBudgetCats(); });
+  return budgetTemplates[key];
+}
+function seedBudgetTemplatesForMonth(key){
+  const priorKeys = Object.keys(budgetTemplates).filter(k=>k < key).sort();
+  const priorKey = priorKeys[priorKeys.length - 1];
+  const prior = priorKey ? budgetTemplates[priorKey] : null;
+  const out = {};
+  pids().forEach(id=>{
+    const list = prior && prior[id] ? prior[id] : defaultBudgetCats();
+    out[id] = list.map(c=>({ ...c, id: genId() }));
+  });
+  return out;
+}
 
 // one-time: los rubros por defecto pasaron de 5 (Salidas/Regalos/Compras
 // Hogar/Deudas/Diaria) a 3 (Salidas/Gustos/Compra dólares). Borra los viejos,
 // conserva el monto de Salidas si ya estaba, y agrega Gustos/Compra dólares
 // en 0 si faltan. Rubros con otro nombre (agregados a mano) quedan intactos.
 const OLD_BUDGET_LABELS = ['Regalos','Compras Hogar','Deudas','Diaria'];
-function migrateBudgetCatsToThree(templates){
+function migrateBudgetCatsToThreeForPersonMap(map){
   let changed = false;
-  Object.keys(templates).forEach(k=>{
-    const list = templates[k];
+  Object.keys(map).forEach(k=>{
+    const list = map[k];
     if(!Array.isArray(list)) return;
     const filtered = list.filter(c=>!OLD_BUDGET_LABELS.includes(c.label));
     if(filtered.length !== list.length) changed = true;
@@ -2424,7 +2661,16 @@ function migrateBudgetCatsToThree(templates){
         changed = true;
       }
     });
-    templates[k] = filtered;
+    map[k] = filtered;
+  });
+  return changed;
+}
+// `templates` ahora es {mes: {personId: [...]}}: aplica la migración de arriba
+// dentro de cada mes por separado.
+function migrateBudgetCatsToThree(templates){
+  let changed = false;
+  Object.keys(templates).forEach(month=>{
+    if(migrateBudgetCatsToThreeForPersonMap(templates[month] || {})) changed = true;
   });
   return changed;
 }
@@ -2432,15 +2678,22 @@ function migrateBudgetCatsToThree(templates){
 // one-time: "Compra dólares" había dejado de ser un rubro (ver budget_cats_m2,
 // ya sin efecto); vuelve a serlo, así que a quien se le haya borrado se lo
 // agregamos de nuevo en 0.
-function migrateBudgetCatsRestoreDolares(templates){
+function migrateBudgetCatsRestoreDolaresForPersonMap(map){
   let changed = false;
-  Object.keys(templates).forEach(k=>{
-    const list = templates[k];
+  Object.keys(map).forEach(k=>{
+    const list = map[k];
     if(!Array.isArray(list)) return;
     if(!list.some(c=>c.label === 'Compra dólares')){
       list.push({ id: genId(), label: 'Compra dólares', amount: 0 });
       changed = true;
     }
+  });
+  return changed;
+}
+function migrateBudgetCatsRestoreDolares(templates){
+  let changed = false;
+  Object.keys(templates).forEach(month=>{
+    if(migrateBudgetCatsRestoreDolaresForPersonMap(templates[month] || {})) changed = true;
   });
   return changed;
 }
@@ -2640,6 +2893,26 @@ async function loadAll(){
   }catch(e){ goals = []; }
   if(!Array.isArray(goals)) goals = [];
 
+  // misma columna nueva, mismo motivo que goals: sin seed write, para no
+  // fallar a los gritos en un couples table que todavía no tiene `debts`.
+  // Mientras la columna no exista, store.get() siempre devuelve null (no hay
+  // forma de distinguir "columna ausente" de "vacía") — pisar debts con []
+  // en ese caso borraría lo que paintFromLocalCache() ya cargó de la caché
+  // local, así que un valor ausente se trata como "sin cambios", no "vacío"
+  try{
+    const v = await store.get(DEBTS_KEY);
+    if(v) debts = JSON.parse(v);
+  }catch(e){}
+  if(!Array.isArray(debts)) debts = [];
+
+  // misma columna nueva y mismo cuidado que debts arriba: un valor ausente
+  // (columna todavía sin crear) no debe pisar lo que ya cargó la caché local
+  try{
+    const v = await store.get(DEBT_TEMPLATES_KEY);
+    if(v) debtTemplates = JSON.parse(v);
+  }catch(e){}
+  if(!debtTemplates || typeof debtTemplates !== 'object') debtTemplates = {};
+
   // mismo motivo que goals: sin seed write, para no fallar a los gritos en un
   // couples table que todavía no tiene la columna `savings`
   try{
@@ -2660,6 +2933,7 @@ async function loadAll(){
   renderIncomeLists();
   renderVarEstimates();
   renderBudgetTemplates();
+  renderDebtTemplates();
   render();
 
   maybeAutoBackup();   // una copia por día, silenciosa (ver más abajo)
@@ -2676,7 +2950,9 @@ async function loadAll(){
 let allowBulkClear = false;
 function countItems(v){
   if(Array.isArray(v)) return v.length;
-  if(v && typeof v === 'object') return Object.keys(v).reduce((s,k)=> s + (Array.isArray(v[k]) ? v[k].length : 0), 0);
+  // recursivo: cubre tanto {persona:[...]} como el budget_overrides ahora
+  // anidado por mes, {mes:{persona:[...]}}
+  if(v && typeof v === 'object') return Object.values(v).reduce((s,x)=> s + countItems(x), 0);
   return 0;
 }
 async function bailOnMassWipe(prevCount, nextCount, reload){
@@ -2724,6 +3000,14 @@ async function saveGoals(){
   if(await bailOnMassWipe(prevCol('goals'), goals.length, ()=>{ render(); })) return false;
   return await store.set(GOALS_KEY, JSON.stringify(goals));
 }
+async function saveDebts(){
+  if(await bailOnMassWipe(prevCol('debts'), debts.length, ()=>{ render(); })) return false;
+  return await store.set(DEBTS_KEY, JSON.stringify(debts));
+}
+async function saveDebtTemplates(){
+  if(await bailOnMassWipe(prevCol('debt_templates'), countItems(debtTemplates), ()=>{ render(); renderDebtTemplates(); })) return false;
+  return await store.set(DEBT_TEMPLATES_KEY, JSON.stringify(debtTemplates));
+}
 async function saveSavings(){
   if(await bailOnMassWipe(prevCol('savings'), countItems(savings), ()=>{ renderAhorro(); })) return false;
   return await store.set(SAVINGS_KEY, JSON.stringify(savings));
@@ -2742,7 +3026,7 @@ function currentSnapshot(){
   return {
     expenses, names: people, income, fixed, fixed_income: fixedIncome,
     variable_estimates: varEstimates, variable_expenses: varExpenses,
-    budget_overrides: budgetTemplates, goals, savings,
+    budget_overrides: budgetTemplates, goals, debts, debt_templates: debtTemplates, savings,
     migration_flags: (coupleRow && coupleRow.migration_flags) || {}
   };
 }
@@ -2804,6 +3088,8 @@ async function applySnapshot(s){
   if(Array.isArray(s.variable_expenses)) patch.variable_expenses = s.variable_expenses;
   if(s.budget_overrides && typeof s.budget_overrides === 'object') patch.budget_overrides = s.budget_overrides;
   if(Array.isArray(s.goals)) patch.goals = s.goals;
+  if(Array.isArray(s.debts)) patch.debts = s.debts;
+  if(s.debt_templates && typeof s.debt_templates === 'object') patch.debt_templates = s.debt_templates;
   if(s.savings && typeof s.savings === 'object') patch.savings = s.savings;
   if(s.migration_flags && typeof s.migration_flags === 'object') patch.migration_flags = s.migration_flags;
   if(!Object.keys(patch).length) throw new Error('La copia no tiene datos reconocibles.');
@@ -2814,7 +3100,7 @@ async function applySnapshot(s){
   [[STORE_KEY,'expenses'],[NAMES_KEY,'names'],[INCOME_KEY,'income'],[FIXED_KEY,'fixed'],
    [FIXED_INCOME_KEY,'fixed_income'],[VAR_ESTIMATES_KEY,'variable_estimates'],
    [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals'],
-   [SAVINGS_KEY,'savings']]
+   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings']]
     .forEach(([k,col])=>{ if(data[col] != null) writeLocalCache(coupleCode, k, JSON.stringify(data[col])); });
   // el snapshot puede traer una columna legítimamente vacía; que el guardaespaldas
   // no lo confunda con corrupción durante el refresco posterior
@@ -2823,7 +3109,7 @@ async function applySnapshot(s){
   refreshPeopleUI();
   render();
   renderFixed(); renderChips(); renderFixedIncome(); renderIncomeChips(); renderIncomeLists();
-  renderVarEstimates(); renderBudgetTemplates();
+  renderVarEstimates(); renderBudgetTemplates(); renderDebtTemplates();
 }
 
 async function doManualBackup(){
@@ -3429,6 +3715,99 @@ function removeVarEstimate(id){
   });
 }
 
+// ---- deudas recurrentes (Ajustes) ----
+// Mismo molde que los gastos variables de acá arriba: concepto + monto de
+// siempre, por persona, sin Compartido (una deuda es siempre de alguien en
+// particular). Es lo que sale como ficha rápida en el modal de "Agregar
+// deuda" (dDescChips) — no toca la lista real de deudas (`debts`).
+let editingDebtTplId = null;
+function renderDebtTemplates(){
+  const list = debtTemplates[currentDebtTplPerson] || [];
+  $('dTplTable').innerHTML = list.length ? list.map(f=>{
+    const amt = `<input type="text" class="f-amt ie-money" inputmode="numeric" data-id="${f.id}"
+             value="${f.amount ? groupThousands(String(f.amount)) : ''}" placeholder="0"
+             aria-label="Monto de ${escapeHtml(f.label)}">`;
+    if(editingDebtTplId === f.id){
+      return `<div class="fixed-row" data-id="${f.id}">
+        <input type="text" class="f-label-edit" value="${escapeHtml(f.label)}" aria-label="Concepto">
+        ${amt}
+        <span class="fixed-actions two">
+          <button type="button" class="ok" onclick="saveEditDebtTemplate('${f.id}')" aria-label="Guardar">✓</button>
+          <button type="button" class="del" onclick="cancelEditDebtTemplate()" aria-label="Cancelar">✕</button>
+        </span>
+      </div>`;
+    }
+    return `<div class="fixed-row" data-id="${f.id}">
+      <span class="f-label">${escapeHtml(f.label)}</span>
+      ${amt}
+      <span class="fixed-actions">
+        <button type="button" class="edit" onclick="startEditDebtTemplate('${f.id}')" aria-label="Editar">✎</button>
+        <button type="button" class="del" onclick="removeDebtTemplate('${f.id}')" aria-label="Eliminar">✕</button>
+      </span>
+    </div>`;
+  }).join('') : `<div class="income-note" style="padding:12px 0;">Todavía no cargaste deudas recurrentes.</div>`;
+}
+$('dTplTable').addEventListener('change', (e)=>{
+  const el = e.target;
+  if(!el.classList.contains('f-amt')) return;
+  const item = (debtTemplates[currentDebtTplPerson]||[]).find(f=>f.id === el.dataset.id);
+  if(!item) return;
+  const d = digitsOnly(el.value);
+  item.amount = d ? parseInt(d,10) : 0;
+  saveDebtTemplates();
+  render();
+});
+function addDebtTemplate(){
+  const label = $('dTplLabelInput').value.trim();
+  if(!label) return;
+  const amount = numVal('dTplAmountInput') || 0;
+  debtTemplates[currentDebtTplPerson].push({ id: genId(), label, amount });
+  $('dTplLabelInput').value = '';
+  $('dTplAmountInput').value = '';
+  saveDebtTemplates();
+  renderDebtTemplates();
+  render();
+}
+function startEditDebtTemplate(id){ editingDebtTplId = id; renderDebtTemplates(); }
+function cancelEditDebtTemplate(){ editingDebtTplId = null; renderDebtTemplates(); }
+function saveEditDebtTemplate(id){
+  const row = document.querySelector(`#dTplTable .fixed-row[data-id="${id}"]`);
+  const item = (debtTemplates[currentDebtTplPerson]||[]).find(f=>f.id === id);
+  if(!row || !item) return;
+  const label = row.querySelector('.f-label-edit').value.trim();
+  if(!label) return;
+  const d = digitsOnly(row.querySelector('.f-amt').value);
+  item.label = label;
+  item.amount = d ? parseInt(d,10) : 0;
+  editingDebtTplId = null;
+  saveDebtTemplates();
+  renderDebtTemplates();
+  render();
+}
+function removeDebtTemplate(id){
+  const item = (debtTemplates[currentDebtTplPerson]||[]).find(f=>f.id === id);
+  if(!item) return;
+  openConfirmModal(`¿Eliminar "${item.label}"? Esta acción no se puede deshacer.`, ()=>{
+    debtTemplates[currentDebtTplPerson] = debtTemplates[currentDebtTplPerson].filter(f=>f.id !== id);
+    saveDebtTemplates();
+    renderDebtTemplates();
+    render();
+    notyf.success(`"${item.label}" eliminado`);
+  });
+}
+async function commitDebtTemplates(){
+  const ok = await saveDebtTemplates();
+  if(ok) notyf.success('Deudas guardadas');
+}
+$('dTplPersonSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentDebtTplPerson = btn.dataset.person;
+  editingDebtTplId = null;
+  refreshPeopleUI();
+  renderDebtTemplates();
+});
+
 // ---- plantillas de gastos posibles ----
 // Mismo molde que los gastos variables de acá arriba: concepto + monto de
 // siempre, por persona o compartidos. Es lo que después sale como etiqueta en
@@ -3437,7 +3816,8 @@ let currentBudgetTplPerson = 'A';
 let editingBudgetTplId = null;
 
 function renderBudgetTemplates(){
-  const list = budgetTemplates[currentBudgetTplPerson] || [];
+  $('bTplBlockTitle').textContent = `Gastos posibles de ${monthShort(viewMonth)}`;
+  const list = budgetTemplatesForMonth(viewMonth)[currentBudgetTplPerson] || [];
   $('bTplTable').innerHTML = list.length ? list.map(f=>{
     const amt = `<input type="text" class="f-amt ie-money" inputmode="numeric" data-id="${f.id}"
              value="${f.amount ? groupThousands(String(f.amount)) : ''}" placeholder="0"
@@ -3469,7 +3849,7 @@ function renderBudgetTemplates(){
 // reparte por mitades, entre Salidas y Gustos, lo que queda de afterVar una
 // vez apartado ese monto — misma cuenta que redistribuirWantsSegunDolares.
 function sugerirMontosBudget(person){
-  const list = budgetTemplates[person] || [];
+  const list = budgetTemplatesForMonth(viewMonth)[person] || [];
   const salidas = list.find(c=>c.label === 'Salidas');
   const gustos = list.find(c=>c.label === 'Gustos');
   if(!salidas || !gustos){
@@ -3493,7 +3873,7 @@ function sugerirMontosBudget(person){
 // solos por mitades con lo que queda de afterVar, igual que "Sugerir
 // montos" — ninguno de los dos toca el monto de Compra dólares.
 function redistribuirWantsSegunDolares(person){
-  const list = budgetTemplates[person] || [];
+  const list = budgetTemplatesForMonth(viewMonth)[person] || [];
   const salidas = list.find(c=>c.label === 'Salidas');
   const gustos = list.find(c=>c.label === 'Gustos');
   if(!salidas || !gustos) return;
@@ -3509,11 +3889,15 @@ function redistribuirWantsSegunDolares(person){
 $('bTplTable').addEventListener('change', (e)=>{
   const el = e.target;
   if(!el.classList.contains('f-amt')) return;
-  const item = (budgetTemplates[currentBudgetTplPerson]||[]).find(f=>f.id === el.dataset.id);
+  const item = (budgetTemplatesForMonth(viewMonth)[currentBudgetTplPerson]||[]).find(f=>f.id === el.dataset.id);
   if(!item) return;
   const d = digitsOnly(el.value);
   item.amount = d ? parseInt(d,10) : 0;
   if(item.label === 'Compra dólares'){
+    // se anota la cotización de hoy junto con el monto, así el toggle a
+    // dólares en Gastos muestra siempre esta cotización y no la de "hoy"
+    // cada vez que se renderiza
+    item.fx = usdRate();
     redistribuirWantsSegunDolares(currentBudgetTplPerson);
     renderBudgetTemplates();   // Salidas/Gustos cambiaron: refresca sus inputs
   }
@@ -3534,7 +3918,9 @@ function addBudgetTemplate(){
   const label = $('bTplLabelInput').value.trim();
   if(!label) return;
   const amount = numVal('bTplAmountInput') || 0;
-  budgetTemplates[currentBudgetTplPerson].push({ id: genId(), label, amount });
+  const item = { id: genId(), label, amount };
+  if(label === 'Compra dólares' && amount > 0) item.fx = usdRate();
+  budgetTemplatesForMonth(viewMonth)[currentBudgetTplPerson].push(item);
   $('bTplLabelInput').value = '';
   $('bTplAmountInput').value = '';
   saveBudgetTemplates();
@@ -3545,7 +3931,7 @@ function startEditBudgetTemplate(id){ editingBudgetTplId = id; renderBudgetTempl
 function cancelEditBudgetTemplate(){ editingBudgetTplId = null; renderBudgetTemplates(); }
 function saveEditBudgetTemplate(id){
   const row = document.querySelector(`#bTplTable .fixed-row[data-id="${id}"]`);
-  const item = (budgetTemplates[currentBudgetTplPerson]||[]).find(f=>f.id === id);
+  const item = (budgetTemplatesForMonth(viewMonth)[currentBudgetTplPerson]||[]).find(f=>f.id === id);
   if(!row || !item) return;
   const label = row.querySelector('.f-label-edit').value.trim();
   if(!label) return;
@@ -3553,16 +3939,20 @@ function saveEditBudgetTemplate(id){
   item.label = label;
   item.amount = d ? parseInt(d,10) : 0;
   editingBudgetTplId = null;
-  if(item.label === 'Compra dólares') redistribuirWantsSegunDolares(currentBudgetTplPerson);
+  if(item.label === 'Compra dólares'){
+    item.fx = usdRate();
+    redistribuirWantsSegunDolares(currentBudgetTplPerson);
+  }
   saveBudgetTemplates();
   renderBudgetTemplates();
   render();   // el bloque de Gastos posibles lee estos montos
 }
 function removeBudgetTemplate(id){
-  const item = (budgetTemplates[currentBudgetTplPerson]||[]).find(f=>f.id === id);
+  const map = budgetTemplatesForMonth(viewMonth);
+  const item = (map[currentBudgetTplPerson]||[]).find(f=>f.id === id);
   if(!item) return;
   openConfirmModal(`¿Eliminar "${item.label}"? Esta acción no se puede deshacer.`, ()=>{
-    budgetTemplates[currentBudgetTplPerson] = budgetTemplates[currentBudgetTplPerson].filter(f=>f.id !== id);
+    map[currentBudgetTplPerson] = map[currentBudgetTplPerson].filter(f=>f.id !== id);
     saveBudgetTemplates();
     renderBudgetTemplates();
     render();   // el bloque de Gastos posibles lee estos montos
@@ -3920,6 +4310,149 @@ function deleteGoal(id){
   notyf.success('Meta eliminada');
 }
 
+// ---- deudas ----
+// mismo molde que el modal de metas de arriba, invertido: en vez de juntar
+// hacia un objetivo, se paga hacia abajo un monto que ya se debe. Sin
+// "Compartido" — cada deuda es de una sola persona.
+function openDebtModal(debtId){
+  resetDebtForm();
+  const d = debtId ? debts.find(x=>x.id === debtId) : null;
+  if(d){
+    editingDebtId = d.id;
+    $('dName').value = d.name;
+    $('dAmount').value = groupThousands(String(d.amount));
+    $('dMonths').value = d.months ? String(d.months) : '';
+    $('dSaved').value = d.saved ? groupThousands(String(d.saved)) : '';
+    currentDebtPerson = d.person;
+    currentDebtKind = d.kind;
+    currentDebtCurrency = d.currency;
+    syncDebtSegs();
+  }
+  $('debtModalTitle').textContent = d ? 'Editar deuda' : 'Agregar deuda';
+  $('dSubmitBtn').textContent = d ? 'Guardar cambios' : 'Agregar deuda';
+  $('debtModal').classList.add('open');
+  document.body.classList.add('modal-open');
+  $('dName').focus();
+}
+function closeDebtModal(){
+  $('debtModal').classList.remove('open');
+  document.body.classList.remove('modal-open');
+}
+function resetDebtForm(){
+  $('debtForm').reset();
+  editingDebtId = null;
+  currentDebtPerson = currentDeudasPerson;
+  currentDebtKind = 'total';
+  currentDebtCurrency = 'ARS';
+  syncDebtSegs();
+}
+// el campo "¿en cuántos meses?" solo tiene sentido en un plan en cuotas
+function syncDebtSegs(){
+  document.querySelectorAll('#dWhoSeg button').forEach(b=>b.classList.toggle('active', b.dataset.who === currentDebtPerson));
+  document.querySelectorAll('#dKindSeg button').forEach(b=>b.classList.toggle('active', b.dataset.kind === currentDebtKind));
+  document.querySelectorAll('#dCurSeg button').forEach(b=>b.classList.toggle('active', b.dataset.cur === currentDebtCurrency));
+  $('dMonthsField').style.display = currentDebtKind === 'plan' ? '' : 'none';
+  renderDebtChips();
+}
+// una ficha por deuda recurrente que la persona elegida cargó en Ajustes;
+// tocarla completa nombre y monto, igual que descChips/vxDescChips
+function renderDebtChips(){
+  const templates = debtTemplates[currentDebtPerson] || [];
+  $('dDescChips').innerHTML = templates.length
+    ? templates.map(t=>`<button type="button" data-id="${t.id}">${escapeHtml(t.label)}${
+        t.amount ? `<span class="chip-amt">${fmtNum(t.amount)}</span>` : ''}</button>`).join('')
+    : `<div class="income-note">Cargá tus deudas recurrentes en Ajustes para tenerlas a un toque.</div>`;
+  syncDebtChips();
+}
+$('dDescChips').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const t = (debtTemplates[currentDebtPerson]||[]).find(x=>x.id === btn.dataset.id);
+  if(!t) return;
+  $('dName').value = t.label;
+  $('dAmount').value = t.amount ? groupThousands(String(t.amount)) : '';
+  syncDebtChips();
+});
+$('dName').addEventListener('input', syncDebtChips);
+function syncDebtChips(){
+  const v = $('dName').value.trim().toLowerCase();
+  document.querySelectorAll('#dDescChips button').forEach(b=>{
+    const t = (debtTemplates[currentDebtPerson]||[]).find(x=>x.id === b.dataset.id);
+    b.classList.toggle('active', !!t && t.label.toLowerCase() === v);
+  });
+}
+$('debtModal').addEventListener('click', (e)=>{ if(e.target === $('debtModal')) closeDebtModal(); });
+$('dWhoSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentDebtPerson = btn.dataset.who;
+  syncDebtSegs();
+});
+$('dKindSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentDebtKind = btn.dataset.kind;
+  syncDebtSegs();
+});
+// mismo motivo que convertGoalAmounts: lo tipeado en Monto y Ya juntaste no
+// puede quedar significando otra moneda con solo tocar el toggle
+function convertDebtAmounts(fromCur, toCur){
+  if(fromCur === toCur) return;
+  const rate = usdRate();
+  if(!(rate > 0)) return;
+  ['dAmount','dSaved'].forEach(id=>{
+    const v = numVal(id);
+    if(!v) return;
+    const converted = toCur === 'USD' ? v / rate : v * rate;
+    $(id).value = groupThousands(String(Math.round(converted)));
+  });
+}
+$('dCurSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const prevCur = currentDebtCurrency;
+  currentDebtCurrency = btn.dataset.cur;
+  convertDebtAmounts(prevCur, currentDebtCurrency);
+  syncDebtSegs();
+});
+$('debtForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const name = $('dName').value.trim();
+  const amount = numVal('dAmount');
+  if(!name || !amount) return;
+  const fields = {
+    person: currentDebtPerson,
+    name,
+    kind: currentDebtKind,
+    months: currentDebtKind === 'plan' ? (numVal('dMonths') || null) : null,
+    amount,
+    currency: currentDebtCurrency,
+    saved: numVal('dSaved') || 0
+  };
+  const existing = editingDebtId ? debts.find(x=>x.id === editingDebtId) : null;
+  if(existing) Object.assign(existing, fields);
+  else debts.push({ id: genId(), ...fields });
+
+  saveDebts();
+  closeDebtModal();
+  resetDebtForm();
+  // la deuda se cargó para quien esté elegido en el modal, así que se muestra esa persona
+  currentDeudasPerson = fields.person;
+  document.querySelectorAll('#deudasPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentDeudasPerson));
+  renderDeudas();
+  notyf.success(existing ? 'Deuda actualizada' : 'Deuda agregada');
+});
+function deleteDebt(id){
+  const d = debts.find(x=>x.id === id);
+  if(!d) return;
+  openConfirmModal(`¿Eliminar "${d.name}"? Esta acción no se puede deshacer.`, ()=>{
+    debts = debts.filter(x=>x.id !== id);
+    saveDebts();
+    renderDeudas();
+    notyf.success('Deuda eliminada');
+  });
+}
+
 // ---- ahorro en dólares: modal para agregar/editar una entrada manual ----
 // en ARS pide también el tipo de cambio de esa fecha, así el valor en dólares
 // queda fijo con la cotización real de la compra y no con la de hoy (que es
@@ -4139,7 +4672,9 @@ function refreshPeopleUI(){
   seg('vxPayerSeg', 'data-paid', currentVxPayer);
   $('vxPayerField').style.display = (!solo && isSharedPay(currentVxPaidBy)) ? '' : 'none';
   seg('gWhoSeg', 'data-who', currentGoalPerson);
+  seg('dWhoSeg', 'data-who', currentDebtPerson);
   seg('ahorroPersonSeg', 'data-person', currentAhorroPerson, 'self');
+  seg('deudasPersonSeg', 'data-person', currentDeudasPerson, 'self');
   if(solo && isSharedPay(currentVarEstPerson)) currentVarEstPerson = firstPid();
   seg('varEstPersonSeg', 'data-person', currentVarEstPerson, 'self');
   // lo que estiman gastar entre todos: la nafta del auto que comparten, las
@@ -4153,6 +4688,10 @@ function refreshPeopleUI(){
   if(isSharedPay(currentBudgetTplPerson)) currentBudgetTplPerson = firstPid();
   seg('bTplPersonSeg', 'data-person', currentBudgetTplPerson, 'self');
   $('bTplPersonSeg').classList.toggle('seg-fit', n <= 2);
+  // las deudas tampoco tienen Compartido: cada una es de una sola persona
+  if(isSharedPay(currentDebtTplPerson)) currentDebtTplPerson = firstPid();
+  seg('dTplPersonSeg', 'data-person', currentDebtTplPerson, 'self');
+  $('dTplPersonSeg').classList.toggle('seg-fit', n <= 2);
 
   // división de un gasto: partes iguales o según ingresos. Solo importa
   // cuando el gasto es Compartido; con una sola persona tampoco hay nada
@@ -4259,6 +4798,8 @@ function commitPeopleCountChange(){
     saveVarExpenses();
     saveBudgetTemplates();
     saveGoals();
+    saveDebts();
+    saveDebtTemplates();
     saveSavings();
   }finally{ allowBulkClear = false; }
   refreshPeopleUI();
@@ -4268,15 +4809,18 @@ function commitPeopleCountChange(){
   renderIncomeChips();
   renderVarEstimates();
   renderBudgetTemplates();
+  renderDebtTemplates();
   render();
 }
 
 function dropPersonData(id){
   delete income.entries[id];
   delete varEstimates[id];
-  delete budgetTemplates[id];
+  delete debtTemplates[id];
+  Object.values(budgetTemplates).forEach(month=>{ delete month[id]; });
   delete savings[id];
   goals = goals.filter(g=>g.person !== id);
+  debts = debts.filter(d=>d.person !== id);
   // siempre se saca del final de la lista, así que la primera persona sigue ahí
   // y hereda los gastos compartidos que pagaba el que se va (si no, el gasto
   // quedaría sin nadie que lo haya puesto y el balance no cerraría)
@@ -4324,6 +4868,15 @@ $('ahorroPersonSeg').addEventListener('click', (e)=>{
   btn.classList.add('active');
   currentAhorroPerson = btn.dataset.person;
   renderAhorro();
+});
+
+$('deudasPersonSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  document.querySelectorAll('#deudasPersonSeg button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentDeudasPerson = btn.dataset.person;
+  renderDeudas();
 });
 
 $('varEstPersonSeg').addEventListener('click', (e)=>{
@@ -4827,7 +5380,7 @@ function financeFor(person, key){
   const afterVar = afterFijos - variables;
   // lo que tiene presupuestado gastar: sus rubros de gastos posibles (ya no
   // hay "Compartido" en gastos posibles, cada uno tiene los suyos)
-  const podes = ownBudgetTotal(person);
+  const podes = ownBudgetTotal(person, key);
   return { inc, fijos, variables, afterFijos, afterVar, podes, ahorro: afterVar - podes };
 }
 
@@ -4992,6 +5545,11 @@ function render(){
   renderResumen(list, fin);
   renderBalance();
   renderAhorro();
+  renderDeudas();
+  // gastos posibles ahora es por mes: si Ajustes está abierto (o se abre
+  // después) tiene que reflejar el mes que se está viendo en Gastos, no
+  // quedarse con el de la última vez que se tocó ese formulario
+  renderBudgetTemplates();
 }
 
 // household view of the month: what came in, everything that goes out
@@ -5005,7 +5563,7 @@ function renderTotals(fin){
   // ahorro = lo cargado en el rubro Compra dólares (la misma definición que
   // usan la pestaña Ahorro y Gastos posibles), no el residual de la cadena
   const dolaresOf = (person) => {
-    const c = (budgetTemplates[person] || []).find(x => x.label === 'Compra dólares');
+    const c = (budgetTemplatesForMonth(viewMonth)[person] || []).find(x => x.label === 'Compra dólares');
     return c ? (c.amount || 0) : 0;
   };
   let ingreso, ahorro;
@@ -5059,7 +5617,7 @@ function renderBlockSaldos(fin){
 
 // lo que ya está cargado en el rubro "Compra dólares" de esa persona
 function dolaresAmountFor(person){
-  const c = (budgetTemplates[person] || []).find(x=>x.label === 'Compra dólares');
+  const c = (budgetTemplatesForMonth(viewMonth)[person] || []).find(x=>x.label === 'Compra dólares');
   return c ? (c.amount || 0) : 0;
 }
 // Saldos que cierra "Compra dólares": el saldo anterior de la cadena
@@ -5080,8 +5638,8 @@ function renderDolaresSaldos(fin){
 // agregue a mano en Ajustes). El monto se edita acá mismo o en Ajustes —
 // son la misma lista, cualquiera de los dos lados la actualiza — y también
 // se puede pre-completar con el botón "Sugerir montos".
-const budgetTotalOf = (who) => (budgetTemplates[who] || []).reduce((s,c)=>s+(c.amount||0), 0);
-const ownBudgetTotal = (person) => budgetTotalOf(person);
+const budgetTotalOf = (who, key) => (budgetTemplatesForMonth(key || viewMonth)[who] || []).reduce((s,c)=>s+(c.amount||0), 0);
+const ownBudgetTotal = (person, key) => budgetTotalOf(person, key);
 
 let currentBudgetTab = 'A';
 
@@ -5103,7 +5661,7 @@ function renderBudgetTabs(){
     ).join('');
   }
 
-  const cats = budgetTemplates[currentBudgetTab] || [];
+  const cats = budgetTemplatesForMonth(viewMonth)[currentBudgetTab] || [];
   const dolaresCat = cats.find(c=>c.label === 'Compra dólares');
   const restCats = cats.filter(c=>c.label !== 'Compra dólares');
 
@@ -5135,7 +5693,10 @@ let budgetDolaresCur = 'USD';
 function budgetRubroRow(c){
   const editing = editingBudgetAmtId === c.id;
   const isDolares = c.label === 'Compra dólares';
-  const rate = usdRate();
+  // la compra tiene la cotización del día en que se cargó ese monto (c.fx),
+  // no la de hoy — si todavía no tiene una guardada (rubro nunca editado en
+  // dólares), usdRate() es sólo el arranque hasta la primera edición
+  const rate = isDolares ? (c.fx || usdRate()) : usdRate();
   const showUsd = isDolares && budgetDolaresCur === 'USD' && rate > 0;
 
   const nameHtml = isDolares && rate > 0
@@ -5176,14 +5737,14 @@ function budgetRubroRow(c){
   </div>`;
 }
 function registerDolaresPurchase(id){
-  const c = (budgetTemplates[currentBudgetTab] || []).find(x=>x.id === id);
+  const c = (budgetTemplatesForMonth(viewMonth)[currentBudgetTab] || []).find(x=>x.id === id);
   if(!c) return;
   currentAhorroPerson = currentBudgetTab;
   // si el mes que se está viendo ya tiene una entrada (a mano o autogenerada),
   // la abre para editarla en vez de duplicarla
   const existing = savingsSlot(currentAhorroPerson).items.find(e=>monthKey(e.date) === viewMonth);
   if(existing) openSavingsModal(existing.id);
-  else openSavingsModal(null, { amount: c.amount || 0, fx: usdRate(), currency: 'ARS' });
+  else openSavingsModal(null, { amount: c.amount || 0, fx: c.fx || usdRate(), currency: 'ARS' });
 }
 function toggleBudgetDolaresCur(){
   budgetDolaresCur = budgetDolaresCur === 'ARS' ? 'USD' : 'ARS';
@@ -5203,19 +5764,24 @@ $('budgetAllLists').addEventListener('keydown', (e)=>{
 $('budgetAllLists').addEventListener('change', (e)=>{
   const el = e.target;
   if(!el.classList.contains('f-amt')) return;
-  const item = (budgetTemplates[currentBudgetTab]||[]).find(f=>f.id === el.dataset.id);
+  const item = (budgetTemplatesForMonth(viewMonth)[currentBudgetTab]||[]).find(f=>f.id === el.dataset.id);
   if(!item) return;
   const d = digitsOnly(el.value);
   const typed = d ? parseInt(d,10) : 0;
+  const rate = usdRate();
   // si se estaba mostrando en dólares, lo tipeado es USD: se guarda en
   // pesos como siempre (todo el resto de la app asume amount en ARS)
   if(el.dataset.cur === 'USD'){
-    const rate = usdRate();
     item.amount = rate > 0 ? Math.round(typed * rate) : 0;
   }else{
     item.amount = typed;
   }
-  if(item.label === 'Compra dólares') redistribuirWantsSegunDolares(currentBudgetTab);
+  if(item.label === 'Compra dólares'){
+    // se congela la cotización de este momento junto con el monto, así el
+    // toggle a dólares no se recalcula con la de "hoy" en cada render
+    item.fx = rate;
+    redistribuirWantsSegunDolares(currentBudgetTab);
+  }
   editingBudgetAmtId = null;
   saveBudgetTemplates();
   renderBudgetTabs();
@@ -5225,10 +5791,11 @@ $('budgetAllLists').addEventListener('change', (e)=>{
 
 function deleteBudgetRubro(id){
   const who = currentBudgetTab;
-  const c = (budgetTemplates[who]||[]).find(x=>x.id === id);
+  const map = budgetTemplatesForMonth(viewMonth);
+  const c = (map[who]||[]).find(x=>x.id === id);
   if(!c) return;
   openConfirmModal(`¿Eliminar "${c.label}"? Esta acción no se puede deshacer.`, ()=>{
-    budgetTemplates[who] = budgetTemplates[who].filter(x=>x.id !== id);
+    map[who] = map[who].filter(x=>x.id !== id);
     saveBudgetTemplates();
     renderBudgetTemplates();
     render();
@@ -5444,6 +6011,63 @@ function renderGoals(monthlySaving, person){
     (mine.length ? '' : '<div class="goal-empty">Todavía no cargaste metas propias. Agregá una: juntar un monto para una fecha, o guardar algo todos los meses.</div>');
 }
 
+// ---- deudas ----
+// espejo de goalTargetArs/goalSavedArs: convierte a pesos si la deuda se
+// cargó en dólares, para poder sumarlas y compararlas todas juntas
+function debtTargetArs(d){
+  return d.currency === 'USD' ? (d.amount||0) * usdRate() : (d.amount||0);
+}
+function debtSavedArs(d){
+  return d.currency === 'USD' ? (d.saved||0) * usdRate() : (d.saved||0);
+}
+// "saldada" no se guarda aparte: se deriva de si ya se juntó el monto entero
+function debtIsDone(d){
+  const target = debtTargetArs(d);
+  return target > 0 && debtSavedArs(d) >= target;
+}
+function renderDeudas(){
+  const person = currentDeudasPerson;
+  $('deudasTitle').textContent = `Deudas de ${monthShort(viewMonth)}`;
+  const mine = debts.filter(d=>d.person === person);
+
+  const pendiente = mine.reduce((s,d)=> s + (debtIsDone(d) ? 0 : Math.max(0, debtTargetArs(d) - debtSavedArs(d))), 0);
+  const saldadas = mine.filter(debtIsDone).length;
+  const cell = (k, v, cls='') => `<div class="totals-cell">
+      <div class="totals-k">${k}</div><div class="totals-v ${cls}">${v}</div></div>`;
+  $('deudasStrip').innerHTML =
+    cell('Pendiente', fmt(pendiente), pendiente > 0 ? 'neg' : '') +
+    cell('Saldada', String(saldadas), saldadas > 0 ? 'save' : '');
+
+  const box = $('debtsBox');
+  if(!mine.length){
+    box.innerHTML = '<div class="goal-empty">Todavía no cargaste deudas propias. Agregá una: todo el monto junto, o en un plan de varios meses.</div>';
+    return;
+  }
+  box.innerHTML = mine.map(d=>{
+    const acts = `<span class="goal-acts">
+      <button type="button" onclick="openDebtModal('${d.id}')" aria-label="Editar deuda">✎</button>
+      <button type="button" onclick="deleteDebt('${d.id}')" aria-label="Eliminar deuda">✕</button>
+    </span>`;
+    const targetArs = debtTargetArs(d);
+    const targetLabel = d.currency === 'USD'
+      ? `${fmtUsd(d.amount)}${targetArs ? ` <span style="color:var(--body-muted);font-weight:400;">· ${fmt(targetArs)}</span>` : ''}`
+      : fmt(d.amount);
+    const saved = Math.max(0, debtSavedArs(d));
+    const pct = targetArs > 0 ? Math.min(100, saved/targetArs*100) : 0;
+    const falta = Math.max(0, targetArs - saved);
+    const detail = debtIsDone(d)
+      ? `pagaste ${fmt(saved)}. Deuda saldada.`
+      : `pagaste ${fmt(saved)}, faltan ${fmt(falta)}.`;
+    // la cuota es solo de referencia — "ya juntaste" siempre se carga a mano,
+    // no se descuenta sola cada mes
+    const extra = (!debtIsDone(d) && d.kind === 'plan' && d.months > 0)
+      ? `En un plan de ${d.months} ${d.months === 1 ? 'mes' : 'meses'}: cuota de referencia ${fmt(targetArs / d.months)} por mes.`
+      : '';
+    const kindTag = d.kind === 'plan' && d.months ? `${d.months} ${d.months === 1 ? 'mes' : 'meses'}` : '';
+    return goalCardHtml(escapeHtml(d.name), targetLabel, pct, detail, extra, acts, kindTag);
+  }).join('');
+}
+
 function renderRule5030(person){
   const ingreso = incomeTotalArs(person);
   const box = $('ruleBox');
@@ -5455,7 +6079,7 @@ function renderRule5030(person){
   // wants = Salidas + Gustos nada más (Compra dólares no es un "deseo");
   // ahorro = el rubro Compra dólares, el mismo número de la tarjeta de arriba
   const f = financeFor(person);
-  const dolares = (budgetTemplates[person] || []).find(c => c.label === 'Compra dólares');
+  const dolares = (budgetTemplatesForMonth(viewMonth)[person] || []).find(c => c.label === 'Compra dólares');
   const dolaresAmt = dolares ? (dolares.amount || 0) : 0;
   const needs = f.fijos + f.variables;
   const wants = f.podes - dolaresAmt;
@@ -5505,17 +6129,22 @@ function ensureAutoDolaresRows(person){
   ].filter(m=>m && m <= viewMonth))];
   const pending = months.filter(m=>!slot.autoMonths.includes(m));
   if(!pending.length) return;
-  const rate = usdRate();
-  const dolares = (budgetTemplates[person] || []).find(c => c.label === 'Compra dólares');
-  const pesos = dolares ? (dolares.amount || 0) : 0;
-  if(!(pesos > 0) || !(rate > 0)) return;   // sin monto o sin cotización, se reintenta en el próximo render
+  // Compra dólares es propio de cada mes, así que la fila que se genera para
+  // cada uno usa el monto y la cotización de ESE mes (c.fx, congelada cuando
+  // se cargó), no un único valor global aplicado a todos a la vez
+  let changed = false;
   pending.forEach(m=>{
+    const dolares = (budgetTemplatesForMonth(m)[person] || []).find(c => c.label === 'Compra dólares');
+    const pesos = dolares ? (dolares.amount || 0) : 0;
+    const rate = (dolares && dolares.fx) || usdRate();
+    if(!(pesos > 0) || !(rate > 0)) return;   // sin monto o sin cotización para ese mes: se reintenta en el próximo render
     slot.autoMonths.push(m);
+    changed = true;
     if(!slot.items.some(e=>monthKey(e.date) === m)){
       slot.items.push({ id: genId(), currency:'ARS', pesos, fx: rate, amount: Math.round(pesos/rate), date: m+'-01', auto: true });
     }
   });
-  saveSavings();
+  if(changed) saveSavings();
 }
 function renderAhorro(){
   const person = currentAhorroPerson;
@@ -5523,9 +6152,12 @@ function renderAhorro(){
   // el saldo final del bloque de Gastos posibles: lo que está cargado en
   // el rubro Compra dólares, el mismo número que muestra el footer Saldos
   // de ese bloque en Gastos
-  const dolares = (budgetTemplates[person] || []).find(c => c.label === 'Compra dólares');
+  const dolares = (budgetTemplatesForMonth(viewMonth)[person] || []).find(c => c.label === 'Compra dólares');
   const ahorro = dolares ? (dolares.amount || 0) : 0;
   const tasa = ingreso > 0 ? (ahorro / ingreso) * 100 : 0;
+  // misma cotización congelada que el toggle de Gastos posibles (c.fx), no la
+  // de hoy, así este número no cambia día a día mirando el mismo mes
+  const dolaresRate = (dolares && dolares.fx) || todayUsdRate;
 
   $('ahorroTitle').textContent = `Ahorro de ${monthShort(viewMonth)}`;
   const cell = (k, v, cls='') => `<div class="totals-cell">
@@ -5533,7 +6165,7 @@ function renderAhorro(){
   $('ahorroStrip').innerHTML =
     cell('Ahorro', fmt(ahorro), ahorro < 0 ? 'neg' : 'save') +
     cell('Tasa de ahorro', (ingreso > 0 ? Math.round(tasa) + '%' : '—'), tasa < 0 ? 'neg' : '') +
-    cell('En dólares', todayUsdRate && ahorro > 0 ? fmtUsd(ahorro / todayUsdRate) : '—');
+    cell('En dólares', dolaresRate && ahorro > 0 ? fmtUsd(ahorro / dolaresRate) : '—');
 
   renderPlan(person);
   renderRule5030(person);
@@ -5755,7 +6387,11 @@ function balanceHtml(rows){
 // panorama completo, no lo toca la pestaña de Resumen
 function renderBalance(){
   const el = $('balanceResult');
-  if(el) el.innerHTML = balanceHtml();
+  if(!el) return;
+  const html = balanceHtml();
+  el.innerHTML = html;
+  const card = $('balanceCard');
+  if(card) card.style.display = html ? '' : 'none';
 }
 
 // mismo cálculo, pero filtrado a las deudas donde participa la persona activa
@@ -5768,6 +6404,7 @@ function renderResumenBalance(personFilter){
 
 viewMonth = monthNow();
 renderTodayDate();
+renderHideAmountsBtn();
 resetForm();
 resetIncomeForm();
 initCouple().then(loadAll);
