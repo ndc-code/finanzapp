@@ -101,14 +101,19 @@
   .month-nav .m{font-weight:600;font-size:14px;letter-spacing:-0.224px;min-width:132px;text-align:center;}
   .month-nav .today{flex:0 0 auto;width:auto;padding:0 10px;font-size:13px;color:var(--primary);background:none;}
   .month-nav .today:hover{background:var(--pearl);}
+  /* .lbl-full/.lbl-short: mismo texto en dos largos (ver monthLabelHtml() y
+     renderTodayDate()) — el mobile de acá abajo elige la corta para que el
+     selector de mes entre al lado de "FinanzApp" en el mismo renglón */
+  .lbl-short{display:none;}
   @media(max-width:600px){
-    .app-head{grid-template-columns:1fr;gap:14px;}
-    .app-head h1{justify-self:stretch;}
-    .app-head .month-nav{justify-self:stretch;}
-    h1{font-size:28px;}
-    .head-right{justify-self:stretch;justify-content:center;gap:10px;}
-    .month-nav{justify-content:space-between;}
-    .month-nav .m{flex:1;min-width:0;}
+    .app-head{grid-template-columns:auto 1fr;grid-template-areas:"title month" "right right";row-gap:10px;}
+    .app-head h1{grid-area:title;justify-self:start;}
+    .app-head .month-nav{grid-area:month;justify-self:end;}
+    h1{font-size:23px;}
+    .head-right{grid-area:right;justify-self:stretch;justify-content:center;gap:10px;}
+    .month-nav .m{min-width:66px;font-size:12.5px;}
+    .lbl-full{display:none;}
+    .lbl-short{display:inline;}
     .session-dropdown{right:0;left:auto;}
   }
 
@@ -180,7 +185,7 @@
   /* ---- accumulation goals ---- */
   .goal{padding:14px 0;border-bottom:1px solid var(--line);}
   .goal:last-child{border-bottom:none;}
-  .goal-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .goal-h{display:flex;justify-content:space-between;align-items:center;gap:10px;}
   .goal-n{font-size:14px;font-weight:600;letter-spacing:-0.224px;}
   .goal-t{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
   .goal-track{height:10px;background:var(--paper);border-radius:9999px;overflow:hidden;margin:10px 0 7px;}
@@ -188,9 +193,11 @@
   .goal-track i.part{background:var(--a-gold);}
   .goal-d{font-size:11.5px;color:var(--body-muted);line-height:1.5;font-variant-numeric:tabular-nums;}
   .goal-pct{font-weight:600;color:var(--ink);}
-  .goal-n .goal-kind{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;
-    color:var(--body-muted);background:var(--paper);border-radius:9999px;padding:2px 8px;margin-left:7px;
-    vertical-align:middle;}
+  /* detalle que aparece solo con el acordeón abierto: fecha, y dólares/pesos
+     cuando la meta se cargó en dólares */
+  .goal-detail-row{display:flex;justify-content:space-between;gap:12px;font-size:11.5px;
+    color:var(--body-muted);padding:2px 0;}
+  .goal-detail-row b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;}
   .goal-acts{display:flex;gap:4px;margin-left:6px;}
   .goal-acts button{border:none;background:transparent;color:var(--body-muted);cursor:pointer;
     font-size:13px;line-height:1;padding:3px 5px;border-radius:7px;font-family:inherit;}
@@ -864,14 +871,14 @@
       <div class="section-title">Ahorro en dólares
         <button type="button" class="bill-cur-toggle" id="svCurToggle" onclick="toggleSavingsCur()">⇄</button>
       </div>
-      <div id="savingsHistory"></div>
-      <button type="button" class="btn-add" style="margin-top:16px;" onclick="openSavingsModal()">+ Agregar ahorro</button>
+      <button type="button" class="btn-add" onclick="openSavingsModal()">+ Agregar ahorro</button>
+      <div id="savingsHistory" style="margin-top:14px;"></div>
     </div>
 
     <div class="card">
       <div class="section-title">Tus metas</div>
-      <div id="goalsBox"></div>
-      <button type="button" class="btn-add" style="margin-top:16px;" onclick="openGoalModal()">+ Agregar meta</button>
+      <button type="button" class="btn-add" onclick="openGoalModal()">+ Agregar meta</button>
+      <div id="goalsBox" style="margin-top:14px;"></div>
     </div>
 
   </div>
@@ -2315,6 +2322,17 @@ function monthLabel(key){
   const s = d.toLocaleDateString('es-AR', {month:'long', year:'numeric'});
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+// abreviaturas fijas en vez de Intl {month:'short'}: el CLDR de es-AR da
+// "sept." (con punto, y de largo variable), y esto tiene que medir siempre
+// lo mismo para no romper el ancho fijo del selector de mes en el header
+const MONTH_ABBR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+// versión con dos tamaños del mismo texto — .lbl-full/.lbl-short deciden
+// cuál se ve según el ancho de pantalla (ver el CSS de .app-head en mobile),
+// así el selector de mes entra al lado de "FinanzApp" sin JS de por medio
+function monthLabelHtml(key){
+  const [,m] = key.split('-');
+  return `<span class="lbl-full">${monthLabel(key)}</span><span class="lbl-short">${MONTH_ABBR[parseInt(m,10)-1]} ${key.split('-')[0]}</span>`;
+}
 function monthShort(key){
   const [y,m] = key.split('-');
   const d = new Date(parseInt(y), parseInt(m)-1, 1);
@@ -2408,9 +2426,15 @@ function copyPreviousMonth(){
 const USD_API = 'https://dolarapi.com/v1/dolares/blue';
 let todayUsdRate = null;   // average of compra/venta, null until it loads
 
+// mismo motivo que monthLabelHtml: dos versiones del mismo texto, el CSS
+// decide cuál mostrar según el ancho de pantalla
+const WEEKDAY_ABBR = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 function renderTodayDate(){
-  const s = new Date().toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
-  $('todayDate').textContent = s.charAt(0).toUpperCase() + s.slice(1);
+  const now = new Date();
+  const full = now.toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
+  const fullCap = full.charAt(0).toUpperCase() + full.slice(1);
+  const short = `${WEEKDAY_ABBR[now.getDay()]}, ${now.getDate()} de ${MONTH_ABBR[now.getMonth()]}`;
+  $('todayDate').innerHTML = `<span class="lbl-full">${fullCap}</span><span class="lbl-short">${short}</span>`;
 }
 
 // ---- personas del espacio ----
@@ -5524,7 +5548,7 @@ $('fixedTabs').addEventListener('click', (e)=>{
 
 function render(){
   if(!viewMonth) viewMonth = monthNow();
-  $('monthLabel').textContent = monthLabel(viewMonth);
+  $('monthLabel').innerHTML = monthLabelHtml(viewMonth);
   updateCopyMonthBtn();
   renderIncomeLists();
 
@@ -5941,16 +5965,38 @@ function monthsUntil(key){
   return Math.max(0, (ty - vy) * 12 + (tm - vm));
 }
 
-function goalCardHtml(name, target, pct, detail, extra, acts, kindTag){
+// se abren/cierran una por una, igual que los renglones de "Totales" — el
+// detalle (fecha, dólares/pesos, la frase de progreso) solo se arma cuando
+// está abierta, así el encabezado nunca se pisa en mobile con montos largos
+let expandedGoals = new Set();
+function toggleGoalOpen(id){
+  if(expandedGoals.has(id)) expandedGoals.delete(id);
+  else expandedGoals.add(id);
+  renderAhorro();
+}
+function goalCardHtml(g){
+  const { id, name, ownAmount, usdAmount, arsAmount, pct, detail, extra, acts, dateLabel } = g;
   const done = pct >= 100;
+  const open = expandedGoals.has(id);
+  const pctText = (pct < 1 && pct > 0 ? '<1' : Math.round(pct)) + '%';
+  // cada fila es independiente: una meta "por mes" no tiene fecha límite, y
+  // una en pesos no tiene nada que convertir — no tiene sentido mostrar la
+  // fila si no aplica
+  const detailRows = (dateLabel ? `<div class="goal-detail-row"><span>Fecha</span><b>${dateLabel}</b></div>` : '')
+    + (usdAmount ? `<div class="goal-detail-row"><span>En dólares</span><b>${usdAmount}</b></div>
+      <div class="goal-detail-row"><span>Equivalente en pesos</span><b>${arsAmount}</b></div>` : '');
   return `<div class="goal">
-    <div class="goal-h">
-      <span class="goal-n">${name}${kindTag ? `<span class="goal-kind">${kindTag}</span>` : ''}</span>
-      <span class="goal-t">${target}</span>
+    <div class="goal-h bill-clickable" onclick="toggleGoalOpen('${id}')">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1" aria-label="${open ? 'Ocultar' : 'Ver'} detalle">▸</button>
+        <span class="goal-n">${name}</span>
+      </div>
+      <span class="goal-t">${ownAmount}</span>
       ${acts || ''}
     </div>
     <div class="goal-track"><i class="${done?'':'part'}" style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>
-    <div class="goal-d"><span class="goal-pct">${pct < 1 && pct > 0 ? '<1' : Math.round(pct)}%</span> — ${detail}${extra ? '<br>' + extra : ''}</div>
+    ${open && detailRows ? `<div class="bill-occurrences">${detailRows}</div>` : ''}
+    <div class="goal-d"><span class="goal-pct">${pctText}</span>${open ? ` — ${detail}${extra ? '<br>' + extra : ''}` : ''}</div>
   </div>`;
 }
 
@@ -5964,14 +6010,19 @@ function renderGoals(monthlySaving, person){
   }
   const mine = goals.filter(g=>g.person === person);
   const custom = mine.map(g=>{
+    // el toggle vive en .goal-h; sin esto, tocar ✎/✕ también abriría o
+    // cerraría el acordeón
     const acts = `<span class="goal-acts">
-      <button type="button" onclick="openGoalModal('${g.id}')" aria-label="Editar meta">✎</button>
-      <button type="button" onclick="deleteGoal('${g.id}')" aria-label="Eliminar meta">✕</button>
+      <button type="button" onclick="event.stopPropagation(); openGoalModal('${g.id}')" aria-label="Editar meta">✎</button>
+      <button type="button" onclick="event.stopPropagation(); deleteGoal('${g.id}')" aria-label="Eliminar meta">✕</button>
     </span>`;
     const targetArs = goalTargetArs(g);
-    const targetLabel = g.currency === 'USD'
-      ? `${fmtUsd(g.amount)}${targetArs ? ` <span style="color:var(--body-muted);font-weight:400;">· ${fmt(targetArs)}</span>` : ''}`
-      : fmt(g.amount);
+    // en el encabezado (siempre visible) solo la moneda elegida para esa
+    // meta — el par dólares/pesos completo se ve al abrir el acordeón, así
+    // el renglón nunca se aprieta en mobile
+    const ownAmount = g.currency === 'USD' ? fmtUsd(g.amount) : fmt(g.amount);
+    const usdAmount = g.currency === 'USD' ? fmtUsd(g.amount) : '';
+    const arsAmount = g.currency === 'USD' ? (targetArs ? fmt(targetArs) : '—') : '';
 
     if(g.kind === 'mensual'){
       // measured against this month's savings, not the accumulated pile
@@ -5982,8 +6033,11 @@ function renderGoals(monthlySaving, person){
         : `este mes ahorraste ${fmt(Math.max(0, monthlySaving))}, faltan ${fmt(falta)} para llegar.`;
       const extra = g.currency === 'USD' && !usdRate()
         ? 'Sin cotización del dólar todavía no se puede comparar contra tu ahorro.' : '';
-      return goalCardHtml(escapeHtml(g.name), targetLabel + '<span style="font-size:11px;font-weight:400;color:var(--body-muted);"> /mes</span>',
-        pct, detail, extra, acts, 'por mes');
+      return goalCardHtml({
+        id: g.id, name: escapeHtml(g.name),
+        ownAmount: ownAmount + '<span style="font-size:11px;font-weight:400;color:var(--body-muted);"> /mes</span>',
+        usdAmount, arsAmount, pct, detail, extra, acts, dateLabel: ''
+      });
     }
 
     const gSaved = Math.max(0, goalSavedArs(g));
@@ -6002,8 +6056,10 @@ function renderGoals(monthlySaving, person){
       const eta = humanMonths(monthsToTarget(monthlySaving, targetArs, gSaved));
       extra = eta ? `A tu ritmo actual (${fmt(Math.max(0, monthlySaving))} por mes): ${eta}.` : 'Todavía no estás ahorrando por mes.';
     }
-    return goalCardHtml(escapeHtml(g.name), targetLabel, pct, detail, extra, acts,
-      g.deadline ? monthLabel(g.deadline) : '');
+    return goalCardHtml({
+      id: g.id, name: escapeHtml(g.name), ownAmount, usdAmount, arsAmount, pct, detail, extra, acts,
+      dateLabel: g.deadline ? monthLabel(g.deadline) : ''
+    });
   }).join('');
 
   box.innerHTML =
