@@ -4454,7 +4454,12 @@ $('debtForm').addEventListener('submit', (e)=>{
     saved: numVal('dSaved') || 0
   };
   const existing = editingDebtId ? debts.find(x=>x.id === editingDebtId) : null;
-  if(existing) Object.assign(existing, fields);
+  if(existing){
+    // se edita "meses"/"ya juntaste" a mano: el detalle cuota por cuota
+    // queda desalineado, se reconstruye solo en el próximo render
+    delete existing.installmentsPaid;
+    Object.assign(existing, fields);
+  }
   else debts.push({ id: genId(), ...fields });
 
   saveDebts();
@@ -6081,6 +6086,119 @@ function debtIsDone(d){
   const target = debtTargetArs(d);
   return target > 0 && debtSavedArs(d) >= target;
 }
+
+// se abren/cierran una por una, igual que expandedGoals en Ahorro
+let expandedDebts = new Set();
+function toggleDebtOpen(id){
+  if(expandedDebts.has(id)) expandedDebts.delete(id);
+  else expandedDebts.add(id);
+  renderDeudas();
+}
+// una deuda "en cuotas" no guarda el detalle cuota por cuota aparte: si no
+// hay un array guardado (o quedó desalineado porque se editó "meses"),
+// se reconstruye a partir de "ya juntaste" marcando las primeras N cuotas
+function installmentsPaidArr(d){
+  const months = d.months || 0;
+  if(Array.isArray(d.installmentsPaid) && d.installmentsPaid.length === months) return d.installmentsPaid;
+  const cuota = months > 0 ? (d.amount || 0) / months : 0;
+  const paidCount = cuota > 0 ? Math.min(months, Math.round((d.saved || 0) / cuota)) : 0;
+  return Array.from({length: months}, (_, i) => i < paidCount);
+}
+// tocar una cuota recalcula "ya juntaste" sola (cuotas pagadas × monto de
+// cuota) en vez de tipearla a mano, como pasa con las ocurrencias de un
+// gasto fijo "veces por mes" (ej. Limpieza)
+function toggleDebtInstallmentPaid(id, idx){
+  const d = debts.find(x=>x.id === id);
+  if(!d || d.kind !== 'plan' || !d.months) return;
+  const arr = installmentsPaidArr(d).slice();
+  arr[idx] = !arr[idx];
+  d.installmentsPaid = arr;
+  d.saved = arr.filter(Boolean).length * (d.amount / d.months);
+  saveDebts();
+  renderDeudas();
+}
+// misma estructura que goalCardHtml, pero el acordeón abre una fila por
+// cuota con su propio checkbox en vez del detalle genérico de una meta
+function debtPlanCardHtml(d, targetLabel, pct, detail, extra, acts){
+  const open = expandedDebts.has(d.id);
+  const done = pct >= 100;
+  const pctText = (pct < 1 && pct > 0 ? '<1' : Math.round(pct)) + '%';
+  const cuota = d.amount / d.months;
+  const items = installmentsPaidArr(d).map((paid, i) => `<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">Cuota ${i+1} de ${d.months}</div>
+      <div class="bill-meta">
+        <label class="bill-paid" title="${paid ? 'Pagada' : 'Marcar como pagada'}">
+          <input type="checkbox" ${paid ? 'checked' : ''} onchange="toggleDebtInstallmentPaid('${d.id}', ${i})">
+        </label>
+      </div>
+    </div>
+    <div class="bill-amt">${d.currency === 'USD' ? fmtUsd(cuota) : fmt(cuota)}</div>
+  </div>`).join('');
+  return `<div class="goal">
+    <div class="goal-h bill-clickable" onclick="toggleDebtOpen('${d.id}')">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1" aria-label="${open ? 'Ocultar' : 'Ver'} las ${d.months} cuotas">▸</button>
+        <span class="goal-n">${escapeHtml(d.name)}</span>
+      </div>
+      <span class="goal-t">${targetLabel}</span>
+      ${acts || ''}
+    </div>
+    <div class="goal-track"><i class="${done?'':'part'}" style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>
+    ${open ? `<div class="bill-occurrences">${items}</div>` : ''}
+    <div class="goal-d"><span class="goal-pct">${pctText}</span>${open ? ` — ${detail}${extra ? '<br>' + extra : ''}` : ''}</div>
+  </div>`;
+}
+
+// mismo patrón que subtotalRowHtml (Gastos fijos): un renglón "Pagado" o "A
+// pagar" que se puede desplegar para ver qué deuda compone ese número
+function debtSubtotalRowHtml(label, amount, items, key){
+  const open = expandedTotalRows.has(key);
+  const clickable = items.length > 0;
+  const header = `<div class="bill bill-subtotal${clickable ? ' bill-clickable' : ''}"
+      ${clickable ? `onclick="toggleTotalRow('${key}')"` : ''}>
+    <div class="bill-main">
+      <div class="bill-name-row">
+        ${clickable ? `<button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+          aria-label="${open ? 'Ocultar' : 'Ver'} el detalle">▸</button>` : ''}
+        <div class="bill-name">${label}</div>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(amount)}</div>
+  </div>`;
+  if(!open || !clickable) return header;
+  const rows = items.map(x=>`<div class="bill bill-subtotal-item">
+    <div class="bill-main"><div class="bill-name">${escapeHtml(x.name)}</div></div>
+    <div class="bill-amt">${fmt(x.amount)}</div>
+  </div>`).join('');
+  return header + `<div class="bill-occurrences">${rows}</div>`;
+}
+// mismo patrón que billTotalRow: "Totales" queda cerrado por defecto y, al
+// abrirlo, se parte en "Pagado" / "A pagar" — igual que Gastos fijos/variables
+function debtsTotalRowHtml(mine){
+  if(!mine.length) return '';
+  const total = mine.reduce((s,d)=>s+debtTargetArs(d), 0);
+  const key = 'debts';
+  const open = expandedTotalsMain.has(key);
+  const header = `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
+    <div class="bill-main">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+          aria-label="${open ? 'Ocultar' : 'Ver'} Pagado y A pagar">▸</button>
+        <div class="bill-name">Totales</div>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(total)}</div>
+  </div>`;
+  if(!open) return header;
+
+  const paidItems = mine.map(d=>({name: d.name, amount: Math.min(debtSavedArs(d), debtTargetArs(d))})).filter(x=>x.amount > 0);
+  const unpaidItems = mine.map(d=>({name: d.name, amount: Math.max(0, debtTargetArs(d) - debtSavedArs(d))})).filter(x=>x.amount > 0);
+  const paidTotal = paidItems.reduce((s,x)=>s+x.amount, 0);
+  const extra = debtSubtotalRowHtml('Pagado', paidTotal, paidItems, key+':paid')
+              + debtSubtotalRowHtml('A pagar', total - paidTotal, unpaidItems, key+':unpaid');
+  return header + `<div class="bill-occurrences">${extra}</div>`;
+}
 function renderDeudas(){
   const person = currentDeudasPerson;
   $('deudasTitle').textContent = `Deudas de ${monthShort(viewMonth)}`;
@@ -6114,14 +6232,16 @@ function renderDeudas(){
     const detail = debtIsDone(d)
       ? `pagaste ${fmt(saved)}. Deuda saldada.`
       : `pagaste ${fmt(saved)}, faltan ${fmt(falta)}.`;
-    // la cuota es solo de referencia — "ya juntaste" siempre se carga a mano,
-    // no se descuenta sola cada mes
     const extra = (!debtIsDone(d) && d.kind === 'plan' && d.months > 0)
       ? `En un plan de ${d.months} ${d.months === 1 ? 'mes' : 'meses'}: cuota de referencia ${fmt(targetArs / d.months)} por mes.`
       : '';
-    const kindTag = d.kind === 'plan' && d.months ? `${d.months} ${d.months === 1 ? 'mes' : 'meses'}` : '';
-    return goalCardHtml(escapeHtml(d.name), targetLabel, pct, detail, extra, acts, kindTag);
-  }).join('');
+    if(d.kind === 'plan' && d.months > 0){
+      return debtPlanCardHtml(d, targetLabel, pct, detail, extra, acts);
+    }
+    return goalCardHtml({
+      id: d.id, name: escapeHtml(d.name), ownAmount: targetLabel, pct, detail, extra, acts, dateLabel: ''
+    });
+  }).join('') + debtsTotalRowHtml(mine);
 }
 
 function renderRule5030(person){
