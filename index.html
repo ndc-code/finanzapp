@@ -45,10 +45,15 @@
   .head-right{display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
 
   .session-menu,.popover-menu{position:relative;flex:0 0 auto;}
-  /* la fecha de hoy, siempre visible en el encabezado */
+  /* la fecha de hoy: chip de texto en desktop (hay lugar); en mobile se
+     esconde y el ícono de calendario (date-icon-wrap) ocupa su lugar */
   .today-chip{flex:0 0 auto;font-size:13px;font-weight:500;color:var(--body-muted);
     white-space:nowrap;letter-spacing:-0.1px;}
-  @media(max-width:600px){.today-chip{font-size:12.5px;}}
+  .date-icon-wrap{display:none;}
+  @media(max-width:600px){
+    #todayDate{display:none;}
+    .date-icon-wrap{display:inline-flex;}
+  }
   .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-strong);
     background:var(--card);color:var(--body-muted);display:flex;align-items:center;justify-content:center;
     cursor:pointer;transition:background-color .15s ease,color .15s ease;flex:0 0 auto;
@@ -58,6 +63,9 @@
   .session-dropdown{display:none;position:absolute;top:calc(100% + 8px);right:0;min-width:200px;
     background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;
     box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:40;}
+  /* el ícono de fecha es el más a la izquierda de la fila: su dropdown abre
+     hacia la derecha en vez de hacia la izquierda, o se sale de pantalla */
+  .date-icon-wrap .session-dropdown{right:auto;left:0;min-width:170px;}
   .session-dropdown.open{display:block;}
   .session-code{font-size:11.5px;color:var(--body-muted);padding:6px 10px 8px;border-bottom:1px solid var(--line);
     margin-bottom:6px;word-break:break-all;}
@@ -705,8 +713,17 @@
       <button type="button" onclick="shiftMonth(1)" aria-label="Mes siguiente">›</button>
     </div>
     <div class="head-right">
-      <!-- la fecha de hoy, a la vista: antes vivía detrás de un ícono de calendario -->
+      <!-- la fecha de hoy, a la vista en desktop (hay lugar); en mobile pasa a
+           ser un ícono más de la fila, igual que el resto — ver dateBtn -->
       <div class="today-chip" id="todayDate"></div>
+      <div class="popover-menu date-icon-wrap">
+        <button type="button" class="icon-btn" id="dateBtn" onclick="toggleDatePopover()" aria-label="Fecha de hoy" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </button>
+        <div class="session-dropdown" id="dateDropdown">
+          <div class="today-chip" id="todayDatePopover" style="color:var(--ink);white-space:normal;"></div>
+        </div>
+      </div>
       <!-- oculta todos los montos de la app con •••, para mostrar la pantalla
            sin exponer cifras — ver toggleAmountsHidden() -->
       <button type="button" class="icon-btn" id="hideAmountsBtn" onclick="toggleAmountsHidden()" aria-pressed="false"></button>
@@ -2182,6 +2199,13 @@ function toggleUsdPopover(force){
   dropdown.classList.toggle('open', open);
   btn.setAttribute('aria-expanded', open);
 }
+function toggleDatePopover(force){
+  const dropdown = $('dateDropdown');
+  const btn = $('dateBtn');
+  const open = typeof force === 'boolean' ? force : !dropdown.classList.contains('open');
+  dropdown.classList.toggle('open', open);
+  btn.setAttribute('aria-expanded', open);
+}
 
 const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-6.06"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.6 20.6 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
@@ -2211,6 +2235,7 @@ document.addEventListener('click', (e)=>{
   if(sessionMenu && !sessionMenu.contains(e.target)) toggleSessionMenu(false);
   document.querySelectorAll('.popover-menu').forEach(menu=>{
     if(!menu.contains(e.target) && menu.querySelector('#usdDropdown')) toggleUsdPopover(false);
+    if(!menu.contains(e.target) && menu.querySelector('#dateDropdown')) toggleDatePopover(false);
   });
 });
 
@@ -2441,9 +2466,11 @@ function renderTodayDate(){
   const now = new Date();
   const full = now.toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
   const fullCap = full.charAt(0).toUpperCase() + full.slice(1);
-  // en mobile (.lbl-short) va en formato D/M/A numérico, no el texto largo
+  // formato D/M/A pedido para mobile — ahora vive en el popover del ícono de
+  // calendario (dateBtn/dateDropdown), no en un chip de texto suelto
   const short = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
-  $('todayDate').innerHTML = `<span class="lbl-full">${fullCap}</span><span class="lbl-short">${short}</span>`;
+  $('todayDate').textContent = fullCap;
+  $('todayDatePopover').textContent = short;
 }
 
 // ---- personas del espacio ----
