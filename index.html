@@ -494,11 +494,6 @@
   /* ---- Resumen: who-paid split bar ---- */
   .split-bar{display:flex;height:14px;border-radius:9999px;overflow:hidden;background:var(--paper);margin:4px 0 12px;}
   .split-bar span{height:100%;}
-  /* barra de categorías: a diferencia de split-bar, cada segmento va separado
-     (gap), como la refe — así overflow:hidden no sirve para redondear el
-     conjunto, cada segmento se redondea por su cuenta */
-  #categoryBar{overflow:visible;gap:3px;background:none;}
-  #categoryBar span{border-radius:9999px;}
   .split-legend{display:flex;justify-content:space-between;font-size:13px;gap:10px;}
   .split-legend-item{display:flex;align-items:center;gap:7px;min-width:0;}
   .split-legend-item .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
