@@ -492,6 +492,11 @@
 
   form.add-form{display:flex;flex-direction:column;gap:14px; margin-bottom:-10px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  /* sin esto, un grid item no se achica más allá del ancho natural de su
+     contenido (min-width:auto por default) — un input[type=date] en mobile
+     pide su formato de fecha completo ("25 sept 2026") como ancho mínimo y
+     el campo se sale del modal en vez de respetar el 1fr de la columna */
+  .row2 > div{min-width:0;}
   @media(max-width:540px){.row2{grid-template-columns:1fr;}}
   label{font-size:14px;color:var(--body-muted);display:block;margin-bottom:6px;letter-spacing:-0.224px;}
   input[type=text],input[type=number],input[type=date],input[type=month],input[type=password],select{
@@ -499,6 +504,12 @@
     padding:10px 12px;font-size:16px;font-family:'Inter',system-ui,sans-serif;color:var(--ink);
     transition:border-color .15s ease, box-shadow .15s ease;
   }
+  /* un input[type=date]/month es un control nativo: su min-width por default
+     es "auto", que el navegador resuelve al ancho que necesita para mostrar
+     su propio formato de fecha (en mobile, uno largo tipo "25 sept 2026").
+     Sin este min-width:0 el campo ignora el width:100% de arriba y se sale
+     del modal en vez de achicarse */
+  input[type=date],input[type=month]{min-width:0;}
   /* iOS Safari auto-zooms on focus when an input's font-size is below 16px */
   @media(max-width:540px){
     input[type=text],input[type=number],input[type=date],input[type=month],input[type=password],select{font-size:16px;}
