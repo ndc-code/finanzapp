@@ -469,6 +469,11 @@
   /* ---- Resumen: who-paid split bar ---- */
   .split-bar{display:flex;height:14px;border-radius:9999px;overflow:hidden;background:var(--paper);margin:4px 0 12px;}
   .split-bar span{height:100%;}
+  /* barra de categorías: a diferencia de split-bar, cada segmento va separado
+     (gap), como la refe — así overflow:hidden no sirve para redondear el
+     conjunto, cada segmento se redondea por su cuenta */
+  #categoryBar{overflow:visible;gap:3px;background:none;}
+  #categoryBar span{border-radius:9999px;}
   .split-legend{display:flex;justify-content:space-between;font-size:13px;gap:10px;}
   .split-legend-item{display:flex;align-items:center;gap:7px;min-width:0;}
   .split-legend-item .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
@@ -931,6 +936,9 @@
 
     <div class="card">
       <div class="chart-title">Por categoría</div>
+      <!-- solo tiene sentido en la pestaña de una persona — Compartido ya
+         muestra el pool entero tal cual, sin nada que prorratear -->
+      <div class="seg seg-fit" id="categorySplitSeg" style="margin:0 0 12px;display:none;"></div>
       <div class="split-bar" id="categoryBar"></div>
       <div id="categoryRank"></div>
     </div>
@@ -5480,6 +5488,18 @@ function expenseOwner(ex){
   const bearers = pids().filter(id=>personShareOf(ex, id) > 0);
   return bearers.length === 1 ? bearers[0] : 'shared';
 }
+// variante para Resumen > Por categoría: a diferencia de expenseOwner, NO
+// trata paidBy:'shared' como compartido automáticamente. Un gasto fijo
+// personal puede haber quedado con paidBy:'shared' arrastrado de una copia
+// mensual vieja (togglePaid clona el mes anterior tal cual) aunque hoy su
+// reparto sea 100/0 para una sola persona — acá eso sí tiene que contar como
+// suyo, no del hogar, porque lo que importa en la categoría es quién carga
+// con la plata, no qué botón quedó tildado al cargarlo
+function categoryOwnerOf(ex){
+  if(ex.splitType === 'income') return 'shared';
+  const bearers = pids().filter(id=>personShareOf(ex, id) > 0);
+  return bearers.length === 1 ? bearers[0] : 'shared';
+}
 let currentFixedTab = 'shared';
 
 function renderFixedTabs(list, mes){
@@ -6444,10 +6464,37 @@ function renderAhorro(){
 }
 
 // ---- Resumen: ranked category bars, who-paid split, month trend ----
+// arma el desglose por categoría de la pestaña activa de Resumen. `list` viene
+// sin scopear (a diferencia del resto de Resumen): Compartido necesita ver
+// solo los gastos que son realmente del hogar (categoryOwnerOf === 'shared'),
+// y cada persona necesita ver sus propios gastos categorizados normal más lo
+// compartido — repartido por categoría real (resumenByShare) o entero solo
+// del lado de quien lo pagó (ver renderCategorySplitSeg)
 function renderCategoryRank(list){
+  renderCategorySplitSeg();
+  const shared = peopleCount() < 2 || isSharedPay(currentResumenTab);
   const byCategory = {};
-  list.forEach(ex=>{ byCategory[ex.category] = (byCategory[ex.category]||0) + ex.amount; });
-  const total = list.reduce((s,x)=>s+x.amount,0);
+  const add = (cat, amt) => { if(amt > 0) byCategory[cat] = (byCategory[cat]||0) + amt; };
+  if(shared){
+    // con una sola persona no hay noción de "compartido" — es todo
+    const scope = peopleCount() < 2 ? list : list.filter(ex=>categoryOwnerOf(ex) === SHARED_PAY);
+    scope.forEach(ex=>add(ex.category, ex.amount));
+  }else{
+    list.filter(ex=>categoryOwnerOf(ex) === currentResumenTab).forEach(ex=>add(ex.category, ex.amount));
+    const sharedExpenses = list.filter(ex=>categoryOwnerOf(ex) === SHARED_PAY);
+    if(resumenByShare){
+      // Reparto: cada gasto compartido entra bajo su categoría real, a
+      // prorrata de cómo esté repartido (según ingreso, partes iguales, lo
+      // que sea — ya está en shares) — aparece de los dos lados
+      sharedExpenses.forEach(ex=>add(ex.category, personShareOf(ex, currentResumenTab)));
+    }else{
+      // Quién pagó: el monto entero, sin prorratear, solo del lado de quien
+      // figura como paidBy — no aparece del otro lado aunque el reparto le
+      // toque una parte
+      sharedExpenses.filter(ex=>ex.paidBy === currentResumenTab).forEach(ex=>add(ex.category, ex.amount));
+    }
+  }
+  const total = Object.values(byCategory).reduce((s,v)=>s+v, 0);
   const data = Object.keys(byCategory).map(cat=>({
     label: cat, value: byCategory[cat], color: catColor(cat)
   })).sort((a,b)=>b.value-a.value);
@@ -6567,6 +6614,31 @@ $('resumenPeriodSeg').addEventListener('click', (e)=>{
   render();
 });
 
+// ---- Por categoría, en la pestaña de una persona: cómo contar lo compartido.
+// "Reparto" (default): cada gasto compartido aparece bajo su categoría real
+// en las DOS personas, a prorrata de cómo esté repartido ese gasto (según
+// ingreso, partes iguales, lo que sea — se lee de shares, ya calculado al
+// cargarlo). "Quién pagó": el monto entero va solo a quien figura como
+// paidBy de ese gasto — no se prorratea, y no aparece del lado de la otra
+// persona aunque el reparto le toque una parte.
+let resumenByShare = true;
+function renderCategorySplitSeg(){
+  const seg = $('categorySplitSeg');
+  const soloPersona = peopleCount() >= 2 && !isSharedPay(currentResumenTab);
+  seg.style.display = soloPersona ? '' : 'none';
+  if(!soloPersona) return;
+  const opts = [{ key:true, label:'Reparto' }, { key:false, label:'Quién pagó' }];
+  seg.innerHTML = opts.map(o=>
+    `<button type="button" data-share="${o.key}"${o.key === resumenByShare ? ' class="active"' : ''}>${o.label}</button>`
+  ).join('');
+}
+$('categorySplitSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  resumenByShare = btn.dataset.share === 'true';
+  render();
+});
+
 // meses del año de viewMonth que tienen algo cargado — no todos los 12: iterar
 // un mes vacío llamaría budgetTemplatesForMonth() y le crearía rubros clonados
 // sin que nadie los haya pedido (ver monthHasAnyData)
@@ -6613,7 +6685,10 @@ function renderResumen(list, fin){
   const activeList = resumenPeriod === 'year' ? yearExpenseList() : list;
   const activeFin = resumenPeriod === 'year' ? yearFinance() : fin;
   renderTotals(activeFin);
-  renderCategoryRank(resumenScope(activeList));
+  // sin scopear: renderCategoryRank necesita ver tanto lo propio de la
+  // pestaña activa como el pool entero de gastos compartidos (para poder
+  // sumar la parte que le toca a esa persona ahí) — ver su propio scoping
+  renderCategoryRank(activeList);
   renderResumenMiddleCard(activeList);
   renderMonthTrend(resumenScope(expenses));
 }
