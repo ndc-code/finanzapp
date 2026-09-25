@@ -893,7 +893,7 @@
     <div class="seg seg-fit" id="resumenPeriodSeg" style="margin-bottom:14px;"></div>
     <div class="card">
       <div class="section-title" id="resumenTitle">Saldo</div>
-      <div class="totals" id="totalsStrip"></div>
+      <div class="totals totals-2" id="totalsStrip"></div>
     </div>
 
     <div class="card">
@@ -5625,8 +5625,7 @@ function renderTotals(fin){
     : `Saldo de ${who} · ${periodLabel}`;
   $('totalsStrip').innerHTML =
     cell('Ingreso', ingreso) +
-    cell('Gasto', gasto) +
-    cell('Ahorro', ahorro, ahorro < 0 ? 'neg' : 'save');
+    cell('Gasto', gasto);
 }
 
 // the "Saldos" footer every big block on Gastos ends with: quién y cuánto, sin
