@@ -444,17 +444,19 @@
 
   /* ---- Resumen: hero total + delta vs. last month ---- */
 
-  /* ---- Resumen: ranked category bars ---- */
-  .rank-row{padding:9px 0;}
-  .rank-row:first-child{padding-top:2px;}
-  .rank-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px;}
-  .rank-label{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500;min-width:0;}
-  .rank-label .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-  .rank-label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .rank-val{flex:0 0 auto;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--body-muted);}
-  .rank-val b{color:var(--ink);font-weight:600;}
-  .rank-track{height:8px;background:var(--paper);border-radius:9999px;overflow:hidden;}
-  .rank-track i{display:block;height:100%;border-radius:9999px;}
+  /* ---- Resumen: por categoría — una card por categoría, como la referencia:
+     ícono circular + nombre a la izquierda, % y monto a la derecha ---- */
+  .rank-card{display:flex;align-items:center;gap:12px;background:var(--paper);
+    border-radius:14px;padding:12px 14px;margin-bottom:8px;}
+  .rank-card:last-child{margin-bottom:0;}
+  .rank-icon{flex:0 0 auto;width:34px;height:34px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:13px;font-weight:700;text-transform:uppercase;}
+  .rank-name{flex:1 1 auto;min-width:0;font-size:14px;font-weight:500;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rank-figures{flex:0 0 auto;text-align:right;line-height:1.35;}
+  .rank-pct{display:block;font-size:12px;color:var(--body-muted);}
+  .rank-amt{display:block;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;}
 
   /* ---- Resumen: who-paid split bar ---- */
   .split-bar{display:flex;height:14px;border-radius:9999px;overflow:hidden;background:var(--paper);margin:4px 0 12px;}
@@ -6413,20 +6415,22 @@ function renderCategoryRank(list){
     return;
   }
   // barra apilada con la proporción de cada categoría de un vistazo, arriba
-  // del detalle fila por fila
+  // de las cards de detalle
   $('categoryBar').innerHTML = data.map(d=>
     `<span style="width:${d.value/total*100}%;background:${d.color}"></span>`
   ).join('');
-  const peak = Math.max(...data.map(d=>d.value));
+  // una card por categoría, como la refe: ícono + nombre a la izquierda,
+  // % y monto a la derecha
   $('categoryRank').innerHTML = data.map(d=>{
     const pct = Math.round(d.value/total*100);
-    const w = Math.round(d.value/peak*100);
-    return `<div class="rank-row">
-      <div class="rank-h">
-        <span class="rank-label"><span class="dot" style="background:${d.color}"></span><span>${escapeHtml(d.label)}</span></span>
-        <span class="rank-val"><b>${fmt(d.value)}</b> · ${pct}%</span>
-      </div>
-      <div class="rank-track"><i style="width:${w}%;background:${d.color}"></i></div>
+    const icon = (d.label||'?').trim().charAt(0) || '?';
+    return `<div class="rank-card">
+      <span class="rank-icon" style="background:${d.color}">${escapeHtml(icon)}</span>
+      <span class="rank-name">${escapeHtml(d.label)}</span>
+      <span class="rank-figures">
+        <span class="rank-pct">${pct}%</span>
+        <span class="rank-amt">${fmt(d.value)}</span>
+      </span>
     </div>`;
   }).join('');
 }
