@@ -129,9 +129,9 @@
   .totals-v.neg{color:var(--a-clay);}
   @media(max-width:480px){.totals-cell{padding:14px 6px;}.totals-v{font-size:16px;}.totals-k{font-size:10px;}}
   @media(max-width:480px){
-    #ahorroStrip{grid-template-columns:1fr;}
-    #ahorroStrip .totals-cell{border-right:none;border-bottom:1px solid var(--line);}
-    #ahorroStrip .totals-cell:last-child{border-bottom:none;}
+    #ahorroStrip, #totalsStrip{grid-template-columns:1fr;}
+    #ahorroStrip .totals-cell, #totalsStrip .totals-cell{border-right:none;border-bottom:1px solid var(--line);}
+    #ahorroStrip .totals-cell:last-child, #totalsStrip .totals-cell:last-child{border-bottom:none;}
   }
 
   /* ---- ahorro en dólares: lista editable ---- */
@@ -888,6 +888,7 @@
     <!-- Mismo patrón que Ahorro: filtro de persona arriba, card con título + totales.
          Compartido = el hogar entero; cada persona filtra lo de abajo a lo suyo. -->
     <div class="seg seg-fit" id="resumenTabs" style="margin-bottom:14px;"></div>
+    <div class="seg seg-fit" id="resumenPeriodSeg" style="margin-bottom:14px;"></div>
     <div class="card">
       <div class="section-title" id="resumenTitle">Saldo</div>
       <div class="totals" id="totalsStrip"></div>
@@ -895,6 +896,7 @@
 
     <div class="card">
       <div class="chart-title">Por categoría</div>
+      <div class="split-bar" id="categoryBar"></div>
       <div id="categoryRank"></div>
     </div>
 
@@ -5589,29 +5591,36 @@ function renderTotals(fin){
       <div class="totals-k">${k}</div>
       <div class="totals-v ${cls}">${fmt(v)}</div>
     </div>`;
+  const isYear = resumenPeriod === 'year';
   // ahorro = lo cargado en el rubro Compra dólares (la misma definición que
-  // usan la pestaña Ahorro y Gastos posibles), no el residual de la cadena
-  const dolaresOf = (person) => {
-    const c = (budgetTemplatesForMonth(viewMonth)[person] || []).find(x => x.label === 'Compra dólares');
+  // usan la pestaña Ahorro y Gastos posibles), no el residual de la cadena;
+  // en Año se suma ese monto mes a mes sobre los meses que tienen datos
+  const dolaresOf = (person, key) => {
+    const c = (budgetTemplatesForMonth(key || viewMonth)[person] || []).find(x => x.label === 'Compra dólares');
     return c ? (c.amount || 0) : 0;
+  };
+  const dolaresYear = (person) => {
+    const year = viewMonth.slice(0,4);
+    return yearMonthsWithData(year).reduce((s,m) => s + dolaresOf(person, m), 0);
   };
   let ingreso, ahorro;
   const shared = peopleCount() < 2 || isSharedPay(currentResumenTab);
   if(shared){
     ingreso = finSum(fin, 'inc');
-    ahorro = pids().reduce((s,p) => s + dolaresOf(p), 0);
+    ahorro = pids().reduce((s,p) => s + (isYear ? dolaresYear(p) : dolaresOf(p)), 0);
   }else{
     const f = fin[currentResumenTab];
     ingreso = f.inc;
-    ahorro = dolaresOf(currentResumenTab);
+    ahorro = isYear ? dolaresYear(currentResumenTab) : dolaresOf(currentResumenTab);
   }
   const gasto = ingreso - ahorro;
   const who = shared
     ? (peopleCount() < 2 ? nameOf(firstPid()) : 'hogar')
     : nameOf(currentResumenTab);
+  const periodLabel = isYear ? viewMonth.slice(0,4) : monthShort(viewMonth);
   $('resumenTitle').textContent = shared && peopleCount() >= 2
-    ? `Saldo compartido · ${monthShort(viewMonth)}`
-    : `Saldo de ${who} · ${monthShort(viewMonth)}`;
+    ? `Saldo compartido · ${periodLabel}`
+    : `Saldo de ${who} · ${periodLabel}`;
   $('totalsStrip').innerHTML =
     cell('Ingreso', ingreso) +
     cell('Gasto', gasto) +
@@ -6399,9 +6408,15 @@ function renderCategoryRank(list){
     label: cat, value: byCategory[cat], color: catColor(cat)
   })).sort((a,b)=>b.value-a.value);
   if(!data.length){
-    $('categoryRank').innerHTML = '<div class="income-note">Todavía no hay gastos en este mes.</div>';
+    $('categoryBar').innerHTML = '';
+    $('categoryRank').innerHTML = `<div class="income-note">Todavía no hay gastos en este ${resumenPeriod === 'year' ? 'año' : 'mes'}.</div>`;
     return;
   }
+  // barra apilada con la proporción de cada categoría de un vistazo, arriba
+  // del detalle fila por fila
+  $('categoryBar').innerHTML = data.map(d=>
+    `<span style="width:${d.value/total*100}%;background:${d.color}"></span>`
+  ).join('');
   const peak = Math.max(...data.map(d=>d.value));
   $('categoryRank').innerHTML = data.map(d=>{
     const pct = Math.round(d.value/total*100);
@@ -6426,7 +6441,7 @@ function renderPersonSplit(list){
   });
   const total = pids().reduce((s,id)=>s+paid[id], 0);
   if(total <= 0){
-    $('personSplit').innerHTML = '<div class="income-note">Todavía no hay gastos en este mes.</div>';
+    $('personSplit').innerHTML = `<div class="income-note">Todavía no hay gastos en este ${resumenPeriod === 'year' ? 'año' : 'mes'}.</div>`;
     return;
   }
   const rows = pids().map((id,i)=>({
@@ -6488,6 +6503,54 @@ function resumenScope(list){
     : list.filter(ex=>expenseOwner(ex) === currentResumenTab);
 }
 
+// ---- Mes / Año: Resumen puede mirar el mes que se está viendo en Gastos, o
+// todo el año de ese mes. No es otra navegación de fecha (esa sigue siendo el
+// month-nav de arriba, que fija viewMonth) — es solo cómo se agrupan los
+// datos de ese momento dentro de Resumen.
+let resumenPeriod = 'month';
+function renderResumenPeriodSeg(){
+  const opts = [{ key:'month', label:'Mes' }, { key:'year', label:'Año' }];
+  $('resumenPeriodSeg').innerHTML = opts.map(o=>
+    `<button type="button" data-period="${o.key}"${o.key === resumenPeriod ? ' class="active"' : ''}>${o.label}</button>`
+  ).join('');
+}
+$('resumenPeriodSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  resumenPeriod = btn.dataset.period;
+  render();
+});
+
+// meses del año de viewMonth que tienen algo cargado — no todos los 12: iterar
+// un mes vacío llamaría budgetTemplatesForMonth() y le crearía rubros clonados
+// sin que nadie los haya pedido (ver monthHasAnyData)
+function yearMonthsWithData(year){
+  return Array.from({length:12}, (_,i)=>`${year}-${String(i+1).padStart(2,'0')}`)
+    .filter(m=>monthHasAnyData(m));
+}
+function yearExpenseList(){
+  const year = viewMonth.slice(0,4);
+  return expenses.filter(x=>monthKey(x.date).slice(0,4) === year)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+}
+// mismo shape que monthFinance pero sumando la cadena de cada persona sobre
+// todos los meses del año que tienen datos
+function yearFinance(){
+  const year = viewMonth.slice(0,4);
+  const months = yearMonthsWithData(year);
+  const out = {};
+  pids().forEach(id=>{
+    out[id] = months.reduce((acc, m)=>{
+      const f = financeFor(id, m);
+      acc.inc += f.inc; acc.fijos += f.fijos; acc.variables += f.variables;
+      acc.afterFijos += f.afterFijos; acc.afterVar += f.afterVar;
+      acc.podes += f.podes; acc.ahorro += f.ahorro;
+      return acc;
+    }, { inc:0, fijos:0, variables:0, afterFijos:0, afterVar:0, podes:0, ahorro:0 });
+  });
+  return out;
+}
+
 // "Quién pagó" compara entre personas, así que solo tiene sentido en Compartido;
 // en la pestaña de una persona lo reemplaza su saldo (a quién le debe o le deben)
 function renderResumenMiddleCard(monthList){
@@ -6500,9 +6563,12 @@ function renderResumenMiddleCard(monthList){
 
 function renderResumen(list, fin){
   renderResumenTabs();
-  renderTotals(fin);
-  renderCategoryRank(resumenScope(list));
-  renderResumenMiddleCard(list);
+  renderResumenPeriodSeg();
+  const activeList = resumenPeriod === 'year' ? yearExpenseList() : list;
+  const activeFin = resumenPeriod === 'year' ? yearFinance() : fin;
+  renderTotals(activeFin);
+  renderCategoryRank(resumenScope(activeList));
+  renderResumenMiddleCard(activeList);
   renderMonthTrend(resumenScope(expenses));
 }
 
