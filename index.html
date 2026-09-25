@@ -5485,6 +5485,18 @@ function expenseOwner(ex){
   const bearers = pids().filter(id=>personShareOf(ex, id) > 0);
   return bearers.length === 1 ? bearers[0] : 'shared';
 }
+// variante para Resumen > Por categoría: a diferencia de expenseOwner, NO
+// trata paidBy:'shared' como compartido automáticamente. Un gasto fijo
+// personal puede haber quedado con paidBy:'shared' arrastrado de una copia
+// mensual vieja (togglePaid clona el mes anterior tal cual) aunque hoy su
+// reparto sea 100/0 para una sola persona — acá eso sí tiene que contar como
+// suyo, no del hogar, porque lo que importa en la categoría es quién carga
+// con la plata, no qué botón quedó tildado al cargarlo
+function categoryOwnerOf(ex){
+  if(ex.splitType === 'income') return 'shared';
+  const bearers = pids().filter(id=>personShareOf(ex, id) > 0);
+  return bearers.length === 1 ? bearers[0] : 'shared';
+}
 let currentFixedTab = 'shared';
 
 function renderFixedTabs(list, mes){
@@ -6462,12 +6474,12 @@ function renderCategoryRank(list){
   const add = (cat, amt) => { if(amt > 0) byCategory[cat] = (byCategory[cat]||0) + amt; };
   if(shared){
     // con una sola persona no hay noción de "compartido" — es todo
-    const scope = peopleCount() < 2 ? list : list.filter(ex=>expenseOwner(ex) === SHARED_PAY);
+    const scope = peopleCount() < 2 ? list : list.filter(ex=>categoryOwnerOf(ex) === SHARED_PAY);
     scope.forEach(ex=>add(ex.category, ex.amount));
   }else{
-    list.filter(ex=>expenseOwner(ex) === currentResumenTab).forEach(ex=>add(ex.category, ex.amount));
+    list.filter(ex=>categoryOwnerOf(ex) === currentResumenTab).forEach(ex=>add(ex.category, ex.amount));
     const misCompartido = list
-      .filter(ex=>expenseOwner(ex) === SHARED_PAY)
+      .filter(ex=>categoryOwnerOf(ex) === SHARED_PAY)
       .reduce((s,ex)=>s + personShareOf(ex, currentResumenTab), 0);
     add('Compartido', misCompartido);
   }
