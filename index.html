@@ -2437,12 +2437,12 @@ let todayUsdRate = null;   // average of compra/venta, null until it loads
 
 // mismo motivo que monthLabelHtml: dos versiones del mismo texto, el CSS
 // decide cuál mostrar según el ancho de pantalla
-const WEEKDAY_ABBR = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 function renderTodayDate(){
   const now = new Date();
   const full = now.toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
   const fullCap = full.charAt(0).toUpperCase() + full.slice(1);
-  const short = `${WEEKDAY_ABBR[now.getDay()]}, ${now.getDate()} de ${MONTH_ABBR[now.getMonth()]}`;
+  // en mobile (.lbl-short) va en formato D/M/A numérico, no el texto largo
+  const short = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
   $('todayDate').innerHTML = `<span class="lbl-full">${fullCap}</span><span class="lbl-short">${short}</span>`;
 }
 
