@@ -469,6 +469,11 @@
   /* ---- Resumen: who-paid split bar ---- */
   .split-bar{display:flex;height:14px;border-radius:9999px;overflow:hidden;background:var(--paper);margin:4px 0 12px;}
   .split-bar span{height:100%;}
+  /* barra de categorías: a diferencia de split-bar, cada segmento va separado
+     (gap), como la refe — así overflow:hidden no sirve para redondear el
+     conjunto, cada segmento se redondea por su cuenta */
+  #categoryBar{overflow:visible;gap:3px;background:none;}
+  #categoryBar span{border-radius:9999px;}
   .split-legend{display:flex;justify-content:space-between;font-size:13px;gap:10px;}
   .split-legend-item{display:flex;align-items:center;gap:7px;min-width:0;}
   .split-legend-item .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
@@ -6444,10 +6449,29 @@ function renderAhorro(){
 }
 
 // ---- Resumen: ranked category bars, who-paid split, month trend ----
+// arma el desglose por categoría de la pestaña activa de Resumen. `list` viene
+// sin scopear (a diferencia del resto de Resumen): Compartido necesita ver
+// solo los gastos que son realmente del hogar (expenseOwner === 'shared'), y
+// cada persona necesita ver sus propios gastos categorizados normal MÁS lo
+// que puso en los compartidos, sumado aparte bajo una categoría "Compartido"
+// — no desglosado por la categoría de cada gasto compartido, porque lo que
+// importa ahí es cuánto puso esta persona, no en qué se gastó
 function renderCategoryRank(list){
+  const shared = peopleCount() < 2 || isSharedPay(currentResumenTab);
   const byCategory = {};
-  list.forEach(ex=>{ byCategory[ex.category] = (byCategory[ex.category]||0) + ex.amount; });
-  const total = list.reduce((s,x)=>s+x.amount,0);
+  const add = (cat, amt) => { if(amt > 0) byCategory[cat] = (byCategory[cat]||0) + amt; };
+  if(shared){
+    // con una sola persona no hay noción de "compartido" — es todo
+    const scope = peopleCount() < 2 ? list : list.filter(ex=>expenseOwner(ex) === SHARED_PAY);
+    scope.forEach(ex=>add(ex.category, ex.amount));
+  }else{
+    list.filter(ex=>expenseOwner(ex) === currentResumenTab).forEach(ex=>add(ex.category, ex.amount));
+    const misCompartido = list
+      .filter(ex=>expenseOwner(ex) === SHARED_PAY)
+      .reduce((s,ex)=>s + personShareOf(ex, currentResumenTab), 0);
+    add('Compartido', misCompartido);
+  }
+  const total = Object.values(byCategory).reduce((s,v)=>s+v, 0);
   const data = Object.keys(byCategory).map(cat=>({
     label: cat, value: byCategory[cat], color: catColor(cat)
   })).sort((a,b)=>b.value-a.value);
@@ -6613,7 +6637,10 @@ function renderResumen(list, fin){
   const activeList = resumenPeriod === 'year' ? yearExpenseList() : list;
   const activeFin = resumenPeriod === 'year' ? yearFinance() : fin;
   renderTotals(activeFin);
-  renderCategoryRank(resumenScope(activeList));
+  // sin scopear: renderCategoryRank necesita ver tanto lo propio de la
+  // pestaña activa como el pool entero de gastos compartidos (para poder
+  // sumar la parte que le toca a esa persona ahí) — ver su propio scoping
+  renderCategoryRank(activeList);
   renderResumenMiddleCard(activeList);
   renderMonthTrend(resumenScope(expenses));
 }
