@@ -968,17 +968,6 @@
       <div class="split-bar" id="categoryBar"></div>
       <div id="categoryRank"></div>
     </div>
-
-    <div class="card">
-      <div class="chart-title" id="personSplitTitle">Quién pagó</div>
-      <div id="personSplit"></div>
-      <div class="bal-line" id="resumenBalance"></div>
-    </div>
-
-    <div class="card">
-      <div class="chart-title">Últimos meses</div>
-      <div id="monthTrend"></div>
-    </div>
   </div>
 
   <!-- ============ TAB: AJUSTES ============ -->
@@ -6616,42 +6605,6 @@ function renderCategoryRank(list){
   }).join('');
 }
 
-function renderPersonSplit(list){
-  const paid = payerBreakdown(list);
-  const total = pids().reduce((s,id)=>s+paid[id], 0);
-  if(total <= 0){
-    $('personSplit').innerHTML = `<div class="income-note">Todavía no hay gastos en este ${resumenPeriod === 'year' ? 'año' : 'mes'}.</div>`;
-    return;
-  }
-  const rows = pids().map((id,i)=>({
-    id, color: personColor(i), amount: paid[id], pct: Math.round(paid[id]/total*100)
-  }));
-  $('personSplit').innerHTML = `
-    <div class="split-bar">${rows.map(r=>`<span style="width:${r.amount/total*100}%;background:${r.color}"></span>`).join('')}</div>
-    <div class="split-legend">${rows.map(r=>
-      `<span class="split-legend-item"><span class="dot" style="background:${r.color}"></span><span class="split-legend-name">${escapeHtml(nameOf(r.id))}</span><span class="split-legend-val"><b>${fmt(r.amount)}</b> · ${r.pct}%</span></span>`
-    ).join('')}</div>`;
-}
-
-function renderMonthTrend(scoped){
-  const months = [...new Set(scoped.map(e=>monthKey(e.date)).filter(Boolean))].sort().slice(-6);
-  if(!months.length){
-    $('monthTrend').innerHTML = '<div class="income-note">Todavía no hay gastos cargados en ningún mes.</div>';
-    return;
-  }
-  const rows = months.map(m=>({ m, total: scoped.filter(x=>monthKey(x.date)===m).reduce((s,x)=>s+x.amount,0) }));
-  const peak = Math.max(1, ...rows.map(r=>r.total));
-  $('monthTrend').innerHTML = rows.map(r=>{
-    const w = Math.round(r.total/peak*100);
-    const current = r.m === viewMonth;
-    return `<div class="trend-row">
-      <span class="trend-m">${monthShort(r.m)}</span>
-      <span class="trend-bar"><i class="${current?'current':''}" style="width:${w}%"></i></span>
-      <span class="trend-v">${fmt(r.total)}</span>
-    </div>`;
-  }).join('');
-}
-
 // ---- sub-pestañas de Resumen: Compartido = el hogar entero (sin filtrar),
 // cada persona ve solo lo suyo (mismo criterio que expenseOwner en Gastos) ----
 let currentResumenTab = SHARED_PAY;
@@ -6760,16 +6713,6 @@ function yearFinance(){
   return out;
 }
 
-// "Quién pagó" compara entre personas, así que solo tiene sentido en Compartido;
-// en la pestaña de una persona lo reemplaza su saldo (a quién le debe o le deben)
-function renderResumenMiddleCard(monthList){
-  const shared = peopleCount() < 2 || isSharedPay(currentResumenTab);
-  $('personSplitTitle').textContent = shared ? 'Quién pagó' : 'Tu saldo';
-  $('personSplit').style.display = shared ? '' : 'none';
-  if(shared) renderPersonSplit(monthList);
-  renderResumenBalance(shared ? null : currentResumenTab);
-}
-
 function renderResumen(fin){
   renderResumenTabs();
   renderResumenPeriodSeg();
@@ -6782,8 +6725,6 @@ function renderResumen(fin){
   // pestaña activa como el pool entero de gastos compartidos (para poder
   // sumar la parte que le toca a esa persona ahí) — ver su propio scoping
   renderCategoryRank(activeList);
-  renderResumenMiddleCard(activeList);
-  renderMonthTrend(resumenScope(allExpenses()));
 }
 
 // cuánto puso cada uno de su bolsillo menos lo que le tocaba, sobre TODOS los
@@ -6848,14 +6789,6 @@ function renderBalance(){
   el.innerHTML = html;
   const card = $('balanceCard');
   if(card) card.style.display = html ? '' : 'none';
-}
-
-// mismo cálculo, pero filtrado a las deudas donde participa la persona activa
-// en Resumen; en Compartido (o con una sola persona) es el panorama completo
-function renderResumenBalance(personFilter){
-  const rows = personFilter ? settlements().filter(s=>s.from === personFilter || s.to === personFilter) : null;
-  const html = balanceHtml(rows);
-  $('resumenBalance').innerHTML = html || (personFilter ? '<span class="income-note">Estás al día.</span>' : '');
 }
 
 viewMonth = monthNow();
