@@ -137,9 +137,11 @@
   .totals-v.neg{color:var(--a-clay);}
   @media(max-width:480px){.totals-cell{padding:14px 6px;}.totals-v{font-size:16px;}.totals-k{font-size:10px;}}
   @media(max-width:480px){
-    #ahorroStrip, #totalsStrip{grid-template-columns:1fr;}
-    #ahorroStrip .totals-cell, #totalsStrip .totals-cell{border-right:none;border-bottom:1px solid var(--line);}
-    #ahorroStrip .totals-cell:last-child, #totalsStrip .totals-cell:last-child{border-bottom:none;}
+    /* #ahorroStrip tiene 3 items y no entran cómodos en fila; #totalsStrip
+       ahora son solo Ingreso/Gasto (2), esos sí quedan uno al lado del otro */
+    #ahorroStrip{grid-template-columns:1fr;}
+    #ahorroStrip .totals-cell{border-right:none;border-bottom:1px solid var(--line);}
+    #ahorroStrip .totals-cell:last-child{border-bottom:none;}
   }
 
   /* ---- ahorro en dólares: lista editable ---- */
@@ -453,10 +455,13 @@
   /* ---- Resumen: hero total + delta vs. last month ---- */
 
   /* ---- Resumen: por categoría — una card por categoría, como la referencia:
-     ícono circular + nombre a la izquierda, % y monto a la derecha ---- */
+     ícono circular + nombre a la izquierda, % y monto a la derecha. Tocarla
+     la expande (mismo patrón que "Totales" en Gastos) y muestra 2 mini
+     cards abajo con cuánto pagó cada persona de esos gastos ---- */
+  .rank-item{margin-bottom:8px;}
+  .rank-item:last-child{margin-bottom:0;}
   .rank-card{display:flex;align-items:center;gap:12px;background:var(--paper);
-    border-radius:14px;padding:12px 14px;margin-bottom:8px;}
-  .rank-card:last-child{margin-bottom:0;}
+    border-radius:14px;padding:12px 14px;cursor:pointer;}
   .rank-icon{flex:0 0 auto;width:34px;height:34px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;
     color:#fff;font-size:13px;font-weight:700;text-transform:uppercase;}
@@ -465,6 +470,23 @@
   .rank-figures{flex:0 0 auto;text-align:right;line-height:1.35;}
   .rank-pct{display:block;font-size:12px;color:var(--body-muted);}
   .rank-amt{display:block;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;}
+  .rank-detail{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:6px;}
+  .rank-mini{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:10px 12px;text-align:center;}
+  .rank-mini-name{display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;
+    color:var(--body-muted);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rank-mini-amt{display:block;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:4px;}
+
+  /* ---- Resumen: switch on/off (solo lo que pagó cada uno) ---- */
+  .switch-toggle{display:flex;align-items:center;gap:9px;border:none;background:none;
+    cursor:pointer;font-family:inherit;padding:0;margin:0 0 12px;}
+  .switch-toggle .switch-label{font-size:13px;color:var(--body-muted);font-weight:500;}
+  .switch-track{width:38px;height:22px;border-radius:9999px;background:var(--line-strong);
+    position:relative;flex:0 0 auto;transition:background-color .15s ease;}
+  .switch-thumb{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.25);transition:transform .15s ease;}
+  .switch-toggle[aria-checked="true"] .switch-track{background:var(--primary);}
+  .switch-toggle[aria-checked="true"] .switch-thumb{transform:translateX(16px);}
 
   /* ---- Resumen: who-paid split bar ---- */
   .split-bar{display:flex;height:14px;border-radius:9999px;overflow:hidden;background:var(--paper);margin:4px 0 12px;}
@@ -937,8 +959,12 @@
     <div class="card">
       <div class="chart-title">Por categoría</div>
       <!-- solo tiene sentido en la pestaña de una persona — Compartido ya
-         muestra el pool entero tal cual, sin nada que prorratear -->
-      <div class="seg seg-fit" id="categorySplitSeg" style="margin:0 0 12px;display:none;"></div>
+         muestra el pool entero tal cual, no hay nada que filtrar -->
+      <button type="button" class="switch-toggle" id="onlyMineToggle" role="switch" aria-checked="false" style="display:none;"
+        onclick="toggleResumenOnlyMine()">
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+        <span class="switch-label" id="onlyMineLabel"></span>
+      </button>
       <div class="split-bar" id="categoryBar"></div>
       <div id="categoryRank"></div>
     </div>
@@ -2827,6 +2853,13 @@ function normalizeVarExpenses(){
       e.shares = soloShares(e.paidBy);
       changed = true;
     }
+    // categoryOfVariable() reemplaza a categoryOf() para variables (ver su
+    // comentario) — re-deriva los que quedaron con "Otro" por el bug viejo,
+    // así no hace falta recargarlos a mano para que aparezcan bien en Resumen
+    if((!e.category || e.category === 'Otro') && e.desc){
+      const cat = categoryOfVariable(e.desc);
+      if(cat !== e.category){ e.category = cat; changed = true; }
+    }
   });
   return changed;
 }
@@ -4236,7 +4269,7 @@ $('varExpenseForm').addEventListener('submit', (e)=>{
   const fields = {
     desc, amount,
     date: $('vxDate').value || defaultDate(),
-    category: categoryOf(desc),
+    category: categoryOfVariable(desc),
     paidBy: isSharedPay(currentVxPaidBy) ? currentVxPayer : currentVxPaidBy,
     // el reparto queda congelado en el gasto, igual que en los fijos: si mañana
     // cambia la cantidad de personas, este mes sigue dividido como fue
@@ -4688,6 +4721,25 @@ function categoryOf(desc){
   const d = (desc||'').trim().toLowerCase();
   const hit = fixed.find(f=>f.label.toLowerCase() === d);
   return hit ? hit.label : 'Otro';
+}
+// mismo criterio para un gasto VARIABLE, pero mirando varEstimates (en
+// cualquiera de sus baldes — cada persona o compartido) en vez de fixed, que
+// es la tabla que le corresponde. Antes esto usaba categoryOf() a secas, que
+// busca contra fixed — un gasto variable nunca matchea ahí, así que todo
+// quedaba filed bajo "Otro" (ej: "Supermercado" no aparecía como su propia
+// categoría en Resumen). Acá, si no matchea ninguna estimación guardada, la
+// categoría es la descripción tal cual — "Otro" perdería justo lo que se
+// está tratando de mostrar.
+function categoryOfVariable(desc){
+  const d = (desc||'').trim();
+  if(!d) return 'Otro';
+  const dl = d.toLowerCase();
+  const buckets = [...pids(), SHARED_PAY];
+  for(const b of buckets){
+    const hit = (varEstimates[b]||[]).find(e=>e.label.toLowerCase() === dl);
+    if(hit) return hit.label;
+  }
+  return d;
 }
 
 function resetForm(){
@@ -5638,7 +5690,7 @@ function render(){
   renderVarExpenseTabs();
   renderBudgetTabs();
   renderBlockSaldos(fin);
-  renderResumen(list, fin);
+  renderResumen(fin);
   renderBalance();
   renderAhorro();
   renderDeudas();
@@ -6463,36 +6515,65 @@ function renderAhorro(){
   renderGoals(ahorro, person);
 }
 
+// cuánto pagó cada persona de una lista de gastos — compartido: cada uno
+// puso su parte, se reparte por shares; si no, el monto entero va a quien
+// figura como paidBy. Usado en "Quién pagó" y al expandir una categoría.
+function payerBreakdown(items){
+  const paid = {};
+  pids().forEach(id=>{ paid[id] = 0; });
+  items.forEach(ex=>{
+    if(isSharedPay(ex.paidBy)) pids().forEach(id=>{ paid[id] += personShareOf(ex, id); });
+    else if(paid[ex.paidBy] != null) paid[ex.paidBy] += ex.amount;
+  });
+  return paid;
+}
+
+// tocar una card de categoría la expande — mismo patrón que "Totales" en
+// Gastos (toggleTotalRow) — mostrando cuánto pagó cada persona de esos
+// gastos puntuales (payerBreakdown), no el monto de la card en sí
+let expandedCategoryCards = new Set();
+function toggleCategoryCard(cat){
+  if(expandedCategoryCards.has(cat)) expandedCategoryCards.delete(cat);
+  else expandedCategoryCards.add(cat);
+  render();
+}
+$('categoryRank').addEventListener('click', (e)=>{
+  const card = e.target.closest('.rank-card');
+  if(!card) return;
+  toggleCategoryCard(card.dataset.cat);
+});
+
 // ---- Resumen: ranked category bars, who-paid split, month trend ----
 // arma el desglose por categoría de la pestaña activa de Resumen. `list` viene
 // sin scopear (a diferencia del resto de Resumen): Compartido necesita ver
 // solo los gastos que son realmente del hogar (categoryOwnerOf === 'shared'),
-// y cada persona necesita ver sus propios gastos categorizados normal más lo
-// compartido — repartido por categoría real (resumenByShare) o entero solo
-// del lado de quien lo pagó (ver renderCategorySplitSeg)
+// y cada persona ve lo suyo + TODO lo compartido (panorama completo), salvo
+// que el toggle "Solo lo que pagó..." esté prendido — ahí filtra a paidBy
+// puro, sin importar de quién sea el gasto (ver renderOnlyMineToggle)
 function renderCategoryRank(list){
-  renderCategorySplitSeg();
+  renderOnlyMineToggle();
   const shared = peopleCount() < 2 || isSharedPay(currentResumenTab);
   const byCategory = {};
-  const add = (cat, amt) => { if(amt > 0) byCategory[cat] = (byCategory[cat]||0) + amt; };
+  const byCategoryItems = {};
+  const add = (cat, amt, ex) => {
+    if(amt > 0){
+      byCategory[cat] = (byCategory[cat]||0) + amt;
+      (byCategoryItems[cat] = byCategoryItems[cat] || []).push(ex);
+    }
+  };
   if(shared){
     // con una sola persona no hay noción de "compartido" — es todo
     const scope = peopleCount() < 2 ? list : list.filter(ex=>categoryOwnerOf(ex) === SHARED_PAY);
-    scope.forEach(ex=>add(ex.category, ex.amount));
+    scope.forEach(ex=>add(ex.category, ex.amount, ex));
+  }else if(resumenOnlyMine){
+    // solo lo que esta persona pagó ella sola — ni lo compartido ni lo que
+    // pagó la otra, sea de quien sea el gasto
+    list.filter(ex=>ex.paidBy === currentResumenTab).forEach(ex=>add(ex.category, ex.amount, ex));
   }else{
-    list.filter(ex=>categoryOwnerOf(ex) === currentResumenTab).forEach(ex=>add(ex.category, ex.amount));
-    const sharedExpenses = list.filter(ex=>categoryOwnerOf(ex) === SHARED_PAY);
-    if(resumenByShare){
-      // Reparto: cada gasto compartido entra bajo su categoría real, a
-      // prorrata de cómo esté repartido (según ingreso, partes iguales, lo
-      // que sea — ya está en shares) — aparece de los dos lados
-      sharedExpenses.forEach(ex=>add(ex.category, personShareOf(ex, currentResumenTab)));
-    }else{
-      // Quién pagó: el monto entero, sin prorratear, solo del lado de quien
-      // figura como paidBy — no aparece del otro lado aunque el reparto le
-      // toque una parte
-      sharedExpenses.filter(ex=>ex.paidBy === currentResumenTab).forEach(ex=>add(ex.category, ex.amount));
-    }
+    // panorama completo de la persona: lo suyo + todo lo compartido, cada
+    // uno con su categoría real y su monto entero (sin prorratear)
+    list.filter(ex=>categoryOwnerOf(ex) === currentResumenTab || categoryOwnerOf(ex) === SHARED_PAY)
+      .forEach(ex=>add(ex.category, ex.amount, ex));
   }
   const total = Object.values(byCategory).reduce((s,v)=>s+v, 0);
   const data = Object.keys(byCategory).map(cat=>({
@@ -6509,29 +6590,34 @@ function renderCategoryRank(list){
     `<span style="width:${d.value/total*100}%;background:${d.color}"></span>`
   ).join('');
   // una card por categoría, como la refe: ícono + nombre a la izquierda,
-  // % y monto a la derecha
+  // % y monto a la derecha. Si está expandida, 2 mini cards abajo con
+  // cuánto pagó cada persona de esos gastos puntuales
   $('categoryRank').innerHTML = data.map(d=>{
     const pct = Math.round(d.value/total*100);
     const icon = (d.label||'?').trim().charAt(0) || '?';
-    return `<div class="rank-card">
-      <span class="rank-icon" style="background:${d.color}">${escapeHtml(icon)}</span>
-      <span class="rank-name">${escapeHtml(d.label)}</span>
-      <span class="rank-figures">
-        <span class="rank-pct">${pct}%</span>
-        <span class="rank-amt">${fmt(d.value)}</span>
-      </span>
+    const open = peopleCount() >= 2 && expandedCategoryCards.has(d.label);
+    const detail = open ? (()=>{
+      const paid = payerBreakdown(byCategoryItems[d.label] || []);
+      return `<div class="rank-detail">${pids().map(id=>
+        `<div class="rank-mini"><span class="rank-mini-name">${escapeHtml(nameOf(id))}</span><span class="rank-mini-amt">${fmt(paid[id])}</span></div>`
+      ).join('')}</div>`;
+    })() : '';
+    return `<div class="rank-item">
+      <div class="rank-card" data-cat="${escapeHtml(d.label)}">
+        <span class="rank-icon" style="background:${d.color}">${escapeHtml(icon)}</span>
+        <span class="rank-name">${escapeHtml(d.label)}</span>
+        <span class="rank-figures">
+          <span class="rank-pct">${pct}%</span>
+          <span class="rank-amt">${fmt(d.value)}</span>
+        </span>
+      </div>
+      ${detail}
     </div>`;
   }).join('');
 }
 
 function renderPersonSplit(list){
-  const paid = {};
-  pids().forEach(id=>{ paid[id] = 0; });
-  list.forEach(ex=>{
-    // compartido = cada uno puso su parte, así que se reparte por el mismo criterio
-    if(isSharedPay(ex.paidBy)) pids().forEach(id=>{ paid[id] += personShareOf(ex, id); });
-    else if(paid[ex.paidBy] != null) paid[ex.paidBy] += ex.amount;
-  });
+  const paid = payerBreakdown(list);
   const total = pids().reduce((s,id)=>s+paid[id], 0);
   if(total <= 0){
     $('personSplit').innerHTML = `<div class="income-note">Todavía no hay gastos en este ${resumenPeriod === 'year' ? 'año' : 'mes'}.</div>`;
@@ -6614,30 +6700,24 @@ $('resumenPeriodSeg').addEventListener('click', (e)=>{
   render();
 });
 
-// ---- Por categoría, en la pestaña de una persona: cómo contar lo compartido.
-// "Reparto" (default): cada gasto compartido aparece bajo su categoría real
-// en las DOS personas, a prorrata de cómo esté repartido ese gasto (según
-// ingreso, partes iguales, lo que sea — se lee de shares, ya calculado al
-// cargarlo). "Quién pagó": el monto entero va solo a quien figura como
-// paidBy de ese gasto — no se prorratea, y no aparece del lado de la otra
-// persona aunque el reparto le toque una parte.
-let resumenByShare = true;
-function renderCategorySplitSeg(){
-  const seg = $('categorySplitSeg');
+// ---- Por categoría, en la pestaña de una persona: qué gastos entran.
+// Apagado (default): lo propio de esa persona + TODO lo compartido, cada uno
+// bajo su categoría real y su monto entero — el panorama completo de esa
+// persona, sin prorratear nada. Prendido: solo lo que esa persona pagó ella
+// sola (paidBy === su id) — ni lo compartido ni lo que pagó la otra persona.
+let resumenOnlyMine = false;
+function renderOnlyMineToggle(){
+  const btn = $('onlyMineToggle');
   const soloPersona = peopleCount() >= 2 && !isSharedPay(currentResumenTab);
-  seg.style.display = soloPersona ? '' : 'none';
+  btn.style.display = soloPersona ? '' : 'none';
   if(!soloPersona) return;
-  const opts = [{ key:true, label:'Reparto' }, { key:false, label:'Quién pagó' }];
-  seg.innerHTML = opts.map(o=>
-    `<button type="button" data-share="${o.key}"${o.key === resumenByShare ? ' class="active"' : ''}>${o.label}</button>`
-  ).join('');
+  btn.setAttribute('aria-checked', resumenOnlyMine ? 'true' : 'false');
+  $('onlyMineLabel').textContent = `Solo lo que pagó ${nameOf(currentResumenTab)}`;
 }
-$('categorySplitSeg').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button');
-  if(!btn) return;
-  resumenByShare = btn.dataset.share === 'true';
+function toggleResumenOnlyMine(){
+  resumenOnlyMine = !resumenOnlyMine;
   render();
-});
+}
 
 // meses del año de viewMonth que tienen algo cargado — no todos los 12: iterar
 // un mes vacío llamaría budgetTemplatesForMonth() y le crearía rubros clonados
@@ -6646,9 +6726,20 @@ function yearMonthsWithData(year){
   return Array.from({length:12}, (_,i)=>`${year}-${String(i+1).padStart(2,'0')}`)
     .filter(m=>monthHasAnyData(m));
 }
+// Resumen necesita ver fijos + variables juntos — financeFor ya los suma los
+// dos en el "Gasto" del bloque de Saldo, así que Por categoría/Quién
+// pagó/Últimos meses tienen que ver la misma torta. A diferencia de `list`
+// en render() (que es solo fijos, porque así lo espera renderFixedTabs), acá
+// se combinan ambos arrays.
+function allExpenses(){ return expenses.concat(varExpenses); }
+function monthExpenseList(key){
+  key = key || viewMonth;
+  return allExpenses().filter(x=>monthKey(x.date) === key)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+}
 function yearExpenseList(){
   const year = viewMonth.slice(0,4);
-  return expenses.filter(x=>monthKey(x.date).slice(0,4) === year)
+  return allExpenses().filter(x=>monthKey(x.date).slice(0,4) === year)
     .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 }
 // mismo shape que monthFinance pero sumando la cadena de cada persona sobre
@@ -6679,10 +6770,12 @@ function renderResumenMiddleCard(monthList){
   renderResumenBalance(shared ? null : currentResumenTab);
 }
 
-function renderResumen(list, fin){
+function renderResumen(fin){
   renderResumenTabs();
   renderResumenPeriodSeg();
-  const activeList = resumenPeriod === 'year' ? yearExpenseList() : list;
+  // ignora el `list` que le pasa render() (ese es solo fijos, para
+  // renderFixedTabs) — Resumen arma el suyo propio con fijos + variables
+  const activeList = resumenPeriod === 'year' ? yearExpenseList() : monthExpenseList(viewMonth);
   const activeFin = resumenPeriod === 'year' ? yearFinance() : fin;
   renderTotals(activeFin);
   // sin scopear: renderCategoryRank necesita ver tanto lo propio de la
@@ -6690,7 +6783,7 @@ function renderResumen(list, fin){
   // sumar la parte que le toca a esa persona ahí) — ver su propio scoping
   renderCategoryRank(activeList);
   renderResumenMiddleCard(activeList);
-  renderMonthTrend(resumenScope(expenses));
+  renderMonthTrend(resumenScope(allExpenses()));
 }
 
 // cuánto puso cada uno de su bolsillo menos lo que le tocaba, sobre TODOS los
