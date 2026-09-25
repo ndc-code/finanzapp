@@ -45,10 +45,15 @@
   .head-right{display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
 
   .session-menu,.popover-menu{position:relative;flex:0 0 auto;}
-  /* la fecha de hoy, siempre visible en el encabezado */
+  /* la fecha de hoy: chip de texto en desktop (hay lugar); en mobile se
+     esconde y el ícono de calendario (date-icon-wrap) ocupa su lugar */
   .today-chip{flex:0 0 auto;font-size:13px;font-weight:500;color:var(--body-muted);
     white-space:nowrap;letter-spacing:-0.1px;}
-  @media(max-width:600px){.today-chip{font-size:12.5px;}}
+  .date-icon-wrap{display:none;}
+  @media(max-width:600px){
+    #todayDate{display:none;}
+    .date-icon-wrap{display:inline-flex;}
+  }
   .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-strong);
     background:var(--card);color:var(--body-muted);display:flex;align-items:center;justify-content:center;
     cursor:pointer;transition:background-color .15s ease,color .15s ease;flex:0 0 auto;
@@ -58,6 +63,9 @@
   .session-dropdown{display:none;position:absolute;top:calc(100% + 8px);right:0;min-width:200px;
     background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;
     box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:40;}
+  /* el ícono de fecha es el más a la izquierda de la fila: su dropdown abre
+     hacia la derecha en vez de hacia la izquierda, o se sale de pantalla */
+  .date-icon-wrap .session-dropdown{right:auto;left:0;min-width:170px;}
   .session-dropdown.open{display:block;}
   .session-code{font-size:11.5px;color:var(--body-muted);padding:6px 10px 8px;border-bottom:1px solid var(--line);
     margin-bottom:6px;word-break:break-all;}
@@ -129,9 +137,9 @@
   .totals-v.neg{color:var(--a-clay);}
   @media(max-width:480px){.totals-cell{padding:14px 6px;}.totals-v{font-size:16px;}.totals-k{font-size:10px;}}
   @media(max-width:480px){
-    #ahorroStrip{grid-template-columns:1fr;}
-    #ahorroStrip .totals-cell{border-right:none;border-bottom:1px solid var(--line);}
-    #ahorroStrip .totals-cell:last-child{border-bottom:none;}
+    #ahorroStrip, #totalsStrip{grid-template-columns:1fr;}
+    #ahorroStrip .totals-cell, #totalsStrip .totals-cell{border-right:none;border-bottom:1px solid var(--line);}
+    #ahorroStrip .totals-cell:last-child, #totalsStrip .totals-cell:last-child{border-bottom:none;}
   }
 
   /* ---- ahorro en dólares: lista editable ---- */
@@ -444,17 +452,19 @@
 
   /* ---- Resumen: hero total + delta vs. last month ---- */
 
-  /* ---- Resumen: ranked category bars ---- */
-  .rank-row{padding:9px 0;}
-  .rank-row:first-child{padding-top:2px;}
-  .rank-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px;}
-  .rank-label{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500;min-width:0;}
-  .rank-label .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-  .rank-label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .rank-val{flex:0 0 auto;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--body-muted);}
-  .rank-val b{color:var(--ink);font-weight:600;}
-  .rank-track{height:8px;background:var(--paper);border-radius:9999px;overflow:hidden;}
-  .rank-track i{display:block;height:100%;border-radius:9999px;}
+  /* ---- Resumen: por categoría — una card por categoría, como la referencia:
+     ícono circular + nombre a la izquierda, % y monto a la derecha ---- */
+  .rank-card{display:flex;align-items:center;gap:12px;background:var(--paper);
+    border-radius:14px;padding:12px 14px;margin-bottom:8px;}
+  .rank-card:last-child{margin-bottom:0;}
+  .rank-icon{flex:0 0 auto;width:34px;height:34px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:13px;font-weight:700;text-transform:uppercase;}
+  .rank-name{flex:1 1 auto;min-width:0;font-size:14px;font-weight:500;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rank-figures{flex:0 0 auto;text-align:right;line-height:1.35;}
+  .rank-pct{display:block;font-size:12px;color:var(--body-muted);}
+  .rank-amt{display:block;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;}
 
   /* ---- Resumen: who-paid split bar ---- */
   .split-bar{display:flex;height:14px;border-radius:9999px;overflow:hidden;background:var(--paper);margin:4px 0 12px;}
@@ -482,6 +492,11 @@
 
   form.add-form{display:flex;flex-direction:column;gap:14px; margin-bottom:-10px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  /* sin esto, un grid item no se achica más allá del ancho natural de su
+     contenido (min-width:auto por default) — un input[type=date] en mobile
+     pide su formato de fecha completo ("25 sept 2026") como ancho mínimo y
+     el campo se sale del modal en vez de respetar el 1fr de la columna */
+  .row2 > div{min-width:0;}
   @media(max-width:540px){.row2{grid-template-columns:1fr;}}
   label{font-size:14px;color:var(--body-muted);display:block;margin-bottom:6px;letter-spacing:-0.224px;}
   input[type=text],input[type=number],input[type=date],input[type=month],input[type=password],select{
@@ -489,6 +504,12 @@
     padding:10px 12px;font-size:16px;font-family:'Inter',system-ui,sans-serif;color:var(--ink);
     transition:border-color .15s ease, box-shadow .15s ease;
   }
+  /* un input[type=date]/month es un control nativo: su min-width por default
+     es "auto", que el navegador resuelve al ancho que necesita para mostrar
+     su propio formato de fecha (en mobile, uno largo tipo "25 sept 2026").
+     Sin este min-width:0 el campo ignora el width:100% de arriba y se sale
+     del modal en vez de achicarse */
+  input[type=date],input[type=month]{min-width:0;}
   /* iOS Safari auto-zooms on focus when an input's font-size is below 16px */
   @media(max-width:540px){
     input[type=text],input[type=number],input[type=date],input[type=month],input[type=password],select{font-size:16px;}
@@ -703,8 +724,17 @@
       <button type="button" onclick="shiftMonth(1)" aria-label="Mes siguiente">›</button>
     </div>
     <div class="head-right">
-      <!-- la fecha de hoy, a la vista: antes vivía detrás de un ícono de calendario -->
+      <!-- la fecha de hoy, a la vista en desktop (hay lugar); en mobile pasa a
+           ser un ícono más de la fila, igual que el resto — ver dateBtn -->
       <div class="today-chip" id="todayDate"></div>
+      <div class="popover-menu date-icon-wrap">
+        <button type="button" class="icon-btn" id="dateBtn" onclick="toggleDatePopover()" aria-label="Fecha de hoy" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </button>
+        <div class="session-dropdown" id="dateDropdown">
+          <div class="today-chip" id="todayDatePopover" style="color:var(--ink);white-space:normal;"></div>
+        </div>
+      </div>
       <!-- oculta todos los montos de la app con •••, para mostrar la pantalla
            sin exponer cifras — ver toggleAmountsHidden() -->
       <button type="button" class="icon-btn" id="hideAmountsBtn" onclick="toggleAmountsHidden()" aria-pressed="false"></button>
@@ -722,6 +752,12 @@
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
         </svg>
+      </button>
+      <!-- Resumen vive acá, entre la cotización y Ajustes, y no en la barra de
+           tabs — switchTab() ya soporta activar un panel sin botón ahí (ver
+           settingsBtn), así que Resumen sigue el mismo patrón -->
+      <button type="button" class="icon-btn" id="resumenBtn" onclick="switchTab('resumen')" aria-label="Resumen">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
       </button>
       <button type="button" class="icon-btn" id="settingsBtn" onclick="switchTab('ajustes')" aria-label="Ajustes">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -743,7 +779,6 @@
     <button type="button" data-tab="gastos" role="tab">Gastos</button>
     <button type="button" data-tab="deudas" role="tab">Deudas</button>
     <button type="button" data-tab="ahorro" role="tab">Ahorro</button>
-    <button type="button" data-tab="resumen" role="tab">Resumen</button>
   </div>
 
   <!-- ============ TAB: INGRESOS ============ -->
@@ -888,13 +923,15 @@
     <!-- Mismo patrón que Ahorro: filtro de persona arriba, card con título + totales.
          Compartido = el hogar entero; cada persona filtra lo de abajo a lo suyo. -->
     <div class="seg seg-fit" id="resumenTabs" style="margin-bottom:14px;"></div>
+    <div class="seg seg-fit" id="resumenPeriodSeg" style="margin-bottom:14px;"></div>
     <div class="card">
       <div class="section-title" id="resumenTitle">Saldo</div>
-      <div class="totals" id="totalsStrip"></div>
+      <div class="totals totals-2" id="totalsStrip"></div>
     </div>
 
     <div class="card">
       <div class="chart-title">Por categoría</div>
+      <div class="split-bar" id="categoryBar"></div>
       <div id="categoryRank"></div>
     </div>
 
@@ -2173,6 +2210,13 @@ function toggleUsdPopover(force){
   dropdown.classList.toggle('open', open);
   btn.setAttribute('aria-expanded', open);
 }
+function toggleDatePopover(force){
+  const dropdown = $('dateDropdown');
+  const btn = $('dateBtn');
+  const open = typeof force === 'boolean' ? force : !dropdown.classList.contains('open');
+  dropdown.classList.toggle('open', open);
+  btn.setAttribute('aria-expanded', open);
+}
 
 const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-6.06"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.6 20.6 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
@@ -2202,6 +2246,7 @@ document.addEventListener('click', (e)=>{
   if(sessionMenu && !sessionMenu.contains(e.target)) toggleSessionMenu(false);
   document.querySelectorAll('.popover-menu').forEach(menu=>{
     if(!menu.contains(e.target) && menu.querySelector('#usdDropdown')) toggleUsdPopover(false);
+    if(!menu.contains(e.target) && menu.querySelector('#dateDropdown')) toggleDatePopover(false);
   });
 });
 
@@ -2428,13 +2473,15 @@ let todayUsdRate = null;   // average of compra/venta, null until it loads
 
 // mismo motivo que monthLabelHtml: dos versiones del mismo texto, el CSS
 // decide cuál mostrar según el ancho de pantalla
-const WEEKDAY_ABBR = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 function renderTodayDate(){
   const now = new Date();
   const full = now.toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
   const fullCap = full.charAt(0).toUpperCase() + full.slice(1);
-  const short = `${WEEKDAY_ABBR[now.getDay()]}, ${now.getDate()} de ${MONTH_ABBR[now.getMonth()]}`;
-  $('todayDate').innerHTML = `<span class="lbl-full">${fullCap}</span><span class="lbl-short">${short}</span>`;
+  // formato D/M/A pedido para mobile — ahora vive en el popover del ícono de
+  // calendario (dateBtn/dateDropdown), no en un chip de texto suelto
+  const short = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+  $('todayDate').textContent = fullCap;
+  $('todayDatePopover').textContent = short;
 }
 
 // ---- personas del espacio ----
@@ -5589,33 +5636,39 @@ function renderTotals(fin){
       <div class="totals-k">${k}</div>
       <div class="totals-v ${cls}">${fmt(v)}</div>
     </div>`;
+  const isYear = resumenPeriod === 'year';
   // ahorro = lo cargado en el rubro Compra dólares (la misma definición que
-  // usan la pestaña Ahorro y Gastos posibles), no el residual de la cadena
-  const dolaresOf = (person) => {
-    const c = (budgetTemplatesForMonth(viewMonth)[person] || []).find(x => x.label === 'Compra dólares');
+  // usan la pestaña Ahorro y Gastos posibles), no el residual de la cadena;
+  // en Año se suma ese monto mes a mes sobre los meses que tienen datos
+  const dolaresOf = (person, key) => {
+    const c = (budgetTemplatesForMonth(key || viewMonth)[person] || []).find(x => x.label === 'Compra dólares');
     return c ? (c.amount || 0) : 0;
+  };
+  const dolaresYear = (person) => {
+    const year = viewMonth.slice(0,4);
+    return yearMonthsWithData(year).reduce((s,m) => s + dolaresOf(person, m), 0);
   };
   let ingreso, ahorro;
   const shared = peopleCount() < 2 || isSharedPay(currentResumenTab);
   if(shared){
     ingreso = finSum(fin, 'inc');
-    ahorro = pids().reduce((s,p) => s + dolaresOf(p), 0);
+    ahorro = pids().reduce((s,p) => s + (isYear ? dolaresYear(p) : dolaresOf(p)), 0);
   }else{
     const f = fin[currentResumenTab];
     ingreso = f.inc;
-    ahorro = dolaresOf(currentResumenTab);
+    ahorro = isYear ? dolaresYear(currentResumenTab) : dolaresOf(currentResumenTab);
   }
   const gasto = ingreso - ahorro;
   const who = shared
     ? (peopleCount() < 2 ? nameOf(firstPid()) : 'hogar')
     : nameOf(currentResumenTab);
+  const periodLabel = isYear ? viewMonth.slice(0,4) : monthShort(viewMonth);
   $('resumenTitle').textContent = shared && peopleCount() >= 2
-    ? `Saldo compartido · ${monthShort(viewMonth)}`
-    : `Saldo de ${who} · ${monthShort(viewMonth)}`;
+    ? `Saldo compartido · ${periodLabel}`
+    : `Saldo de ${who} · ${periodLabel}`;
   $('totalsStrip').innerHTML =
     cell('Ingreso', ingreso) +
-    cell('Gasto', gasto) +
-    cell('Ahorro', ahorro, ahorro < 0 ? 'neg' : 'save');
+    cell('Gasto', gasto);
 }
 
 // the "Saldos" footer every big block on Gastos ends with: quién y cuánto, sin
@@ -6399,19 +6452,27 @@ function renderCategoryRank(list){
     label: cat, value: byCategory[cat], color: catColor(cat)
   })).sort((a,b)=>b.value-a.value);
   if(!data.length){
-    $('categoryRank').innerHTML = '<div class="income-note">Todavía no hay gastos en este mes.</div>';
+    $('categoryBar').innerHTML = '';
+    $('categoryRank').innerHTML = `<div class="income-note">Todavía no hay gastos en este ${resumenPeriod === 'year' ? 'año' : 'mes'}.</div>`;
     return;
   }
-  const peak = Math.max(...data.map(d=>d.value));
+  // barra apilada con la proporción de cada categoría de un vistazo, arriba
+  // de las cards de detalle
+  $('categoryBar').innerHTML = data.map(d=>
+    `<span style="width:${d.value/total*100}%;background:${d.color}"></span>`
+  ).join('');
+  // una card por categoría, como la refe: ícono + nombre a la izquierda,
+  // % y monto a la derecha
   $('categoryRank').innerHTML = data.map(d=>{
     const pct = Math.round(d.value/total*100);
-    const w = Math.round(d.value/peak*100);
-    return `<div class="rank-row">
-      <div class="rank-h">
-        <span class="rank-label"><span class="dot" style="background:${d.color}"></span><span>${escapeHtml(d.label)}</span></span>
-        <span class="rank-val"><b>${fmt(d.value)}</b> · ${pct}%</span>
-      </div>
-      <div class="rank-track"><i style="width:${w}%;background:${d.color}"></i></div>
+    const icon = (d.label||'?').trim().charAt(0) || '?';
+    return `<div class="rank-card">
+      <span class="rank-icon" style="background:${d.color}">${escapeHtml(icon)}</span>
+      <span class="rank-name">${escapeHtml(d.label)}</span>
+      <span class="rank-figures">
+        <span class="rank-pct">${pct}%</span>
+        <span class="rank-amt">${fmt(d.value)}</span>
+      </span>
     </div>`;
   }).join('');
 }
@@ -6426,7 +6487,7 @@ function renderPersonSplit(list){
   });
   const total = pids().reduce((s,id)=>s+paid[id], 0);
   if(total <= 0){
-    $('personSplit').innerHTML = '<div class="income-note">Todavía no hay gastos en este mes.</div>';
+    $('personSplit').innerHTML = `<div class="income-note">Todavía no hay gastos en este ${resumenPeriod === 'year' ? 'año' : 'mes'}.</div>`;
     return;
   }
   const rows = pids().map((id,i)=>({
@@ -6488,6 +6549,54 @@ function resumenScope(list){
     : list.filter(ex=>expenseOwner(ex) === currentResumenTab);
 }
 
+// ---- Mes / Año: Resumen puede mirar el mes que se está viendo en Gastos, o
+// todo el año de ese mes. No es otra navegación de fecha (esa sigue siendo el
+// month-nav de arriba, que fija viewMonth) — es solo cómo se agrupan los
+// datos de ese momento dentro de Resumen.
+let resumenPeriod = 'month';
+function renderResumenPeriodSeg(){
+  const opts = [{ key:'month', label:'Mes' }, { key:'year', label:'Año' }];
+  $('resumenPeriodSeg').innerHTML = opts.map(o=>
+    `<button type="button" data-period="${o.key}"${o.key === resumenPeriod ? ' class="active"' : ''}>${o.label}</button>`
+  ).join('');
+}
+$('resumenPeriodSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  resumenPeriod = btn.dataset.period;
+  render();
+});
+
+// meses del año de viewMonth que tienen algo cargado — no todos los 12: iterar
+// un mes vacío llamaría budgetTemplatesForMonth() y le crearía rubros clonados
+// sin que nadie los haya pedido (ver monthHasAnyData)
+function yearMonthsWithData(year){
+  return Array.from({length:12}, (_,i)=>`${year}-${String(i+1).padStart(2,'0')}`)
+    .filter(m=>monthHasAnyData(m));
+}
+function yearExpenseList(){
+  const year = viewMonth.slice(0,4);
+  return expenses.filter(x=>monthKey(x.date).slice(0,4) === year)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+}
+// mismo shape que monthFinance pero sumando la cadena de cada persona sobre
+// todos los meses del año que tienen datos
+function yearFinance(){
+  const year = viewMonth.slice(0,4);
+  const months = yearMonthsWithData(year);
+  const out = {};
+  pids().forEach(id=>{
+    out[id] = months.reduce((acc, m)=>{
+      const f = financeFor(id, m);
+      acc.inc += f.inc; acc.fijos += f.fijos; acc.variables += f.variables;
+      acc.afterFijos += f.afterFijos; acc.afterVar += f.afterVar;
+      acc.podes += f.podes; acc.ahorro += f.ahorro;
+      return acc;
+    }, { inc:0, fijos:0, variables:0, afterFijos:0, afterVar:0, podes:0, ahorro:0 });
+  });
+  return out;
+}
+
 // "Quién pagó" compara entre personas, así que solo tiene sentido en Compartido;
 // en la pestaña de una persona lo reemplaza su saldo (a quién le debe o le deben)
 function renderResumenMiddleCard(monthList){
@@ -6500,9 +6609,12 @@ function renderResumenMiddleCard(monthList){
 
 function renderResumen(list, fin){
   renderResumenTabs();
-  renderTotals(fin);
-  renderCategoryRank(resumenScope(list));
-  renderResumenMiddleCard(list);
+  renderResumenPeriodSeg();
+  const activeList = resumenPeriod === 'year' ? yearExpenseList() : list;
+  const activeFin = resumenPeriod === 'year' ? yearFinance() : fin;
+  renderTotals(activeFin);
+  renderCategoryRank(resumenScope(activeList));
+  renderResumenMiddleCard(activeList);
   renderMonthTrend(resumenScope(expenses));
 }
 
