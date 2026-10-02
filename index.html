@@ -242,6 +242,12 @@
   .bal-pair + .bal-pair{margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.08);
     align-self:stretch;}
   .bal-line .bal-who{font-size:13px;font-weight:500;}
+  /* ✓ de "saldado", abajo a la derecha de la card; con el padding extra de
+     abajo no se pisa con el monto */
+  #balanceResult{position:relative;padding-bottom:40px;transition:background .2s,color .2s;}
+  .bal-check{position:absolute;right:14px;bottom:12px;display:flex;align-items:center;gap:6px;
+    font-size:12px;font-weight:500;cursor:pointer;user-select:none;}
+  .bal-check input{width:18px;height:18px;margin:0;cursor:pointer;accent-color:var(--good);}
   .bal-line .amt{font-size:24px;font-weight:700;color:var(--a-clay-ink);letter-spacing:-0.5px;}
   .bal-line.good{background:var(--good-bg);color:var(--good);}
   .bal-line.good .amt{color:var(--good);}
@@ -859,8 +865,8 @@
       </div>
     </div>
 
-    <!-- quién le debe a quién, panorama completo (fijos + variables de todos
-         los meses) — fuera de los bloques de gastos, después de variables.
+    <!-- quién le debe a quién en el mes que se está viendo (fijos +
+         variables de ese mes) — fuera de los bloques de gastos, después de variables.
          El card se oculta entero cuando no hay deuda (balanceResult vacío),
          para no dejar una caja vacía con padding. -->
     <div class="card" id="balanceCard">
@@ -1473,6 +1479,8 @@ const GOALS_KEY = 'goals_v1';
 const DEBTS_KEY = 'debts_v1';
 const DEBT_TEMPLATES_KEY = 'debttemplates_v1';
 const SAVINGS_KEY = 'savings_v1';
+// meses en los que la deuda entre ustedes ya se saldó: {'2026-09': true}
+const SETTLED_KEY = 'settled_v1';
 
 let expenses = [];
 // ---- quiénes viven en este espacio ----
@@ -1553,6 +1561,8 @@ let debtTemplates = {};
 // era la real, ensureAutoDolaresRows() no la vuelve a crear en el próximo render
 let savings = { A: { items: [], autoMonths: [] }, B: { items: [], autoMonths: [] } };
 let editingSavingsId = null;
+// el ✓ de la card de "le debe a": un flag por mes (YYYY-MM), compartido
+let settledMonths = {};
 // misma idea que budgetDolaresCur: un switch para ver la lista entera en
 // pesos o en dólares en vez de las dos columnas apiladas — arranca en USD
 let savingsCur = 'USD';
@@ -1650,7 +1660,8 @@ const COLUMN_FOR_KEY = {
   goals_v1: 'goals',
   debts_v1: 'debts',
   debttemplates_v1: 'debt_templates',
-  savings_v1: 'savings'
+  savings_v1: 'savings',
+  settled_v1: 'settled_months'
 };
 const MIGRATION_FLAG_KEYS = new Set(['fixed_m1','fixed_m2','fixed_m3','fixedincome_m1','budget_cats_m1','budget_cats_m3']);
 
@@ -1803,6 +1814,7 @@ function applyCoupleRow(){
   if(Array.isArray(coupleRow.debts)) debts = coupleRow.debts;
   if(coupleRow.debt_templates && typeof coupleRow.debt_templates === 'object') debtTemplates = coupleRow.debt_templates;
   if(coupleRow.savings && typeof coupleRow.savings === 'object') savings = migrateSavings(coupleRow.savings);
+  if(coupleRow.settled_months && typeof coupleRow.settled_months === 'object') settledMonths = coupleRow.settled_months;
   ensureSharedSlots();
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
@@ -1861,6 +1873,8 @@ function paintFromLocalCache(code){
     if(dtpl) debtTemplates = JSON.parse(dtpl);
     const sv = readLocalCache(code, SAVINGS_KEY);
     if(sv) savings = migrateSavings(JSON.parse(sv));
+    const st = readLocalCache(code, SETTLED_KEY);
+    if(st) settledMonths = JSON.parse(st);
     if(normalizeExpenses()){ /* fixed up in-memory; loadAll()'s real save will persist it */ }
     normalizeVarExpenses();
     render();
@@ -3023,6 +3037,14 @@ async function loadAll(){
     savings = v ? migrateSavings(JSON.parse(v)) : {};
   }catch(e){ savings = {}; }
 
+  // columna nueva, mismo cuidado que debts: null puede ser "columna todavía
+  // sin crear", y no tiene que pisar lo que ya trajo la caché local
+  try{
+    const v = await store.get(SETTLED_KEY);
+    if(v) settledMonths = JSON.parse(v);
+  }catch(e){}
+  if(!settledMonths || typeof settledMonths !== 'object' || Array.isArray(settledMonths)) settledMonths = {};
+
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
   ensureSharedSlots();   // los datos vienen después de setPeople()
@@ -3115,6 +3137,10 @@ async function saveSavings(){
   if(await bailOnMassWipe(prevCol('savings'), countItems(savings), ()=>{ renderAhorro(); })) return false;
   return await store.set(SAVINGS_KEY, JSON.stringify(savings));
 }
+// sin bailOnMassWipe: destildar el único mes saldado es un paso legítimo a vacío
+async function saveSettled(){
+  return await store.set(SETTLED_KEY, JSON.stringify(settledMonths));
+}
 
 // ================= Copias de seguridad =================
 // Cada copia es una fila en la tabla `couple_backups`, aparte de `couples` — así
@@ -3130,6 +3156,7 @@ function currentSnapshot(){
     expenses, names: people, income, fixed, fixed_income: fixedIncome,
     variable_estimates: varEstimates, variable_expenses: varExpenses,
     budget_overrides: budgetTemplates, goals, debts, debt_templates: debtTemplates, savings,
+    settled_months: settledMonths,
     migration_flags: (coupleRow && coupleRow.migration_flags) || {}
   };
 }
@@ -3194,6 +3221,7 @@ async function applySnapshot(s){
   if(Array.isArray(s.debts)) patch.debts = s.debts;
   if(s.debt_templates && typeof s.debt_templates === 'object') patch.debt_templates = s.debt_templates;
   if(s.savings && typeof s.savings === 'object') patch.savings = s.savings;
+  if(s.settled_months && typeof s.settled_months === 'object') patch.settled_months = s.settled_months;
   if(s.migration_flags && typeof s.migration_flags === 'object') patch.migration_flags = s.migration_flags;
   if(!Object.keys(patch).length) throw new Error('La copia no tiene datos reconocibles.');
 
@@ -3203,7 +3231,7 @@ async function applySnapshot(s){
   [[STORE_KEY,'expenses'],[NAMES_KEY,'names'],[INCOME_KEY,'income'],[FIXED_KEY,'fixed'],
    [FIXED_INCOME_KEY,'fixed_income'],[VAR_ESTIMATES_KEY,'variable_estimates'],
    [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals'],
-   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings']]
+   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings'],[SETTLED_KEY,'settled_months']]
     .forEach(([k,col])=>{ if(data[col] != null) writeLocalCache(coupleCode, k, JSON.stringify(data[col])); });
   // el snapshot puede traer una columna legítimamente vacía; que el guardaespaldas
   // no lo confunda con corrupción durante el refresco posterior
@@ -6748,8 +6776,9 @@ function renderResumen(fin){
   renderCategoryRank(activeList);
 }
 
-// cuánto puso cada uno de su bolsillo menos lo que le tocaba, sobre TODOS los
-// meses (fijos y variables) — Positivo = le deben; negativo = debe. Gastos
+// cuánto puso cada uno de su bolsillo menos lo que le tocaba, en UN mes
+// (fijos y variables) — Positivo = le deben; negativo = debe. Cada mes se
+// salda por separado (ver el ✓ de la card), así que no se arrastra. Gastos
 // posibles no entra acá: es una plantilla recurrente sin fecha, no una
 // transacción puntual.
 function accumulateNet(net, list){
@@ -6760,19 +6789,21 @@ function accumulateNet(net, list){
     pids().forEach(id=>{ net[id] -= personShareOf(ex, id); });
   });
 }
-function netBalances(){
+function netBalances(key){
+  key = key || viewMonth;
+  const inMonth = x=>monthKey(x.date) === key;
   const net = {};
   pids().forEach(id=>{ net[id] = 0; });
-  accumulateNet(net, expenses);
-  accumulateNet(net, varExpenses);
+  accumulateNet(net, expenses.filter(inMonth));
+  accumulateNet(net, varExpenses.filter(inMonth));
   return net;
 }
 
 // con dos personas hay una sola deuda; con tres o cuatro hay varias cruzadas,
 // así que se saldan de a pares — el que más debe le paga al que más puso —
 // hasta que no queda nadie en rojo. Da el mínimo de transferencias posible.
-function settlements(){
-  const net = netBalances();
+function settlements(key){
+  const net = netBalances(key);
   const debtors = [], creditors = [];
   pids().forEach(id=>{
     const v = net[id];
@@ -6801,15 +6832,26 @@ function balanceHtml(rows){
   </span>`).join('');
 }
 
-// who owes whom, across every month — el de Gastos fijos siempre es el
-// panorama completo, no lo toca la pestaña de Resumen
+// who owes whom en el mes que se está viendo. El ✓ de abajo a la derecha
+// marca ese mes como saldado y pasa la card de rojo a verde.
 function renderBalance(){
   const el = $('balanceResult');
   if(!el) return;
-  const html = balanceHtml();
-  el.innerHTML = html;
+  const html = balanceHtml(settlements(viewMonth));
+  const done = !!settledMonths[viewMonth];
+  el.innerHTML = html ? html + `<label class="bal-check" title="Marcar como saldado">
+    <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleSettled(this.checked)">
+    <span>${done ? 'Saldado' : 'Saldar'}</span>
+  </label>` : '';
+  el.classList.toggle('good', done);
   const card = $('balanceCard');
   if(card) card.style.display = html ? '' : 'none';
+}
+function toggleSettled(on){
+  if(on) settledMonths[viewMonth] = true;
+  else delete settledMonths[viewMonth];
+  renderBalance();
+  try{ saveSettled(); }catch(e){}
 }
 
 viewMonth = monthNow();
