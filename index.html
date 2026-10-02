@@ -196,6 +196,9 @@
   .goal{padding:14px 0;border-bottom:1px solid var(--line);}
   .goal:last-child{border-bottom:none;}
   .goal-h{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  /* el nombre se estira y empuja el monto a la derecha, pegado a ✎/✕ — como
+     en cualquier gasto — en vez de quedar flotando en el medio */
+  .goal-h > .bill-name-row{flex:1;min-width:0;}
   .goal-n{font-size:14px;font-weight:600;letter-spacing:-0.224px;}
   .goal-t{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
   .goal-track{height:10px;background:var(--paper);border-radius:9999px;overflow:hidden;margin:10px 0 7px;}
@@ -233,26 +236,16 @@
   .avail-est-total{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;font-weight:600;color:var(--ink);}
   .avail-est-total .neg{color:var(--a-clay);}
   .avail-est-empty{font-size:12px;color:var(--body-muted);text-align:center;line-height:1.5;}
-  .bal-line{display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;margin:16px 0 0;
-    padding:16px;background:var(--a-clay-bg);border-radius:16px;font-size:13px;color:var(--a-clay-ink);
-    font-variant-numeric:tabular-nums;}
-  .bal-line:empty{display:none;}
-  /* con 3+ personas puede haber más de una deuda cruzada, una debajo de la otra */
-  .bal-pair{display:flex;flex-direction:column;align-items:center;gap:2px;}
-  .bal-pair + .bal-pair{margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.08);
-    align-self:stretch;}
-  .bal-line .bal-who{font-size:13px;font-weight:500;}
-  /* ✓ de "saldado", abajo a la derecha de la card; con el padding extra de
-     abajo no se pisa con el monto */
-  #balanceResult{position:relative;padding-bottom:40px;transition:background .2s,color .2s;}
-  .bal-check{position:absolute;right:14px;bottom:12px;display:flex;align-items:center;gap:6px;
-    font-size:12px;font-weight:500;cursor:pointer;user-select:none;}
-  .bal-check input{width:18px;height:18px;margin:0;cursor:pointer;accent-color:var(--good);}
-  .bal-line .amt{font-size:24px;font-weight:700;color:var(--a-clay-ink);letter-spacing:-0.5px;}
-  .bal-line.good{background:var(--good-bg);color:var(--good);}
-  .bal-line.good .amt{color:var(--good);}
-  .avail-col .bal-line{margin:14px 0 0;padding:12px;}
-  .avail-col .bal-line .amt{font-size:20px;}
+  /* "X le debe a Y": misma tarjeta .bill que cualquier gasto (ver billRow),
+     en su propio bloque de Deudas. El monto va en rojo hasta que se tilda saldado,
+     ahí pasa a verde. Al tocarla se abre una fila por persona con la cuenta
+     en totales: "pagó X de Y" (lo que puso de lo que le tocaba) y su neto. */
+  .bal-bill .bill-amt{color:var(--a-clay);}
+  .bal-bill.is-settled .bill-amt{color:var(--good);}
+  .bal-person .bill-amt.pos{color:var(--good);}
+  .bal-person .bill-amt.neg{color:var(--a-clay);}
+  .cp-subhead{display:flex;justify-content:space-between;gap:10px;}
+  .bal-item-calc{font-size:11.5px;color:var(--body-muted);margin-top:1px;font-variant-numeric:tabular-nums;}
   @media(max-width:480px){.avail{grid-template-columns:1fr;}}
   /* the two-person columns sit inside a big block card now, so they can't
      repeat the card's own background or they read as a card inside a card */
@@ -865,14 +858,6 @@
       </div>
     </div>
 
-    <!-- quién le debe a quién en el mes que se está viendo (fijos +
-         variables de ese mes) — fuera de los bloques de gastos, después de variables.
-         El card se oculta entero cuando no hay deuda (balanceResult vacío),
-         para no dejar una caja vacía con padding. -->
-    <div class="card" id="balanceCard">
-      <div class="bal-line" id="balanceResult"></div>
-    </div>
-
     <!-- BLOQUE 3: presupuesto discrecional. Compra dólares va primero — es el
          ahorro, tiene prioridad — con lo disponible apenas se pagan fijos y
          variables; Salidas/Gustos van después, con lo que queda una vez
@@ -912,10 +897,27 @@
       <div class="totals totals-2" id="deudasStrip"></div>
     </div>
 
+    <!-- quién le debe a quién en el mes que se está viendo (fijos +
+         variables de ese mes), con la misma tarjeta que un gasto — ver
+         renderBalance(). No depende de la persona elegida arriba: es entre
+         todos. El bloque entero se oculta cuando no hay deuda. -->
+    <div class="card" id="balanceBlock">
+      <div class="section-title">Entre ustedes</div>
+      <div id="balanceCard"></div>
+    </div>
+
     <div class="card">
       <div class="section-title">Tus deudas</div>
       <button type="button" class="btn-add" onclick="openDebtModal()">+ Agregar deuda</button>
       <div id="debtsBox" style="margin-top:14px;"></div>
+    </div>
+
+    <!-- compras con tarjeta en cuotas: la cuota de cada mes se suma sola en
+         Gastos variables como "Cuotas <tarjeta>" — ver syncCardExpenses() -->
+    <div class="card">
+      <div class="section-title">Compras en cuotas</div>
+      <button type="button" class="btn-add" onclick="openCpModal()">+ Agregar compra</button>
+      <div id="cardPurchasesBox" style="margin-top:14px;"></div>
     </div>
   </div>
 
@@ -1385,6 +1387,10 @@
           <label for="dMonths">¿En cuántos meses?</label>
           <input type="text" inputmode="numeric" id="dMonths" placeholder="Ej: 6">
         </div>
+        <div>
+          <label for="dStartMonth">¿Desde qué mes?</label>
+          <input type="month" id="dStartMonth">
+        </div>
       </div>
       <div class="row2">
         <div>
@@ -1404,6 +1410,47 @@
         <input type="text" inputmode="numeric" class="ie-money" id="dSaved" placeholder="0">
       </div>
       <button type="submit" class="btn-primary" id="dSubmitBtn">Agregar deuda</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: agregar/editar compra en cuotas ============ -->
+<div class="modal-backdrop" id="cpModal" role="dialog" aria-modal="true" aria-labelledby="cpModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="cpModalTitle">Agregar compra en cuotas</div>
+      <button type="button" class="modal-close" onclick="closeCpModal()" aria-label="Cerrar">✕</button>
+    </div>
+    <form class="add-form" id="cpForm">
+      <div>
+        <label>¿De quién es?</label>
+        <div class="seg" id="cpWhoSeg"></div>
+      </div>
+      <div>
+        <label for="cpCard">¿Con qué tarjeta?</label>
+        <input type="text" id="cpCard" placeholder="Ej: MP, Visa" required>
+        <!-- una ficha por tarjeta que esa persona ya usó -->
+        <div class="chips" id="cpCardChips"></div>
+      </div>
+      <div>
+        <label for="cpName">¿Qué compraste?</label>
+        <input type="text" id="cpName" placeholder="Ej: Zapatillas" required>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="cpAmount">Monto total</label>
+          <input type="text" inputmode="numeric" class="ie-money" id="cpAmount" placeholder="0" required>
+        </div>
+        <div>
+          <label for="cpMonths">¿Cuántas cuotas?</label>
+          <input type="text" inputmode="numeric" id="cpMonths" placeholder="Ej: 6" required>
+        </div>
+      </div>
+      <div>
+        <label for="cpStartMonth">¿Desde qué mes?</label>
+        <input type="month" id="cpStartMonth">
+      </div>
+      <button type="submit" class="btn-primary" id="cpSubmitBtn">Agregar compra</button>
     </form>
   </div>
 </div>
@@ -1481,6 +1528,8 @@ const DEBT_TEMPLATES_KEY = 'debttemplates_v1';
 const SAVINGS_KEY = 'savings_v1';
 // meses en los que la deuda entre ustedes ya se saldó: {'2026-09': true}
 const SETTLED_KEY = 'settled_v1';
+// compras en cuotas con tarjeta — ver syncCardExpenses()
+const CARD_PURCHASES_KEY = 'cardpurchases_v1';
 
 let expenses = [];
 // ---- quiénes viven en este espacio ----
@@ -1547,6 +1596,8 @@ let editingGoalId = null;
 // months (solo si es plan), amount, currency, saved} — mismo molde que goals,
 // "saldada" se deriva de saved >= amount en vez de guardarse aparte
 let debts = [];
+// [{id, person, card, name, amount, months, startMonth}] — ver syncCardExpenses()
+let cardPurchases = [];
 let editingDebtId = null;
 // deudas recurrentes de Ajustes, solo nombre y monto de siempre — {personId:
 // [{id,label,amount}]}, mismo molde (plano, sin mes) que varEstimates. Es lo
@@ -1570,6 +1621,12 @@ let currentGoalPerson = 'A';
 let currentGoalKind = 'total';
 let currentGoalCurrency = 'ARS';
 let currentDebtPerson = 'A';
+// compras en cuotas: modal (persona elegida, cuál se edita) y qué tarjetas /
+// gastos "Cuotas <tarjeta>" están abiertos
+let currentCpPerson = 'A';
+let editingCpId = null;
+let expandedCps = new Set();
+let expandedCardExpenses = new Set();
 let currentDebtKind = 'total';
 let currentDebtCurrency = 'ARS';
 let currentSplit = 'equal';
@@ -1661,7 +1718,8 @@ const COLUMN_FOR_KEY = {
   debts_v1: 'debts',
   debttemplates_v1: 'debt_templates',
   savings_v1: 'savings',
-  settled_v1: 'settled_months'
+  settled_v1: 'settled_months',
+  cardpurchases_v1: 'card_purchases'
 };
 const MIGRATION_FLAG_KEYS = new Set(['fixed_m1','fixed_m2','fixed_m3','fixedincome_m1','budget_cats_m1','budget_cats_m3']);
 
@@ -1815,6 +1873,7 @@ function applyCoupleRow(){
   if(coupleRow.debt_templates && typeof coupleRow.debt_templates === 'object') debtTemplates = coupleRow.debt_templates;
   if(coupleRow.savings && typeof coupleRow.savings === 'object') savings = migrateSavings(coupleRow.savings);
   if(coupleRow.settled_months && typeof coupleRow.settled_months === 'object') settledMonths = coupleRow.settled_months;
+  if(Array.isArray(coupleRow.card_purchases)) cardPurchases = coupleRow.card_purchases;
   ensureSharedSlots();
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
@@ -1875,6 +1934,8 @@ function paintFromLocalCache(code){
     if(sv) savings = migrateSavings(JSON.parse(sv));
     const st = readLocalCache(code, SETTLED_KEY);
     if(st) settledMonths = JSON.parse(st);
+    const cp = readLocalCache(code, CARD_PURCHASES_KEY);
+    if(cp) cardPurchases = JSON.parse(cp);
     if(normalizeExpenses()){ /* fixed up in-memory; loadAll()'s real save will persist it */ }
     normalizeVarExpenses();
     render();
@@ -2582,6 +2643,7 @@ function setPeople(list){
   if(!isPerson(currentAhorroPerson)) currentAhorroPerson = firstPid();
   if(!isPerson(currentGoalPerson)) currentGoalPerson = firstPid();
   if(!isPerson(currentDebtPerson)) currentDebtPerson = firstPid();
+  if(!isPerson(currentCpPerson)) currentCpPerson = firstPid();
   if(!isPerson(currentDeudasPerson)) currentDeudasPerson = firstPid();
   if(!isPerson(currentDebtTplPerson)) currentDebtTplPerson = firstPid();
 }
@@ -3045,8 +3107,17 @@ async function loadAll(){
   }catch(e){}
   if(!settledMonths || typeof settledMonths !== 'object' || Array.isArray(settledMonths)) settledMonths = {};
 
+  // mismo cuidado: columna nueva, null no pisa la caché local
+  try{
+    const v = await store.get(CARD_PURCHASES_KEY);
+    if(v) cardPurchases = JSON.parse(v);
+  }catch(e){}
+  if(!Array.isArray(cardPurchases)) cardPurchases = [];
+
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
+  // los "Cuotas <tarjeta>" de Gastos variables se rearman desde las compras
+  persistCardExpenses();
   ensureSharedSlots();   // los datos vienen después de setPeople()
 
   refreshPeopleUI();
@@ -3137,6 +3208,10 @@ async function saveSavings(){
   if(await bailOnMassWipe(prevCol('savings'), countItems(savings), ()=>{ renderAhorro(); })) return false;
   return await store.set(SAVINGS_KEY, JSON.stringify(savings));
 }
+async function saveCardPurchases(){
+  if(await bailOnMassWipe(prevCol('card_purchases'), cardPurchases.length, ()=>{ render(); })) return false;
+  return await store.set(CARD_PURCHASES_KEY, JSON.stringify(cardPurchases));
+}
 // sin bailOnMassWipe: destildar el único mes saldado es un paso legítimo a vacío
 async function saveSettled(){
   return await store.set(SETTLED_KEY, JSON.stringify(settledMonths));
@@ -3156,7 +3231,7 @@ function currentSnapshot(){
     expenses, names: people, income, fixed, fixed_income: fixedIncome,
     variable_estimates: varEstimates, variable_expenses: varExpenses,
     budget_overrides: budgetTemplates, goals, debts, debt_templates: debtTemplates, savings,
-    settled_months: settledMonths,
+    settled_months: settledMonths, card_purchases: cardPurchases,
     migration_flags: (coupleRow && coupleRow.migration_flags) || {}
   };
 }
@@ -3222,6 +3297,7 @@ async function applySnapshot(s){
   if(s.debt_templates && typeof s.debt_templates === 'object') patch.debt_templates = s.debt_templates;
   if(s.savings && typeof s.savings === 'object') patch.savings = s.savings;
   if(s.settled_months && typeof s.settled_months === 'object') patch.settled_months = s.settled_months;
+  if(Array.isArray(s.card_purchases)) patch.card_purchases = s.card_purchases;
   if(s.migration_flags && typeof s.migration_flags === 'object') patch.migration_flags = s.migration_flags;
   if(!Object.keys(patch).length) throw new Error('La copia no tiene datos reconocibles.');
 
@@ -3231,7 +3307,7 @@ async function applySnapshot(s){
   [[STORE_KEY,'expenses'],[NAMES_KEY,'names'],[INCOME_KEY,'income'],[FIXED_KEY,'fixed'],
    [FIXED_INCOME_KEY,'fixed_income'],[VAR_ESTIMATES_KEY,'variable_estimates'],
    [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals'],
-   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings'],[SETTLED_KEY,'settled_months']]
+   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings'],[SETTLED_KEY,'settled_months'],[CARD_PURCHASES_KEY,'card_purchases']]
     .forEach(([k,col])=>{ if(data[col] != null) writeLocalCache(coupleCode, k, JSON.stringify(data[col])); });
   // el snapshot puede traer una columna legítimamente vacía; que el guardaespaldas
   // no lo confunda con corrupción durante el refresco posterior
@@ -4147,6 +4223,7 @@ document.addEventListener('keydown', (e)=>{
   if($('incomeModal').classList.contains('open')) closeIncomeModal();
   if($('varExpenseModal').classList.contains('open')) closeVarExpenseModal();
   if($('confirmModal').classList.contains('open')) closeConfirmModal();
+  if($('cpModal').classList.contains('open')) closeCpModal();
 });
 
 // ---- confirmar antes de borrar: un solo modal para cualquier borrado (gasto,
@@ -4453,6 +4530,7 @@ function openDebtModal(debtId){
     $('dName').value = d.name;
     $('dAmount').value = groupThousands(String(d.amount));
     $('dMonths').value = d.months ? String(d.months) : '';
+    $('dStartMonth').value = debtStartMonth(d);
     $('dSaved').value = d.saved ? groupThousands(String(d.saved)) : '';
     currentDebtPerson = d.person;
     currentDebtKind = d.kind;
@@ -4471,6 +4549,7 @@ function closeDebtModal(){
 }
 function resetDebtForm(){
   $('debtForm').reset();
+  $('dStartMonth').value = viewMonth;
   editingDebtId = null;
   currentDebtPerson = currentDeudasPerson;
   currentDebtKind = 'total';
@@ -4556,6 +4635,7 @@ $('debtForm').addEventListener('submit', (e)=>{
     name,
     kind: currentDebtKind,
     months: currentDebtKind === 'plan' ? (numVal('dMonths') || null) : null,
+    startMonth: currentDebtKind === 'plan' ? ($('dStartMonth').value || viewMonth) : null,
     amount,
     currency: currentDebtCurrency,
     saved: numVal('dSaved') || 0
@@ -4586,6 +4666,318 @@ function deleteDebt(id){
     saveDebts();
     renderDeudas();
     notyf.success('Deuda eliminada');
+  });
+}
+
+// ---- compras en cuotas con tarjeta ----
+// Cada compra (`cardPurchases`) es de una persona y de una tarjeta, y se paga
+// en `months` cuotas iguales desde `startMonth`. No se cargan a mano en Gastos:
+// syncCardExpenses() arma un gasto variable personal "Cuotas <tarjeta>" por
+// persona/tarjeta/mes con la suma de las cuotas que caen ese mes (marcado con
+// `cardAuto`), así entra solo en la cadena de plata (financeFor), en Resumen y
+// en Ahorro sin tocar ninguno de esos cálculos. El "pagado" de ese gasto es lo
+// que marca como pagas las cuotas de ese mes en Deudas.
+const cardNorm = c => String(c || '').trim().toLowerCase();
+function monthDiff(from, to){
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+function cpCuota(p){ return (p.amount || 0) / p.months; }
+function cpValid(p){ return isPerson(p.person) && p.months > 0 && !!p.startMonth && !!cardNorm(p.card); }
+function cardExpenseKey(person, card, month){ return `${person}|${cardNorm(card)}|${month}`; }
+
+// lo que debería haber en varExpenses según las compras: un total por
+// persona/tarjeta/mes
+function desiredCardExpenses(){
+  const out = new Map();
+  cardPurchases.filter(cpValid).forEach(p=>{
+    for(let i = 0; i < p.months; i++){
+      const month = addMonthsKey(p.startMonth, i);
+      const k = cardExpenseKey(p.person, p.card, month);
+      const cur = out.get(k) || { person: p.person, card: p.card.trim(), month, amount: 0 };
+      cur.amount += cpCuota(p);
+      out.set(k, cur);
+    }
+  });
+  return out;
+}
+// deja varExpenses en línea con las compras: actualiza el monto de los que ya
+// están (sin tocar su `paid`), saca los que ya no tienen cuotas y crea los que
+// faltan. Devuelve si cambió algo, para que el que llama decida si guarda.
+function syncCardExpenses(){
+  const want = desiredCardExpenses();
+  const seen = new Set();
+  let changed = false;
+  const next = [];
+  varExpenses.forEach(e=>{
+    if(!e.cardAuto){ next.push(e); return; }
+    const k = cardExpenseKey(e.cardAuto.person, e.cardAuto.card, monthKey(e.date));
+    const w = want.get(k);
+    if(!w || seen.has(k)){ changed = true; return; }   // sin cuotas ese mes, o repetido
+    seen.add(k);
+    const amount = Math.round(w.amount);
+    const desc = 'Cuotas ' + w.card;
+    if(e.amount !== amount || e.desc !== desc){
+      e.amount = amount; e.desc = desc; e.category = desc;
+      e.cardAuto = { person: w.person, card: w.card };
+      changed = true;
+    }
+    next.push(e);
+  });
+  want.forEach((w, k)=>{
+    if(seen.has(k)) return;
+    const desc = 'Cuotas ' + w.card;
+    next.push({ id: genId(), desc, amount: Math.round(w.amount), date: w.month + '-01', category: desc,
+      paidBy: w.person, shares: soloShares(w.person), cardAuto: { person: w.person, card: w.card } });
+    changed = true;
+  });
+  if(changed) varExpenses = next;
+  return changed;
+}
+// borrar la última compra puede dejar varExpenses vacío de golpe: es a
+// propósito, así que no tiene que frenarlo bailOnMassWipe (que chequea
+// allowBulkClear antes de su primer await, o sea dentro de este try)
+function persistCardExpenses(){
+  if(!syncCardExpenses()) return;
+  allowBulkClear = true;
+  try{ saveVarExpenses(); }finally{ allowBulkClear = false; }
+}
+
+function cardExpenseFor(person, card, month){
+  const k = cardExpenseKey(person, card, month);
+  return varExpenses.find(e=>e.cardAuto && cardExpenseKey(e.cardAuto.person, e.cardAuto.card, monthKey(e.date)) === k);
+}
+// una cuota cuenta como paga cuando el gasto "Cuotas <tarjeta>" de su mes
+// está tildado como pagado en Gastos variables
+function cpPaidArr(p){
+  return Array.from({length: p.months}, (_, i)=>{
+    const ex = cardExpenseFor(p.person, p.card, addMonthsKey(p.startMonth, i));
+    return !!(ex && ex.paid);
+  });
+}
+function cardPendingFor(person){
+  return cardPurchases.filter(p=>p.person === person && cpValid(p))
+    .reduce((s, p)=> s + cpPaidArr(p).filter(x=>!x).length * cpCuota(p), 0);
+}
+// las compras que tienen una cuota en ese mes, con el número de cuota
+function cardPurchasesInMonth(person, card, month){
+  return cardPurchases
+    .filter(p=>p.person === person && cpValid(p) && cardNorm(p.card) === cardNorm(card))
+    .map(p=>{
+      const idx = monthDiff(p.startMonth, month);
+      return idx >= 0 && idx < p.months ? { p, n: idx + 1, cuota: cpCuota(p) } : null;
+    })
+    .filter(Boolean);
+}
+
+// el gasto "Cuotas MP" en Gastos variables: se abre como Limpieza, con una
+// fila por compra. No se edita ni se borra a mano — sale de las compras —, así
+// que ✎ lleva a Deudas y ✕ queda oculto (solo para que el monto quede alineado)
+function toggleCardExpenseOpen(id){
+  if(expandedCardExpenses.has(id)) expandedCardExpenses.delete(id);
+  else expandedCardExpenses.add(id);
+  render();
+}
+function goToCardPurchases(person){
+  currentDeudasPerson = person;
+  document.querySelectorAll('#deudasPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === person));
+  renderDeudas();
+  switchTab('deudas');
+}
+function cardExpenseBillRow(ex){
+  const open = expandedCardExpenses.has(ex.id);
+  const items = cardPurchasesInMonth(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date));
+  const parent = `<div class="bill bill-clickable" onclick="toggleCardExpenseOpen('${ex.id}')">
+    <div class="bill-main">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+          aria-label="${open ? 'Ocultar' : 'Ver'} las compras">▸</button>
+        <div class="bill-name">${escapeHtml(ex.desc)}</div>
+      </div>
+      <div class="bill-meta">
+        <span>${shortDate(ex.date)}</span>
+        <span class="bill-occ-badge">${items.length} ${items.length === 1 ? 'compra' : 'compras'}</span>
+        <label class="bill-paid" title="${ex.paid ? 'Pagado' : 'Marcar como pagado'}" onclick="event.stopPropagation()">
+          <input type="checkbox" ${ex.paid ? 'checked' : ''} onchange="toggleVarExpensePaid('${ex.id}')">
+        </label>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(ex.amount)}</div>
+    <button class="bill-edit" onclick="event.stopPropagation(); goToCardPurchases('${ex.cardAuto.person}')"
+      aria-label="Ver las compras en Deudas" title="Las compras se cargan en Deudas">✎</button>
+    <button class="bill-del" style="visibility:hidden" tabindex="-1" aria-hidden="true">✕</button>
+  </div>`;
+  if(!open) return parent;
+  const rows = items.map(x=>`<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">${escapeHtml(x.p.name)}</div>
+      <div class="bill-meta"><span>Cuota ${x.n} de ${x.p.months}</span></div>
+    </div>
+    <div class="bill-amt">${fmt(x.cuota)}</div>
+  </div>`).join('');
+  return parent + `<div class="bill-occurrences">${rows}</div>`;
+}
+
+// ---- bloque "Compras en cuotas" de Deudas ----
+function toggleCpOpen(id){
+  if(expandedCps.has(id)) expandedCps.delete(id);
+  else expandedCps.add(id);
+  renderDeudas();
+}
+function cpCardHtml(p){
+  const open = expandedCps.has(p.id);
+  const paidArr = cpPaidArr(p);
+  const paidCount = paidArr.filter(Boolean).length;
+  const pct = p.months > 0 ? paidCount / p.months * 100 : 0;
+  const falta = (p.months - paidCount) * cpCuota(p);
+  const items = paidArr.map((paid, i)=>`<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">Cuota ${i+1} de ${p.months}</div>
+      <div class="bill-meta">
+        <span>${monthLabel(addMonthsKey(p.startMonth, i))}</span>
+        <label class="bill-paid" title="Se marca al tildar el gasto de ese mes en Gastos variables">
+          <input type="checkbox" ${paid ? 'checked' : ''} disabled>
+        </label>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(cpCuota(p))}</div>
+  </div>`).join('');
+  return `<div class="goal">
+    <div class="goal-h bill-clickable" onclick="toggleCpOpen('${p.id}')">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1" aria-label="${open ? 'Ocultar' : 'Ver'} las ${p.months} cuotas">▸</button>
+        <span class="goal-n">${escapeHtml(p.name)}</span>
+      </div>
+      <span class="goal-t">${fmt(p.amount)}</span>
+      <span class="goal-acts">
+        <button type="button" onclick="event.stopPropagation(); openCpModal('${p.id}')" aria-label="Editar compra">✎</button>
+        <button type="button" onclick="event.stopPropagation(); deleteCp('${p.id}')" aria-label="Eliminar compra">✕</button>
+      </span>
+    </div>
+    <div class="goal-track"><i class="${pct >= 100 ? '' : 'part'}" style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>
+    ${open ? `<div class="bill-occurrences">${items}</div>` : ''}
+    <div class="goal-d"><span class="goal-pct">${paidCount} de ${p.months} cuotas</span>${
+      falta > 0.5 ? ` — faltan ${fmt(falta)}.` : ' — compra pagada.'}</div>
+  </div>`;
+}
+function renderCardPurchases(person){
+  const box = $('cardPurchasesBox');
+  if(!box) return;
+  const mine = cardPurchases.filter(p=>p.person === person && cpValid(p));
+  if(!mine.length){
+    box.innerHTML = '<div class="goal-empty">Cargá las compras que hiciste en cuotas con tarjeta. La cuota de cada mes se suma sola en Gastos variables como "Cuotas" + la tarjeta.</div>';
+    return;
+  }
+  // agrupadas por tarjeta, en el orden en que se cargó la primera de cada una
+  const groups = [];
+  mine.forEach(p=>{
+    let g = groups.find(x=>x.key === cardNorm(p.card));
+    if(!g){ g = { key: cardNorm(p.card), label: p.card.trim(), list: [] }; groups.push(g); }
+    g.list.push(p);
+  });
+  box.innerHTML = groups.map((g, i)=>{
+    const thisMonth = cardPurchasesInMonth(person, g.label, viewMonth).reduce((s, x)=>s + x.cuota, 0);
+    return `<div class="budget-subhead cp-subhead"${i ? ' style="margin-top:18px;"' : ''}>
+        <span>${escapeHtml(g.label)}</span>${thisMonth > 0 ? `<span>${escapeHtml(monthShort(viewMonth))} ${fmt(thisMonth)}</span>` : ''}
+      </div>` + g.list.map(cpCardHtml).join('');
+  }).join('');
+}
+
+// ---- modal: agregar/editar compra en cuotas ----
+function openCpModal(id){
+  resetCpForm();
+  const p = id ? cardPurchases.find(x=>x.id === id) : null;
+  if(p){
+    editingCpId = p.id;
+    currentCpPerson = p.person;
+    $('cpCard').value = p.card;
+    $('cpName').value = p.name;
+    $('cpAmount').value = groupThousands(String(p.amount));
+    $('cpMonths').value = String(p.months);
+    $('cpStartMonth').value = p.startMonth;
+    syncCpSegs();
+  }
+  $('cpModalTitle').textContent = p ? 'Editar compra en cuotas' : 'Agregar compra en cuotas';
+  $('cpSubmitBtn').textContent = p ? 'Guardar cambios' : 'Agregar compra';
+  $('cpModal').classList.add('open');
+  document.body.classList.add('modal-open');
+  $(p ? 'cpName' : 'cpCard').focus();
+}
+function closeCpModal(){
+  $('cpModal').classList.remove('open');
+  document.body.classList.remove('modal-open');
+}
+function resetCpForm(){
+  $('cpForm').reset();
+  $('cpStartMonth').value = viewMonth;
+  editingCpId = null;
+  currentCpPerson = currentDeudasPerson;
+  syncCpSegs();
+}
+function syncCpSegs(){
+  document.querySelectorAll('#cpWhoSeg button').forEach(b=>b.classList.toggle('active', b.dataset.who === currentCpPerson));
+  renderCpCardChips();
+}
+// una ficha por tarjeta que esa persona ya usó, para no tipearla cada vez
+function renderCpCardChips(){
+  const cards = [];
+  cardPurchases.filter(p=>p.person === currentCpPerson && cardNorm(p.card)).forEach(p=>{
+    if(!cards.some(c=>cardNorm(c) === cardNorm(p.card))) cards.push(p.card.trim());
+  });
+  $('cpCardChips').innerHTML = cards.map(c=>`<button type="button" data-card="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+  syncCpCardChips();
+}
+function syncCpCardChips(){
+  const v = cardNorm($('cpCard').value);
+  document.querySelectorAll('#cpCardChips button').forEach(b=>b.classList.toggle('active', cardNorm(b.dataset.card) === v));
+}
+$('cpCardChips').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  $('cpCard').value = btn.dataset.card;
+  syncCpCardChips();
+});
+$('cpCard').addEventListener('input', syncCpCardChips);
+$('cpWhoSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentCpPerson = btn.dataset.who;
+  syncCpSegs();
+});
+$('cpModal').addEventListener('click', (e)=>{ if(e.target === $('cpModal')) closeCpModal(); });
+$('cpForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const card = $('cpCard').value.trim();
+  const name = $('cpName').value.trim();
+  const amount = numVal('cpAmount');
+  const months = numVal('cpMonths');
+  if(!card || !name || !amount || !(months > 0)) return;
+  const fields = {
+    person: currentCpPerson, card, name, amount,
+    months: Math.round(months),
+    startMonth: $('cpStartMonth').value || viewMonth
+  };
+  const existing = editingCpId ? cardPurchases.find(x=>x.id === editingCpId) : null;
+  if(existing) Object.assign(existing, fields);
+  else cardPurchases.push({ id: genId(), ...fields });
+  saveCardPurchases();
+  persistCardExpenses();
+  closeCpModal();
+  currentDeudasPerson = fields.person;
+  document.querySelectorAll('#deudasPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentDeudasPerson));
+  render();
+  notyf.success(existing ? 'Compra actualizada' : 'Compra agregada');
+});
+function deleteCp(id){
+  const p = cardPurchases.find(x=>x.id === id);
+  if(!p) return;
+  openConfirmModal(`¿Eliminar "${p.name}"? Sus cuotas se sacan de Gastos variables.`, ()=>{
+    cardPurchases = cardPurchases.filter(x=>x.id !== id);
+    saveCardPurchases();
+    persistCardExpenses();
+    render();
+    notyf.success('Compra eliminada');
   });
 }
 
@@ -4828,6 +5220,7 @@ function refreshPeopleUI(){
   $('vxPayerField').style.display = (!solo && isSharedPay(currentVxPaidBy)) ? '' : 'none';
   seg('gWhoSeg', 'data-who', currentGoalPerson);
   seg('dWhoSeg', 'data-who', currentDebtPerson);
+  seg('cpWhoSeg', 'data-who', currentCpPerson);
   seg('ahorroPersonSeg', 'data-person', currentAhorroPerson, 'self');
   seg('deudasPersonSeg', 'data-person', currentDeudasPerson, 'self');
   if(solo && isSharedPay(currentVarEstPerson)) currentVarEstPerson = firstPid();
@@ -4976,6 +5369,7 @@ function dropPersonData(id){
   delete savings[id];
   goals = goals.filter(g=>g.person !== id);
   debts = debts.filter(d=>d.person !== id);
+  cardPurchases = cardPurchases.filter(p=>p.person !== id);
   // siempre se saca del final de la lista, así que la primera persona sigue ahí
   // y hereda los gastos compartidos que pagaba el que se va (si no, el gasto
   // quedaría sin nadie que lo haya puesto y el balance no cerraría)
@@ -5500,6 +5894,7 @@ function entryShareOf(e, person){
 
 // same card design as billRow(): shows the split label too when it's shared
 function varExpenseBillRow(ex){
+  if(ex.cardAuto) return cardExpenseBillRow(ex);
   const dateStr = new Date(ex.date+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'});
   const splitLabel = splitLabelOf(ex);
   return `<div class="bill">
@@ -6231,6 +6626,24 @@ function debtIsDone(d){
   return target > 0 && debtSavedArs(d) >= target;
 }
 
+// mes de la primera cuota (YYYY-MM). Las deudas cargadas antes de que
+// existiera `startMonth` lo sacan del id, que arranca con el timestamp de
+// cuando se crearon (ver genId) — y si no se puede, el mes que se está viendo
+function debtStartMonth(d){
+  if(d.startMonth) return d.startMonth;
+  const ts = parseInt(String(d.id || '').slice(0, -4), 36);
+  if(ts > Date.UTC(2020, 0, 1) && ts < Date.UTC(2100, 0, 1)){
+    const dt = new Date(ts);
+    return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+  }
+  return viewMonth;
+}
+function addMonthsKey(key, n){
+  const [y, m] = key.split('-').map(Number);
+  const dt = new Date(y, m - 1 + n, 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+}
+
 // se abren/cierran una por una, igual que expandedGoals en Ahorro
 let expandedDebts = new Set();
 function toggleDebtOpen(id){
@@ -6268,10 +6681,12 @@ function debtPlanCardHtml(d, targetLabel, pct, detail, extra, acts){
   const done = pct >= 100;
   const pctText = (pct < 1 && pct > 0 ? '<1' : Math.round(pct)) + '%';
   const cuota = d.amount / d.months;
+  const start = debtStartMonth(d);
   const items = installmentsPaidArr(d).map((paid, i) => `<div class="bill">
     <div class="bill-main">
       <div class="bill-name">Cuota ${i+1} de ${d.months}</div>
       <div class="bill-meta">
+        <span>${monthLabel(addMonthsKey(start, i))}</span>
         <label class="bill-paid" title="${paid ? 'Pagada' : 'Marcar como pagada'}">
           <input type="checkbox" ${paid ? 'checked' : ''} onchange="toggleDebtInstallmentPaid('${d.id}', ${i})">
         </label>
@@ -6348,13 +6763,17 @@ function renderDeudas(){
   $('deudasTitle').textContent = `Deudas de ${monthShort(viewMonth)}`;
   const mine = debts.filter(d=>d.person === person);
 
-  const pendiente = mine.reduce((s,d)=> s + (debtIsDone(d) ? 0 : Math.max(0, debtTargetArs(d) - debtSavedArs(d))), 0);
+  // lo que falta de las compras en cuotas también se debe
+  const pendiente = mine.reduce((s,d)=> s + (debtIsDone(d) ? 0 : Math.max(0, debtTargetArs(d) - debtSavedArs(d))), 0)
+    + cardPendingFor(person);
   const saldadas = mine.filter(debtIsDone).length;
   const cell = (k, v, cls='') => `<div class="totals-cell">
       <div class="totals-k">${k}</div><div class="totals-v ${cls}">${v}</div></div>`;
   $('deudasStrip').innerHTML =
     cell('Pendiente', fmt(pendiente), pendiente > 0 ? 'neg' : '') +
     cell('Saldada', String(saldadas), saldadas > 0 ? 'save' : '');
+
+  renderCardPurchases(person);
 
   const box = $('debtsBox');
   if(!mine.length){
@@ -6366,18 +6785,19 @@ function renderDeudas(){
       <button type="button" onclick="openDebtModal('${d.id}')" aria-label="Editar deuda">✎</button>
       <button type="button" onclick="deleteDebt('${d.id}')" aria-label="Eliminar deuda">✕</button>
     </span>`;
-    const targetArs = debtTargetArs(d);
-    const targetLabel = d.currency === 'USD'
-      ? `${fmtUsd(d.amount)}${targetArs ? ` <span style="color:var(--body-muted);font-weight:400;">· ${fmt(targetArs)}</span>` : ''}`
-      : fmt(d.amount);
-    const saved = Math.max(0, debtSavedArs(d));
-    const pct = targetArs > 0 ? Math.min(100, saved/targetArs*100) : 0;
-    const falta = Math.max(0, targetArs - saved);
+    // todo en la moneda que se eligió para la deuda, sin la conversión a la
+    // otra al lado — solo Totales (que suma deudas de monedas mezcladas) pasa a pesos
+    const fmtCur = v => d.currency === 'USD' ? fmtUsd(v) : fmt(v);
+    const target = Math.max(0, d.amount || 0);
+    const targetLabel = fmtCur(target);
+    const saved = Math.max(0, d.saved || 0);
+    const pct = target > 0 ? Math.min(100, saved/target*100) : 0;
+    const falta = Math.max(0, target - saved);
     const detail = debtIsDone(d)
-      ? `pagaste ${fmt(saved)}. Deuda saldada.`
-      : `pagaste ${fmt(saved)}, faltan ${fmt(falta)}.`;
+      ? `pagaste ${fmtCur(saved)}. Deuda saldada.`
+      : `pagaste ${fmtCur(saved)}, faltan ${fmtCur(falta)}.`;
     const extra = (!debtIsDone(d) && d.kind === 'plan' && d.months > 0)
-      ? `En un plan de ${d.months} ${d.months === 1 ? 'mes' : 'meses'}: cuota de referencia ${fmt(targetArs / d.months)} por mes.`
+      ? `En un plan de ${d.months} ${d.months === 1 ? 'mes' : 'meses'}: cuota de referencia ${fmtCur(target / d.months)} por mes.`
       : '';
     if(d.kind === 'plan' && d.months > 0){
       return debtPlanCardHtml(d, targetLabel, pct, detail, extra, acts);
@@ -6825,27 +7245,76 @@ function settlements(key){
   return out;
 }
 
-function balanceHtml(rows){
-  return (rows || settlements()).map(s=>`<span class="bal-pair">
-    <span class="bal-who">${escapeHtml(nameOf(s.from))} le debe a ${escapeHtml(nameOf(s.to))}</span>
-    <span class="amt">${fmt(s.amount)}</span>
-  </span>`).join('');
+const fmtSigned = v => (v > 0.5 ? '+' : '') + fmt(v);
+
+// la cuenta de una persona en el mes, en totales: lo que puso de su bolsillo
+// en los gastos no compartidos menos lo que le tocaba de ellos — la resta es
+// su neto en netBalances() (positivo = le deben, negativo = debe)
+function balanceTotalsFor(id, key){
+  const inMonth = x=>monthKey(x.date) === key;
+  const list = expenses.filter(inMonth).concat(varExpenses.filter(inMonth))
+    .filter(ex=>!isSharedPay(ex.paidBy));
+  const paid = list.reduce((s,ex)=>s + (ex.paidBy === id ? (ex.amount||0) : 0), 0);
+  const share = list.reduce((s,ex)=>s + personShareOf(ex, id), 0);
+  return { paid, share };
 }
 
-// who owes whom en el mes que se está viendo. El ✓ de abajo a la derecha
-// marca ese mes como saldado y pasa la card de rojo a verde.
+function balancePersonHtml(id, net, key){
+  const { paid, share } = balanceTotalsFor(id, key);
+  return `<div class="bill bill-subtotal bal-person">
+    <div class="bill-main">
+      <div class="bill-name">${escapeHtml(nameOf(id))}</div>
+      <div class="bal-item-calc">pagó ${fmt(paid)} de ${fmt(share)}</div>
+    </div>
+    <div class="bill-amt ${net > 0.5 ? 'pos' : net < -0.5 ? 'neg' : ''}">${fmtSigned(net)}</div>
+  </div>`;
+}
+
+// who owes whom en el mes que se está viendo, como una tarjeta más (mismo
+// look que un gasto). Al tocarla se desglosa por persona; el ✓ marca ese mes
+// como saldado y pasa el monto de rojo a verde.
+let balanceExpanded = false;
+function toggleBalanceExpanded(){
+  balanceExpanded = !balanceExpanded;
+  renderBalance();
+}
 function renderBalance(){
-  const el = $('balanceResult');
+  const el = $('balanceCard');
   if(!el) return;
-  const html = balanceHtml(settlements(viewMonth));
-  const done = !!settledMonths[viewMonth];
-  el.innerHTML = html ? html + `<label class="bal-check" title="Marcar como saldado">
-    <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleSettled(this.checked)">
-    <span>${done ? 'Saldado' : 'Saldar'}</span>
-  </label>` : '';
-  el.classList.toggle('good', done);
-  const card = $('balanceCard');
-  if(card) card.style.display = html ? '' : 'none';
+  const key = viewMonth;
+  const rows = settlements(key);
+  const block = $('balanceBlock');
+  if(!rows.length){ el.innerHTML = ''; if(block) block.style.display = 'none'; return; }
+  if(block) block.style.display = '';
+  const done = !!settledMonths[key];
+  const [first, ...rest] = rows;
+  // con 3+ personas puede haber más de una transferencia: la primera es el
+  // título, las demás van en la línea de abajo
+  const more = rest.map(s=>`<span>${escapeHtml(nameOf(s.from))} → ${escapeHtml(nameOf(s.to))} ${fmt(s.amount)}</span>`).join('');
+  const net = netBalances(key);
+  // la deuda es del mes entero: se fecha el último día, como un cierre
+  const [y, m] = key.split('-').map(Number);
+  const lastDay = `${key}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`;
+  const header = `<div class="bill bill-clickable bal-bill${done ? ' is-settled' : ''}" onclick="toggleBalanceExpanded()">
+    <div class="bill-main">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${balanceExpanded ? ' open' : ''}" tabindex="-1"
+          aria-label="${balanceExpanded ? 'Ocultar' : 'Ver'} la cuenta">▸</button>
+        <div class="bill-name">${escapeHtml(nameOf(first.from))} le debe a ${escapeHtml(nameOf(first.to))}</div>
+      </div>
+      <div class="bill-meta">
+        <span>${shortDate(lastDay)}</span><span>·</span><span class="bill-info-btn">Deuda</span>
+        ${more}
+        <label class="bill-paid" title="${done ? 'Saldado' : 'Marcar como saldado'}" onclick="event.stopPropagation()">
+          <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleSettled(this.checked)">
+        </label>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(first.amount)}</div>
+  </div>`;
+  el.innerHTML = balanceExpanded
+    ? header + `<div class="bill-occurrences">${pids().map(id=>balancePersonHtml(id, net[id], key)).join('')}</div>`
+    : header;
 }
 function toggleSettled(on){
   if(on) settledMonths[viewMonth] = true;
