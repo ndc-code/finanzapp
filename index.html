@@ -126,6 +126,32 @@
     .lbl-short{display:inline;}
     .session-dropdown{right:0;left:auto;}
   }
+  /* ---- menú del header (solo mobile, <= 479px) ----
+     Los íconos de .head-right no entran en una fila: se juntan detrás de un
+     solo botón (headMenuBtn) y .head-right pasa a ser su panel desplegable.
+     Cada ícono muestra su aria-label como texto al lado, y los popovers que
+     ya tenían (fecha, dólar, sesión) se abren adentro del panel, debajo de
+     su fila, en vez de flotar. */
+  #headMenuBtn{display:none;}
+  @media(max-width:479px){
+    .app-head{position:relative;grid-template-columns:auto 1fr auto;grid-template-areas:"title month menu";gap:8px;}
+    #headMenuBtn{display:flex;grid-area:menu;}
+    .head-right{display:none;position:absolute;top:calc(100% + 8px);right:0;z-index:45;width:250px;
+      flex-direction:column;align-items:stretch;gap:2px;padding:6px;
+      background:var(--card);border:1px solid var(--line);border-radius:14px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.12);}
+    .app-head.menu-open .head-right{display:flex;}
+    .head-right .popover-menu, .head-right .session-menu{width:100%;}
+    .head-right .date-icon-wrap{display:block;}
+    .head-right .icon-btn{width:100%;height:44px;border:none;border-radius:10px;background:transparent;
+      justify-content:flex-start;gap:12px;padding:0 10px;}
+    .head-right .icon-btn:hover{background:var(--pearl);}
+    .head-right .icon-btn:disabled{background:transparent;}
+    .head-right .icon-btn > svg{flex:0 0 18px;}
+    .head-right .icon-btn::after{content:attr(aria-label);font-size:14px;font-weight:500;color:var(--ink);text-align:left;}
+    .head-right .session-dropdown{position:static;min-width:0;box-shadow:none;border:none;
+      background:var(--pearl);margin:2px 0 4px;padding:6px;}
+  }
 
   /* ---- month totals strip ---- */
   .totals{display:grid;grid-template-columns:repeat(3,1fr);background:var(--card);
@@ -803,6 +829,10 @@
       <span class="m" id="monthLabel"></span>
       <button type="button" onclick="shiftMonth(1)" aria-label="Mes siguiente">›</button>
     </div>
+    <!-- en mobile (<= 479px) todos los íconos de .head-right van detrás de este botón -->
+    <button type="button" class="icon-btn" id="headMenuBtn" onclick="toggleHeadMenu()" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
     <div class="head-right">
       <!-- la fecha de hoy, a la vista en desktop (hay lugar); en mobile pasa a
            ser un ícono más de la fila, igual que el resto — ver dateBtn -->
@@ -2560,6 +2590,22 @@ function toggleAmountsHidden(){
   renderFixed(); renderChips(); renderFixedIncome(); renderIncomeChips(); renderIncomeLists();
   renderVarEstimates(); renderBudgetTemplates(); renderDebtTemplates();
 }
+// menú del header en mobile: abre/cierra .head-right como panel (ver CSS)
+function toggleHeadMenu(force){
+  const head = document.querySelector('.app-head');
+  const open = typeof force === 'boolean' ? force : !head.classList.contains('menu-open');
+  head.classList.toggle('menu-open', open);
+  $('headMenuBtn').setAttribute('aria-expanded', open);
+}
+// una acción del panel lo cierra; los íconos con popover (fecha, dólar,
+// sesión) lo dejan abierto para mostrar su contenido adentro
+document.querySelector('.head-right').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.icon-btn');
+  if(btn && !btn.hasAttribute('aria-haspopup')) toggleHeadMenu(false);
+});
+document.addEventListener('click', (e)=>{
+  if(!document.querySelector('.app-head').contains(e.target)) toggleHeadMenu(false);
+});
 document.addEventListener('click', (e)=>{
   const sessionMenu = document.querySelector('.session-menu');
   if(sessionMenu && !sessionMenu.contains(e.target)) toggleSessionMenu(false);
