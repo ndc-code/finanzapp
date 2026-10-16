@@ -421,6 +421,13 @@
   .confirm-actions .btn-cancel:hover{background:var(--pearl);color:var(--ink);}
   .confirm-actions .btn-danger{background:var(--a-clay);color:#fff;}
   .confirm-actions .btn-danger:hover{background:var(--a-clay-ink);}
+  .confirm-actions button:disabled{opacity:.45;cursor:not-allowed;}
+  .confirm-actions .btn-danger:disabled:hover{background:var(--a-clay);}
+  /* "escribí X para confirmar" — solo en los borrados grandes (ver opts.confirmWord) */
+  .confirm-type{margin:-8px 0 22px;}
+  .confirm-type[hidden]{display:none;}
+  .confirm-type label{display:block;font-size:13.5px;color:var(--ink);margin-bottom:8px;}
+  .confirm-type input{width:100%;}
   /* para confirmaciones que no borran nada (ej: copiar mes anterior) — mismo
      azul que el resto de las acciones primarias, no el rojo de "Eliminar" */
   .confirm-actions .btn-confirm{background:var(--primary);color:#fff;}
@@ -1737,6 +1744,10 @@
       <button type="button" class="modal-close" onclick="closeConfirmModal()" aria-label="Cerrar">✕</button>
     </div>
     <p class="confirm-text" id="confirmModalText"></p>
+    <div class="confirm-type" id="confirmType" hidden>
+      <label for="confirmTypeInput" id="confirmTypeLabel"></label>
+      <input type="text" id="confirmTypeInput" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
     <div class="confirm-actions">
       <button type="button" class="btn-cancel" onclick="closeConfirmModal()">Cancelar</button>
       <button type="button" class="btn-danger" id="confirmModalOk">Eliminar</button>
@@ -2842,7 +2853,7 @@ function clearMonth(){
       render();
       notyf.success(`Se borró ${monthLabel(key)}`);
     },
-    { title:'Borrar mes', okLabel:'Borrar todo' }
+    { title:'Borrar mes', okLabel:'Borrar todo', confirmWord: monthShort(key) }
   );
 }
 function copyEntriesToMonth(list, fromKey, toKey, sameAs){
@@ -2897,7 +2908,7 @@ function copyMonthToNext(){
       render();
       notyf.success(`Se copió ${monthLabel(fromKey)} a ${monthLabel(toKey)}`);
     },
-    { title:'Copiar al mes siguiente', okLabel:'Copiar', danger:false }
+    { title:'Copiar al mes siguiente', okLabel:'Copiar', danger:false, confirmWord: monthShort(toKey) }
   );
 }
 
@@ -4583,7 +4594,15 @@ document.addEventListener('keydown', (e)=>{
 // también para cualquier otra acción que convenga confirmar (ej: copiar mes
 // anterior). `opts` cambia el título y el botón cuando no es un borrado;
 // por defecto queda igual que siempre (Eliminar, en rojo).
+// `opts.confirmWord`: para los borrados grandes (ej: Borrar mes) — el botón
+// queda deshabilitado hasta escribir esa palabra (sin importar mayúsculas,
+// tildes ni espacios de más).
 let confirmModalAction = null;
+let confirmModalWord = null;
+const normWord = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+function confirmWordOk(){
+  return !confirmModalWord || normWord($('confirmTypeInput').value) === normWord(confirmModalWord);
+}
 function openConfirmModal(message, onConfirm, opts){
   opts = opts || {};
   $('confirmModalTitle').textContent = opts.title || 'Eliminar';
@@ -4594,15 +4613,27 @@ function openConfirmModal(message, onConfirm, opts){
   ok.classList.toggle('btn-danger', danger);
   ok.classList.toggle('btn-confirm', !danger);
   confirmModalAction = onConfirm;
+  confirmModalWord = opts.confirmWord || null;
+  $('confirmType').hidden = !confirmModalWord;
+  $('confirmTypeInput').value = '';
+  if(confirmModalWord) $('confirmTypeLabel').innerHTML = `Para confirmar, escribí <strong>${escapeHtml(confirmModalWord)}</strong>`;
+  ok.disabled = !confirmWordOk();
   $('confirmModal').classList.add('open');
   document.body.classList.add('modal-open');
+  if(confirmModalWord) $('confirmTypeInput').focus();
 }
 function closeConfirmModal(){
   $('confirmModal').classList.remove('open');
   document.body.classList.remove('modal-open');
   confirmModalAction = null;
+  confirmModalWord = null;
 }
+$('confirmTypeInput').addEventListener('input', ()=>{ $('confirmModalOk').disabled = !confirmWordOk(); });
+$('confirmTypeInput').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter' && confirmWordOk()){ e.preventDefault(); $('confirmModalOk').click(); }
+});
 $('confirmModalOk').addEventListener('click', ()=>{
+  if(!confirmWordOk()) return;
   const action = confirmModalAction;
   closeConfirmModal();
   if(action) action();
