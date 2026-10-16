@@ -276,6 +276,37 @@
   .fab:hover{filter:brightness(1.08);}
   .fab:focus-visible{outline:2px solid var(--primary-focus);outline-offset:3px;}
   .fab[hidden], body.modal-open .fab{display:none;}
+  /* ---- navegación inferior (solo mobile, <= 479px) ----
+     Barra flotante de vidrio: Ingresos · Gastos · + · Deudas · Ahorro.
+     En mobile reemplaza a #tabs y al .fab; el + del centro abre el mismo
+     modal que el .fab. La sección activa lleva un fondo suave. */
+  .bnav{display:none;}
+  @media(max-width:479px){
+    .tabs, .fab{display:none;}
+    .wrap{padding-bottom:calc(104px + env(safe-area-inset-bottom));}
+    .notyf{padding-bottom:calc(96px + env(safe-area-inset-bottom));}
+    .bnav{display:block;position:fixed;left:8px;right:8px;bottom:max(12px, env(safe-area-inset-bottom));
+      z-index:40;max-width:400px;margin-inline:auto;padding:4px;border-radius:16px;
+      border:1px solid rgba(0,0,0,0.10);background:rgba(250,250,252,0.72);
+      -webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
+      box-shadow:0 6px 24px rgba(0,0,0,0.08);}
+    .bnav[hidden], body.modal-open .bnav{display:none;}
+    .bnav-list{height:56px;display:grid;grid-template-columns:repeat(5,1fr);gap:2px;}
+    .bnav button{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+      border:none;border-radius:12px;background:transparent;color:var(--body-muted);cursor:pointer;padding:0;
+      font-family:'Inter',system-ui,sans-serif;font-size:11px;font-weight:500;
+      transition:background-color .15s ease,color .15s ease,transform .15s ease;}
+    .bnav button svg{width:22px;height:22px;stroke-width:1.6;}
+    .bnav button.active{background:rgba(0,0,0,0.06);color:var(--ink);}
+    .bnav button.active svg{stroke-width:2;}
+    .bnav button:focus-visible{outline:2px solid var(--primary-focus);outline-offset:1px;}
+    .bnav .bnav-add{background:var(--ink);color:#fff;}
+    .bnav .bnav-add svg{width:24px;height:24px;stroke-width:2.2;}
+    .bnav .bnav-add:active{transform:scale(0.96);}
+  }
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+    .bnav{background:var(--pearl);}
+  }
   /* ---- "Saldos" footer, closing every big block on Gastos ---- */
   .sld-block{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);}
   /* when Saldos is the card's only content there's nothing above it to divide from */
@@ -1444,6 +1475,31 @@
 <button type="button" class="fab" id="dailyFab" onclick="openDailyModal()" aria-label="Agregar gasto o ingreso" title="Agregar gasto o ingreso">
   <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
 </button>
+
+<!-- navegación inferior en mobile (<= 479px): reemplaza a #tabs y al .fab -->
+<nav class="bnav" id="bottomNav" aria-label="Secciones" hidden>
+  <div class="bnav-list">
+    <button type="button" data-tab="ingresos" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      <span>Ingresos</span>
+    </button>
+    <button type="button" data-tab="gastos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+      <span>Gastos</span>
+    </button>
+    <button type="button" class="bnav-add" onclick="openDailyModal()" aria-label="Agregar gasto o ingreso">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button type="button" data-tab="deudas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>
+      <span>Deudas</span>
+    </button>
+    <button type="button" data-tab="ahorro">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+      <span>Ahorro</span>
+    </button>
+  </div>
+</nav>
 
 <!-- ============ MODAL: agregar meta de ahorro ============ -->
 <div class="modal-backdrop" id="goalModal" role="dialog" aria-modal="true" aria-labelledby="goalModalTitle">
@@ -4411,7 +4467,7 @@ async function commitBudgetTemplates(){
 
 // ---- tabs ----
 function switchTab(name){
-  document.querySelectorAll('#tabs button').forEach(b=>{
+  document.querySelectorAll('#tabs button, #bottomNav button[data-tab]').forEach(b=>{
     b.classList.toggle('active', b.dataset.tab === name);
   });
   document.querySelectorAll('.tab-panel').forEach(p=>{
@@ -4422,6 +4478,10 @@ function switchTab(name){
 }
 $('tabs').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
+  if(btn) switchTab(btn.dataset.tab);
+});
+$('bottomNav').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-tab]');
   if(btn) switchTab(btn.dataset.tab);
 });
 
@@ -6409,6 +6469,7 @@ function render(){
   renderBudgetTabs();
   renderDailyBlock(fin);
   $('dailyFab').hidden = !coupleCode;
+  $('bottomNav').hidden = !coupleCode;
   renderBlockSaldos(fin);
   renderResumen(fin);
   renderBalance();

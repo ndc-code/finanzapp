@@ -72,6 +72,8 @@ and returns every intermediate saldo (`afterFijos`, `afterVar`) plus `propio`/`c
 - `incomePctA()` — proportional income split (used when an expense's `splitType === 'income'`), converts any USD income entries to ARS using the manually-entered `fx` rate before comparing.
 - Recurring expenses: marking a recurring expense paid (`togglePaid`) auto-generates the next month's copy via `addMonths()`, and bumps `cycleCount`; if `adjustPct > 0` and the new cycle is a multiple of 3, the amount is escalated by that percentage.
 
+**Mobile navigation**: at `max-width:479px` the top `#tabs` and the floating `.fab` are hidden and replaced by `#bottomNav` (`.bnav`), a floating glass bar — Ingresos · Gastos · + · Deudas · Ahorro — modeled on the bottom nav of the project in `inspo/app` (git-ignored reference material). Its tab buttons go through the same `switchTab()`, which keeps both navs' `.active` in sync; the center + calls `openDailyModal()` like the `.fab`. It is hidden with the `.fab` while there's no couple code and while a modal is open.
+
 **Charts**: category and payer breakdowns are rendered as hand-rolled SVG pie charts (`pieSvgHtml`/`arcPath`/`polarToCartesian`) — no charting library.
 
 **i18n**: all user-facing strings are hardcoded Spanish (Argentine locale — `es-AR` for `Intl.NumberFormat`/date formatting, ARS as the default currency). There's no translation layer; don't add one unless asked.
