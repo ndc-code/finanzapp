@@ -36,7 +36,8 @@
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;-webkit-font-smoothing:antialiased;}
   body.modal-open{overflow:hidden;}
-  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 64px;}
+  /* 96px abajo: el botón flotante de gasto diario no tapa la última fila */
+  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 96px;}
   @media(max-width:540px){.wrap{padding:20px 10px 48px;}}
   h1{font-weight:600;font-size:34px;margin:0;letter-spacing:-0.374px;line-height:1.15;}
   .app-head{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:16px;margin-bottom:20px;}
@@ -59,6 +60,7 @@
     cursor:pointer;transition:background-color .15s ease,color .15s ease;flex:0 0 auto;
     font-size:15px;font-weight:600;font-family:inherit;}
   .icon-btn:hover{background:var(--pearl);color:var(--ink);}
+  .icon-btn:disabled{opacity:.4;cursor:default;background:transparent;}
   .icon-btn:focus-visible{outline:2px solid var(--primary-focus);outline-offset:1px;}
   .session-dropdown{display:none;position:absolute;top:calc(100% + 8px);right:0;min-width:200px;
     background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;
@@ -118,7 +120,7 @@
     .app-head h1{grid-area:title;justify-self:start;}
     .app-head .month-nav{grid-area:month;justify-self:end;}
     h1{font-size:23px;}
-    .head-right{grid-area:right;justify-self:stretch;justify-content:center;gap:10px;}
+    .head-right{grid-area:right;justify-self:stretch;justify-content:center;gap:10px;flex-wrap:wrap;}
     .month-nav .m{min-width:66px;font-size:12.5px;}
     .lbl-full{display:none;}
     .lbl-short{display:inline;}
@@ -256,6 +258,24 @@
      el título de la card entera */
   .budget-subhead{font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--body-muted);
     font-weight:600;margin:18px 0 4px;}
+  /* ---- Gastos diarios: cuánto de la bolsa Salidas + Gustos ya se fue ---- */
+  .dly-meter{background:var(--pearl);border:1px solid var(--line);border-radius:14px;padding:14px;}
+  .dly-meter.over{background:var(--a-clay-bg);border-color:transparent;}
+  .dly-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:var(--body-muted);}
+  .dly-left{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.4px;color:var(--ink);margin-top:4px;}
+  .dly-meter.over .dly-left{color:var(--a-clay-ink);}
+  .dly-meter .goal-track{background:var(--paper);margin:10px 0 6px;}
+  .dly-meter .goal-track i.warn{background:var(--a-gold);}
+  .dly-meter .goal-track i.over{background:var(--a-clay);}
+  .dly-sub{font-size:12px;color:var(--body-muted);font-variant-numeric:tabular-nums;}
+  .dly-meter.over .dly-sub{color:var(--a-clay-ink);}
+  .fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:40;
+    width:56px;height:56px;border-radius:50%;border:none;background:var(--primary);color:#fff;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 6px 18px rgba(0,0,0,0.22);}
+  .fab:hover{filter:brightness(1.08);}
+  .fab:focus-visible{outline:2px solid var(--primary-focus);outline-offset:3px;}
+  .fab[hidden], body.modal-open .fab{display:none;}
   /* ---- "Saldos" footer, closing every big block on Gastos ---- */
   .sld-block{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);}
   /* when Saldos is the card's only content there's nothing above it to divide from */
@@ -519,6 +539,7 @@
   .card .section-title{margin-top:0;}
 
   form.add-form{display:flex;flex-direction:column;gap:14px; margin-bottom:-10px}
+  .dly-group{display:flex;flex-direction:column;gap:14px;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   /* sin esto, un grid item no se achica más allá del ancho natural de su
      contenido (min-width:auto por default) — un input[type=date] en mobile
@@ -772,20 +793,25 @@
           <div id="usdDropdownBody" class="usd-dropdown-body">Cargando…</div>
         </div>
       </div>
-      <!-- solo se ve cuando el mes en pantalla está vacío y el anterior tiene
-           algo para copiar — ver updateCopyMonthBtn() -->
-      <button type="button" class="icon-btn" id="copyMonthBtn" onclick="copyPreviousMonth()"
-        aria-label="Copiar mes anterior" title="Copiar los gastos e ingresos del mes anterior" style="display:none;">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-        </svg>
-      </button>
       <!-- Resumen vive acá, entre la cotización y Ajustes, y no en la barra de
            tabs — switchTab() ya soporta activar un panel sin botón ahí (ver
            settingsBtn), así que Resumen sigue el mismo patrón -->
       <button type="button" class="icon-btn" id="resumenBtn" onclick="switchTab('resumen')" aria-label="Resumen">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="copyMonthBtn" onclick="copyMonthToNext()"
+        aria-label="Copiar al mes siguiente" title="Copiar los gastos e ingresos de este mes al siguiente">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      </button>
+      <button type="button" class="icon-btn" id="clearMonthBtn" onclick="clearMonth()"
+        aria-label="Borrar los datos de este mes" title="Borrar los gastos e ingresos de este mes">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>
+        </svg>
       </button>
       <button type="button" class="icon-btn" id="settingsBtn" onclick="switchTab('ajustes')" aria-label="Ajustes">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -885,6 +911,18 @@
         <div class="budget-subhead" style="margin-top:22px;">Salidas y gustos</div>
         <div id="budgetList"></div>
       </div>
+    </div>
+
+    <!-- BLOQUE 4: gastos hormiga del día a día. Salen de la bolsa de Salidas +
+         Gustos de cada persona — ver financeFor() -->
+    <div class="card">
+      <div class="section-title"><span id="dailyBlockTitle">Gastos diarios</span></div>
+      <button type="button" class="btn-add" onclick="openDailyModal()">+ Agregar gasto diario</button>
+      <div class="seg sub-seg" id="dailyTabs" style="margin-top:16px;"></div>
+      <!-- un medidor por persona, siempre todos a la vista: las pestañas de
+           arriba filtran solo la lista, igual que en fijos y variables -->
+      <div class="sld-grid" id="dailyMeter" style="margin-top:14px;"></div>
+      <div id="dailyList" style="margin-top:6px;"></div>
     </div>
 
   </div>
@@ -1304,6 +1342,109 @@
   </div>
 </div>
 
+<!-- ============ MODAL: gasto diario (carga rápida) ============ -->
+<div class="modal-backdrop" id="dailyModal" role="dialog" aria-modal="true" aria-labelledby="dailyModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="dailyModalTitle">Agregar gasto diario</div>
+      <button type="button" class="modal-close" onclick="closeDailyModal()" aria-label="Cerrar">✕</button>
+    </div>
+    <form class="add-form" id="dailyForm" novalidate>
+      <!-- el "+" carga un gasto (lo de todos los días) o un ingreso; los dos
+           tipos viven en este mismo form, se muestra uno u otro -->
+      <div class="seg" id="dlyKindSeg">
+        <button type="button" data-kind="gasto" class="active">Gasto</button>
+        <button type="button" data-kind="ingreso">Ingreso</button>
+      </div>
+
+      <div id="dlyExpenseFields" class="dly-group">
+        <div>
+          <label>¿De quién es?</label>
+          <div class="seg" id="dlyOwnerSeg"></div>
+        </div>
+        <div>
+          <label for="dlyAmount">Monto (ARS)</label>
+          <input type="text" inputmode="numeric" class="ie-money" id="dlyAmount" placeholder="0">
+        </div>
+        <div>
+          <label for="dlyDesc">Descripción</label>
+          <input type="text" id="dlyDesc" placeholder="Ej: Super, comida del perro, café">
+          <div class="chips" id="dlyDescChips"></div>
+        </div>
+        <div>
+          <label for="dlyDate">Fecha</label>
+          <input type="date" id="dlyDate">
+        </div>
+        <div id="dlyPayerField" style="display:none;">
+          <label>¿Quién lo pagó?</label>
+          <div class="seg" id="dlyPayerSeg"></div>
+        </div>
+        <div id="dlySplitField" style="display:none;">
+          <label>¿Cómo se divide?</label>
+          <div class="seg" id="dlySplitToggle">
+            <button type="button" data-split="equal">Partes iguales</button>
+            <button type="button" data-split="income">Según ingresos</button>
+          </div>
+        </div>
+        <p class="income-note" id="dlyHint" style="margin:0;"></p>
+      </div>
+
+      <!-- Crédito: la plata recarga Salidas y Gustos de este mes y lo que se
+           devuelve entra como compra en cuotas desde el mes siguiente (ver
+           creditReceivedOf() y syncCardExpenses()) -->
+      <div id="dlyIncomeFields" class="dly-group" style="display:none;">
+        <div class="seg" id="dlyIncKindSeg">
+          <button type="button" data-inc="credito" class="active">Crédito</button>
+          <button type="button" data-inc="comun">Ingreso común</button>
+        </div>
+        <div id="dlyCommonFields" style="display:none;">
+          <p class="income-note" style="margin:0 0 12px;">Sueldo, un cobro, una venta: se carga en Ingresos como siempre.</p>
+          <button type="button" class="btn-primary" onclick="openIncomeFromFab()">Cargar ingreso</button>
+        </div>
+        <div id="dlyCreditFields" class="dly-group">
+          <div>
+            <label>¿Quién lo sacó?</label>
+            <div class="seg" id="dlyCrWhoSeg"></div>
+          </div>
+          <div>
+            <label for="dlyCrCard">¿De dónde?</label>
+            <input type="text" id="dlyCrCard" placeholder="Ej: Crédito MP">
+            <div class="chips" id="dlyCrCardChips"></div>
+          </div>
+          <div class="row2">
+            <div>
+              <label for="dlyCrReceived">Te dieron (ARS)</label>
+              <input type="text" inputmode="numeric" class="ie-money" id="dlyCrReceived" placeholder="0">
+            </div>
+            <div>
+              <label for="dlyCrDate">Fecha</label>
+              <input type="date" id="dlyCrDate">
+            </div>
+          </div>
+          <div class="row2">
+            <div>
+              <label for="dlyCrRepay">Vas a devolver (ARS)</label>
+              <input type="text" inputmode="numeric" class="ie-money" id="dlyCrRepay" placeholder="Con intereses">
+            </div>
+            <div>
+              <label for="dlyCrMonths">En cuántas cuotas</label>
+              <input type="text" inputmode="numeric" id="dlyCrMonths" value="1">
+            </div>
+          </div>
+          <p class="income-note" id="dlyCrHint" style="margin:0;"></p>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary" id="dlySubmitBtn">Agregar gasto diario</button>
+    </form>
+  </div>
+</div>
+
+<!-- carga rápida de un gasto diario desde cualquier pestaña -->
+<button type="button" class="fab" id="dailyFab" onclick="openDailyModal()" aria-label="Agregar gasto o ingreso" title="Agregar gasto o ingreso">
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
 <!-- ============ MODAL: agregar meta de ahorro ============ -->
 <div class="modal-backdrop" id="goalModal" role="dialog" aria-modal="true" aria-labelledby="goalModalTitle">
   <div class="modal">
@@ -1530,6 +1671,9 @@ const SAVINGS_KEY = 'savings_v1';
 const SETTLED_KEY = 'settled_v1';
 // compras en cuotas con tarjeta — ver syncCardExpenses()
 const CARD_PURCHASES_KEY = 'cardpurchases_v1';
+// gastos hormiga del día a día — ver financeFor(): se descuentan de la bolsa
+// de Salidas + Gustos de cada persona
+const DAILY_EXPENSES_KEY = 'dailyexpenses_v1';
 
 let expenses = [];
 // ---- quiénes viven en este espacio ----
@@ -1598,6 +1742,21 @@ let editingGoalId = null;
 let debts = [];
 // [{id, person, card, name, amount, months, startMonth}] — ver syncCardExpenses()
 let cardPurchases = [];
+// [{id, desc, amount, date, paidBy, shares, splitType}] — mismo molde que
+// varExpenses: propio de una persona o compartido (con quién pagó y reparto)
+let dailyExpenses = [];
+let currentDailyTab = 'shared';
+let currentDailyOwner = 'A';
+let currentDailyPayer = 'A';
+let currentDailySplit = 'income';
+let editingDailyId = null;
+// el "+" también carga ingresos: 'gasto' | 'ingreso', y dentro de ingreso
+// 'credito' | 'comun'. Un crédito se guarda en cardPurchases con `credit`
+// ({received, date}) — ver creditReceivedOf()
+let currentDailyKind = 'gasto';
+let currentDailyInc = 'credito';
+let currentCrPerson = 'A';
+let editingCreditId = null;
 let editingDebtId = null;
 // deudas recurrentes de Ajustes, solo nombre y monto de siempre — {personId:
 // [{id,label,amount}]}, mismo molde (plano, sin mes) que varEstimates. Es lo
@@ -1719,7 +1878,8 @@ const COLUMN_FOR_KEY = {
   debttemplates_v1: 'debt_templates',
   savings_v1: 'savings',
   settled_v1: 'settled_months',
-  cardpurchases_v1: 'card_purchases'
+  cardpurchases_v1: 'card_purchases',
+  dailyexpenses_v1: 'daily_expenses'
 };
 const MIGRATION_FLAG_KEYS = new Set(['fixed_m1','fixed_m2','fixed_m3','fixedincome_m1','budget_cats_m1','budget_cats_m3']);
 
@@ -1874,6 +2034,7 @@ function applyCoupleRow(){
   if(coupleRow.savings && typeof coupleRow.savings === 'object') savings = migrateSavings(coupleRow.savings);
   if(coupleRow.settled_months && typeof coupleRow.settled_months === 'object') settledMonths = coupleRow.settled_months;
   if(Array.isArray(coupleRow.card_purchases)) cardPurchases = coupleRow.card_purchases;
+  if(Array.isArray(coupleRow.daily_expenses)) dailyExpenses = coupleRow.daily_expenses;
   ensureSharedSlots();
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
@@ -1936,6 +2097,8 @@ function paintFromLocalCache(code){
     if(st) settledMonths = JSON.parse(st);
     const cp = readLocalCache(code, CARD_PURCHASES_KEY);
     if(cp) cardPurchases = JSON.parse(cp);
+    const dx = readLocalCache(code, DAILY_EXPENSES_KEY);
+    if(dx) dailyExpenses = JSON.parse(dx);
     if(normalizeExpenses()){ /* fixed up in-memory; loadAll()'s real save will persist it */ }
     normalizeVarExpenses();
     render();
@@ -2505,15 +2668,12 @@ function addOneMonth(dateStr){
   return `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
 }
 
-// ---- "Copiar mes anterior": para cuando el mes en pantalla arranca de cero
-// y va a ser igual al anterior — trae gastos fijos, variables e ingresos de
-// un mes atrás, con la fecha corrida un mes y el pagado reseteado (todavía no
-// se pagó nada de eso este mes nuevo). Gastos posibles (Compra dólares,
-// Salidas, Gustos) no entra acá explícitamente: budgetTemplatesForMonth() ya
-// clona el mes anterior más cercano la primera vez que se pide uno nuevo, así
-// que apenas se ve el mes ya aparece con lo mismo que tenía el anterior —
-// pero desde ese clon en adelante es independiente, editarlo no vuelve a
-// tocar el mes de origen.
+// ---- "Copiar al mes siguiente": duplica los gastos fijos, variables e
+// ingresos del mes en pantalla en el que le sigue, con la fecha corrida un mes
+// y el pagado reseteado. Lo que el mes destino ya tiene con la misma
+// descripción (y mismo dueño) no se vuelve a copiar, así que tocarlo dos veces
+// no duplica nada. Gastos posibles no entra acá: budgetTemplatesForMonth() ya
+// clona el mes anterior la primera vez que se abre uno nuevo.
 function monthHasAnyData(key){
   if(expenses.some(x=>monthKey(x.date) === key)) return true;
   if(varExpenses.some(x=>monthKey(x.date) === key)) return true;
@@ -2522,46 +2682,112 @@ function monthHasAnyData(key){
 function updateCopyMonthBtn(){
   const btn = $('copyMonthBtn');
   if(!btn) return;
-  const prevKey = monthKeyShift(viewMonth, -1);
-  const show = !monthHasAnyData(viewMonth) && monthHasAnyData(prevKey);
-  btn.style.display = show ? '' : 'none';
+  btn.disabled = !monthHasAnyData(viewMonth);
+  $('clearMonthBtn').disabled = !monthClearCounts(viewMonth).total;
 }
-function copyPreviousMonth(){
-  const prevKey = monthKeyShift(viewMonth, -1);
-  openConfirmModal(
-    `¿Copiar los gastos e ingresos de ${monthLabel(prevKey)} a ${monthLabel(viewMonth)}? Se copian los montos, fechas (corridas un mes) y repartos — el pagado arranca sin tildar, porque todavía no se pagó nada este mes.`,
-    ()=>{
-      expenses.filter(x=>monthKey(x.date) === prevKey).forEach(ex=>{
-        const copy = JSON.parse(JSON.stringify(ex));
-        copy.id = genId();
-        copy.date = addOneMonth(ex.date);
-        copy.paid = false;
-        if(Array.isArray(copy.occurrencesPaid)) copy.occurrencesPaid = copy.occurrencesPaid.map(()=>false);
-        expenses.push(copy);
-      });
-      varExpenses.filter(x=>monthKey(x.date) === prevKey).forEach(ex=>{
-        const copy = JSON.parse(JSON.stringify(ex));
-        copy.id = genId();
-        copy.date = addOneMonth(ex.date);
-        copy.paid = false;
-        varExpenses.push(copy);
-      });
-      pids().forEach(p=>{
-        (income.entries[p]||[]).filter(e=>monthKey(e.date) === prevKey).forEach(e=>{
-          const copy = JSON.parse(JSON.stringify(e));
-          copy.id = genId();
-          copy.date = addOneMonth(e.date);
-          income.entries[p].push(copy);
-        });
-      });
 
-      saveExpenses();
-      saveVarExpenses();
-      saveIncome();
+// ---- "Borrar mes": saca gastos fijos, variables, diarios e ingresos del mes
+// en pantalla. No toca lo que vive fuera del mes: compras en cuotas y créditos
+// (Deudas) — sus cuotas automáticas se volverían a generar igual, así que
+// tampoco se borran — ni los rubros de Gastos posibles. Antes de borrar deja
+// una copia de seguridad, como las restauraciones.
+function monthClearCounts(key){
+  const inMonth = x=>monthKey(x.date) === key;
+  const fijos = expenses.filter(inMonth).length;
+  const variables = varExpenses.filter(e=>inMonth(e) && !e.cardAuto).length;
+  const diarios = dailyExpenses.filter(inMonth).length;
+  const ingresos = pids().reduce((s,p)=>s + (income.entries[p]||[]).filter(inMonth).length, 0);
+  return { fijos, variables, diarios, ingresos, total: fijos + variables + diarios + ingresos };
+}
+function clearMonth(){
+  const key = viewMonth;
+  const c = monthClearCounts(key);
+  if(!c.total) return;
+  const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+  const parts = [];
+  if(c.fijos) parts.push(plural(c.fijos, 'gasto fijo', 'gastos fijos'));
+  if(c.variables) parts.push(plural(c.variables, 'gasto variable', 'gastos variables'));
+  if(c.diarios) parts.push(plural(c.diarios, 'gasto diario', 'gastos diarios'));
+  if(c.ingresos) parts.push(plural(c.ingresos, 'ingreso', 'ingresos'));
+  openConfirmModal(
+    `¿Borrar todo ${monthLabel(key)}? Se borran ${parts.join(', ')}. ` +
+    `No se tocan las compras en cuotas ni los créditos (Deudas), ni los montos de Gastos posibles. ` +
+    `Antes de borrar se guarda una copia de seguridad, por si necesitás volver atrás desde Ajustes.`,
+    async ()=>{
+      try{ await createBackup(`Antes de borrar ${monthLabel(key)}`); }
+      catch(e){ notyf.error('No se pudo guardar la copia de seguridad; se borra igual.'); }
+      const inMonth = x=>monthKey(x.date) === key;
+      expenses = expenses.filter(x=>!inMonth(x));
+      varExpenses = varExpenses.filter(e=>!inMonth(e) || e.cardAuto);
+      dailyExpenses = dailyExpenses.filter(x=>!inMonth(x));
+      pids().forEach(p=>{ income.entries[p] = (income.entries[p]||[]).filter(e=>!inMonth(e)); });
+      // si era el único mes cargado, la columna queda vacía a propósito
+      allowBulkClear = true;
+      try{
+        if(c.fijos) saveExpenses();
+        if(c.variables) saveVarExpenses();
+        if(c.diarios) saveDailyExpenses();
+        if(c.ingresos) saveIncome();
+      }finally{ allowBulkClear = false; }
       render();
-      notyf.success(`Se copió ${monthLabel(prevKey)} a ${monthLabel(viewMonth)}`);
+      notyf.success(`Se borró ${monthLabel(key)}`);
     },
-    { title:'Copiar mes anterior', okLabel:'Copiar', danger:false }
+    { title:'Borrar mes', okLabel:'Borrar todo' }
+  );
+}
+function copyEntriesToMonth(list, fromKey, toKey, sameAs){
+  const existing = list.filter(x=>monthKey(x.date) === toKey);
+  return list.filter(x=>monthKey(x.date) === fromKey)
+    .filter(x=>!existing.some(y=>sameAs(x, y)))
+    .map(x=>{
+      const copy = JSON.parse(JSON.stringify(x));
+      copy.id = genId();
+      copy.date = addOneMonth(x.date);
+      delete copy.paid;
+      if(Array.isArray(copy.occurrencesPaid)) copy.occurrencesPaid = copy.occurrencesPaid.map(()=>null);
+      return copy;
+    });
+}
+const sameText = (a, b) => String(a||'').trim().toLowerCase() === String(b||'').trim().toLowerCase();
+function copyMonthToNext(){
+  const fromKey = viewMonth;
+  const toKey = monthKeyShift(viewMonth, 1);
+  if(!monthHasAnyData(fromKey)) return;
+
+  const sameExpense = (a, b) => sameText(a.desc, b.desc) && a.paidBy === b.paidBy;
+  const newExpenses = copyEntriesToMonth(expenses, fromKey, toKey, sameExpense);
+  const newVar = copyEntriesToMonth(varExpenses, fromKey, toKey, sameExpense);
+  const newIncome = {};
+  pids().forEach(p=>{
+    newIncome[p] = copyEntriesToMonth(income.entries[p]||[], fromKey, toKey, (a, b)=>sameText(a.label, b.label));
+  });
+  const incomeCount = pids().reduce((s, p)=>s + newIncome[p].length, 0);
+  const total = newExpenses.length + newVar.length + incomeCount;
+
+  if(!total){
+    notyf.success(`${monthLabel(toKey)} ya tiene todo lo de ${monthLabel(fromKey)}`);
+    return;
+  }
+
+  const parts = [];
+  if(newExpenses.length) parts.push(`${newExpenses.length} gasto${newExpenses.length === 1 ? '' : 's'} fijo${newExpenses.length === 1 ? '' : 's'}`);
+  if(newVar.length) parts.push(`${newVar.length} gasto${newVar.length === 1 ? '' : 's'} variable${newVar.length === 1 ? '' : 's'}`);
+  if(incomeCount) parts.push(`${incomeCount} ingreso${incomeCount === 1 ? '' : 's'}`);
+  const skipNote = monthHasAnyData(toKey) ? ` Lo que ${monthLabel(toKey)} ya tiene con el mismo nombre no se duplica.` : '';
+
+  openConfirmModal(
+    `¿Copiar ${parts.join(', ')} de ${monthLabel(fromKey)} a ${monthLabel(toKey)}? Se copian montos, repartos y fechas (corridas un mes); el pagado arranca sin tildar.${skipNote}`,
+    ()=>{
+      expenses.push(...newExpenses);
+      varExpenses.push(...newVar);
+      pids().forEach(p=>{ income.entries[p] = (income.entries[p]||[]).concat(newIncome[p]); });
+      if(newExpenses.length) saveExpenses();
+      if(newVar.length) saveVarExpenses();
+      if(incomeCount) saveIncome();
+      render();
+      notyf.success(`Se copió ${monthLabel(fromKey)} a ${monthLabel(toKey)}`);
+    },
+    { title:'Copiar al mes siguiente', okLabel:'Copiar', danger:false }
   );
 }
 
@@ -3114,6 +3340,13 @@ async function loadAll(){
   }catch(e){}
   if(!Array.isArray(cardPurchases)) cardPurchases = [];
 
+  // mismo cuidado: columna nueva, null no pisa la caché local
+  try{
+    const v = await store.get(DAILY_EXPENSES_KEY);
+    if(v) dailyExpenses = JSON.parse(v);
+  }catch(e){}
+  if(!Array.isArray(dailyExpenses)) dailyExpenses = [];
+
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
   // los "Cuotas <tarjeta>" de Gastos variables se rearman desde las compras
@@ -3212,6 +3445,10 @@ async function saveCardPurchases(){
   if(await bailOnMassWipe(prevCol('card_purchases'), cardPurchases.length, ()=>{ render(); })) return false;
   return await store.set(CARD_PURCHASES_KEY, JSON.stringify(cardPurchases));
 }
+async function saveDailyExpenses(){
+  if(await bailOnMassWipe(prevCol('daily_expenses'), dailyExpenses.length, ()=>{ render(); })) return false;
+  return await store.set(DAILY_EXPENSES_KEY, JSON.stringify(dailyExpenses));
+}
 // sin bailOnMassWipe: destildar el único mes saldado es un paso legítimo a vacío
 async function saveSettled(){
   return await store.set(SETTLED_KEY, JSON.stringify(settledMonths));
@@ -3231,7 +3468,7 @@ function currentSnapshot(){
     expenses, names: people, income, fixed, fixed_income: fixedIncome,
     variable_estimates: varEstimates, variable_expenses: varExpenses,
     budget_overrides: budgetTemplates, goals, debts, debt_templates: debtTemplates, savings,
-    settled_months: settledMonths, card_purchases: cardPurchases,
+    settled_months: settledMonths, card_purchases: cardPurchases, daily_expenses: dailyExpenses,
     migration_flags: (coupleRow && coupleRow.migration_flags) || {}
   };
 }
@@ -3298,6 +3535,7 @@ async function applySnapshot(s){
   if(s.savings && typeof s.savings === 'object') patch.savings = s.savings;
   if(s.settled_months && typeof s.settled_months === 'object') patch.settled_months = s.settled_months;
   if(Array.isArray(s.card_purchases)) patch.card_purchases = s.card_purchases;
+  if(Array.isArray(s.daily_expenses)) patch.daily_expenses = s.daily_expenses;
   if(s.migration_flags && typeof s.migration_flags === 'object') patch.migration_flags = s.migration_flags;
   if(!Object.keys(patch).length) throw new Error('La copia no tiene datos reconocibles.');
 
@@ -3307,7 +3545,7 @@ async function applySnapshot(s){
   [[STORE_KEY,'expenses'],[NAMES_KEY,'names'],[INCOME_KEY,'income'],[FIXED_KEY,'fixed'],
    [FIXED_INCOME_KEY,'fixed_income'],[VAR_ESTIMATES_KEY,'variable_estimates'],
    [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals'],
-   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings'],[SETTLED_KEY,'settled_months'],[CARD_PURCHASES_KEY,'card_purchases']]
+   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings'],[SETTLED_KEY,'settled_months'],[CARD_PURCHASES_KEY,'card_purchases'],[DAILY_EXPENSES_KEY,'daily_expenses']]
     .forEach(([k,col])=>{ if(data[col] != null) writeLocalCache(coupleCode, k, JSON.stringify(data[col])); });
   // el snapshot puede traer una columna legítimamente vacía; que el guardaespaldas
   // no lo confunda con corrupción durante el refresco posterior
@@ -4858,7 +5096,8 @@ function cpCardHtml(p){
     <div class="goal-track"><i class="${pct >= 100 ? '' : 'part'}" style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>
     ${open ? `<div class="bill-occurrences">${items}</div>` : ''}
     <div class="goal-d"><span class="goal-pct">${paidCount} de ${p.months} cuotas</span>${
-      falta > 0.5 ? ` — faltan ${fmt(falta)}.` : ' — compra pagada.'}</div>
+      falta > 0.5 ? ` — faltan ${fmt(falta)}.` : (p.credit ? ' — crédito devuelto.' : ' — compra pagada.')}${
+      p.credit ? `<br>Te dieron ${fmt(p.credit.received || 0)} en ${escapeHtml(monthShort(monthKey(p.credit.date)))}.` : ''}</div>
   </div>`;
 }
 function renderCardPurchases(person){
@@ -4886,8 +5125,10 @@ function renderCardPurchases(person){
 
 // ---- modal: agregar/editar compra en cuotas ----
 function openCpModal(id){
-  resetCpForm();
   const p = id ? cardPurchases.find(x=>x.id === id) : null;
+  // un crédito se edita donde se cargó, que también tiene lo que te dieron
+  if(p && p.credit) return openDailyModal(null, { creditId: p.id });
+  resetCpForm();
   if(p){
     editingCpId = p.id;
     currentCpPerson = p.person;
@@ -4977,7 +5218,7 @@ function deleteCp(id){
     saveCardPurchases();
     persistCardExpenses();
     render();
-    notyf.success('Compra eliminada');
+    notyf.success(p.credit ? 'Crédito eliminado' : 'Compra eliminada');
   });
 }
 
@@ -5218,6 +5459,19 @@ function refreshPeopleUI(){
   if(!isPerson(currentVxPayer)) currentVxPayer = firstPid();
   seg('vxPayerSeg', 'data-paid', currentVxPayer);
   $('vxPayerField').style.display = (!solo && isSharedPay(currentVxPaidBy)) ? '' : 'none';
+  if(solo && isSharedPay(currentDailyOwner)) currentDailyOwner = firstPid();
+  seg('dlyOwnerSeg', 'data-owner', currentDailyOwner);
+  if(!solo){
+    $('dlyOwnerSeg').insertAdjacentHTML('afterbegin',
+      `<button type="button" data-owner="${SHARED_PAY}"${isSharedPay(currentDailyOwner) ? ' class="active"' : ''}>Compartido</button>`);
+  }
+  $('dlyOwnerSeg').classList.toggle('seg-fit', n <= 2);
+  if(!isPerson(currentDailyPayer)) currentDailyPayer = firstPid();
+  seg('dlyPayerSeg', 'data-paid', currentDailyPayer);
+  $('dlyPayerField').style.display = (!solo && isSharedPay(currentDailyOwner)) ? '' : 'none';
+  $('dlySplitField').style.display = (!solo && isSharedPay(currentDailyOwner)) ? '' : 'none';
+  if(!isPerson(currentCrPerson)) currentCrPerson = firstPid();
+  seg('dlyCrWhoSeg', 'data-who', currentCrPerson);
   seg('gWhoSeg', 'data-who', currentGoalPerson);
   seg('dWhoSeg', 'data-who', currentDebtPerson);
   seg('cpWhoSeg', 'data-who', currentCpPerson);
@@ -5349,6 +5603,8 @@ function commitPeopleCountChange(){
     saveDebts();
     saveDebtTemplates();
     saveSavings();
+    saveCardPurchases();
+    saveDailyExpenses();
   }finally{ allowBulkClear = false; }
   refreshPeopleUI();
   renderFixed();
@@ -5370,6 +5626,9 @@ function dropPersonData(id){
   goals = goals.filter(g=>g.person !== id);
   debts = debts.filter(d=>d.person !== id);
   cardPurchases = cardPurchases.filter(p=>p.person !== id);
+  // mismo criterio que los variables (más abajo): los propios se borran, los
+  // compartidos quedan y su parte se reparte en redistributeShares()
+  dailyExpenses = dailyExpenses.filter(d=>expenseOwner(d) !== id);
   // siempre se saca del final de la lista, así que la primera persona sigue ahí
   // y hereda los gastos compartidos que pagaba el que se va (si no, el gasto
   // quedaría sin nadie que lo haya puesto y el balance no cerraría)
@@ -5380,6 +5639,7 @@ function dropPersonData(id){
   // quedan, solo se reasigna quién los pagó para no perder esa deuda
   varExpenses = varExpenses.filter(e=>expenseOwner(e) !== id);
   varExpenses.forEach(e=>{ if(e.paidBy === id) e.paidBy = fallback; });
+  dailyExpenses.forEach(e=>{ if(e.paidBy === id) e.paidBy = fallback; });
   fixedIncome.forEach(f=>{ if(f.person === id) f.person = fallback; });
   // sus gastos fijos propios pasan a ser del hogar, igual que su parte de los
   // gastos ya cargados: quedan a la vista en Compartidos y no en la nada
@@ -5391,7 +5651,7 @@ function dropPersonData(id){
 function redistributeShares(goneIds){
   // los variables compartidos se reparten igual: los propios del que se va ya
   // los borró dropPersonData, pero de una cena de los dos queda su mitad
-  [...expenses, ...varExpenses].forEach(ex=>{
+  [...expenses, ...varExpenses, ...dailyExpenses].forEach(ex=>{
     if(!ex.shares) return;
     let orphan = 0;
     goneIds.forEach(id=>{
@@ -5596,17 +5856,35 @@ function incomeRowHtml(p, e){
   </div>`;
 }
 
+// un crédito se ve en Ingresos (es plata que entró) pero no suma al total de
+// arriba: ese total es el que reparte los gastos "según ingresos", y la plata
+// prestada recarga Salidas y Gustos en vez de contar como sueldo
+function creditIncomeRowHtml(c){
+  const devolucion = c.months > 1
+    ? `${c.months} cuotas de ${fmt(cpCuota(c))} desde ${monthShort(c.startMonth)}`
+    : `devolvés ${fmt(c.amount)} en ${monthShort(c.startMonth)}`;
+  return `
+  <div class="income-entry-row">
+    <span class="ie-main"><span class="lbl">${escapeHtml(c.card)} <span class="tag">Crédito</span></span>
+      <span class="ie-sub" style="white-space:normal;">A Salidas y Gustos, no suma al total · ${devolucion}</span></span>
+    <span class="amt-cur">${fmt(c.credit.received || 0)}</span>
+    <button class="edit" onclick="openCpModal('${c.id}')" aria-label="Editar crédito">✎</button>
+    <button class="del" onclick="deleteCp('${c.id}')" aria-label="Eliminar crédito">✕</button>
+  </div>`;
+}
+
 function renderIncomeLists(){
   const title = $('incomeSectionTitle');
   if(title) title.textContent = `Ingresos de ${monthShort(viewMonth)}`;
 
   $('incomeGrid').innerHTML = pids().map(p=>{
     const list = (income.entries[p]||[]).filter(e=>monthKey(e.date) === viewMonth);
+    const credits = cardPurchases.filter(c=>c.credit && c.person === p && monthKey(c.credit.date) === viewMonth);
     return `<div class="income-person" data-person="${p}">
       <div class="who-label">${escapeHtml(nameOf(p))}</div>
       <div class="income-big">${fmt(incomeTotalArs(p))}</div>
-      <div class="income-entries">${list.length
-        ? list.map(e=>incomeRowHtml(p, e)).join('')
+      <div class="income-entries">${list.length || credits.length
+        ? list.map(e=>incomeRowHtml(p, e)).join('') + credits.map(creditIncomeRowHtml).join('')
         : '<div class="income-note">Todavía sin ingresos.</div>'}</div>
     </div>`;
   }).join('');
@@ -5931,7 +6209,33 @@ function financeFor(person, key){
   // lo que tiene presupuestado gastar: sus rubros de gastos posibles (ya no
   // hay "Compartido" en gastos posibles, cada uno tiene los suyos)
   const podes = ownBudgetTotal(person, key);
-  return { inc, fijos, variables, afterFijos, afterVar, podes, ahorro: afterVar - podes };
+  // los gastos diarios salen de la bolsa de Salidas + Gustos, que ya está
+  // descontada entera en `podes`: solo lo que la pasa baja el ahorro, y lo
+  // que sobra no lo sube (sigue reservado hasta fin de mes)
+  // un crédito sacado este mes recarga esa bolsa (no cuenta como ingreso, así
+  // no mueve el reparto "según ingresos"); se devuelve desde el mes siguiente
+  // como gasto variable, por syncCardExpenses()
+  const credito = creditReceivedOf(person, key);
+  const bolsa = wantsBudgetOf(person, key) + credito;
+  const diarios = dailyTotalOf(person, key);
+  const excedente = Math.max(0, diarios - bolsa);
+  return { inc, fijos, variables, afterFijos, afterVar, podes, credito, bolsa, diarios, excedente,
+           ahorro: afterVar - podes - excedente };
+}
+function creditReceivedOf(person, key){
+  key = key || viewMonth;
+  return cardPurchases.filter(p=>p.credit && p.person === person && monthKey(p.credit.date) === key)
+    .reduce((s,p)=>s+(p.credit.received||0), 0);
+}
+function bolsaOf(person, key){ return wantsBudgetOf(person, key) + creditReceivedOf(person, key); }
+function wantsBudgetOf(person, key){
+  return (budgetTemplatesForMonth(key || viewMonth)[person] || [])
+    .filter(c=>c.label !== 'Compra dólares').reduce((s,c)=>s+(c.amount||0), 0);
+}
+// la parte de cada uno: un compartido le descuenta a cada persona solo su slice
+function dailyTotalOf(person, key){
+  key = key || viewMonth;
+  return dailyExpenses.filter(d=>monthKey(d.date) === key).reduce((s,d)=>s+entryShareOf(d, person), 0);
 }
 
 function monthFinance(key){
@@ -6103,6 +6407,8 @@ function render(){
 
   renderVarExpenseTabs();
   renderBudgetTabs();
+  renderDailyBlock(fin);
+  $('dailyFab').hidden = !coupleCode;
   renderBlockSaldos(fin);
   renderResumen(fin);
   renderBalance();
@@ -6425,6 +6731,383 @@ $('varTabs').addEventListener('click', (e)=>{
   currentVarTab = btn.dataset.tab;
   renderVarExpenseTabs();
 });
+
+// ---- Gastos diarios ----
+// Gastos hormiga del día a día. Como los variables, pueden ser de una persona
+// o compartidos (con quién pagó y cómo se divide, y generan deuda en "Entre
+// ustedes"). A cada persona le descuentan su parte de su bolsa de Salidas +
+// Gustos: los medidores van siempre todos a la vista y las pestañas filtran
+// solo la lista, igual que en fijos y variables.
+function renderDailyBlock(fin){
+  const tabs = $('dailyTabs');
+  if(!tabs) return;
+  const mes = monthShort(viewMonth);
+  $('dailyBlockTitle').textContent = `Gastos diarios de ${mes}`;
+  $('dailyMeter').innerHTML = pids().map(p=>dailyMeterHtml(p, fin[p].bolsa, fin[p].diarios, fin[p].credito)).join('');
+
+  const list = dailyExpenses.filter(d=>inViewMonth(d.date))
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(peopleCount() < 2){
+    tabs.style.display = 'none';
+    currentDailyTab = firstPid();
+    $('dailyList').innerHTML = dailyListHtml(list, `Todavía no cargaste gastos diarios en ${mes}.`);
+    return;
+  }
+  tabs.style.display = '';
+  const groups = [{ key:SHARED_PAY, label:'Compartidos' }, ...people.map(p=>({ key:p.id, label:p.name }))];
+  if(!groups.some(g=>g.key === currentDailyTab)) currentDailyTab = SHARED_PAY;
+  tabs.innerHTML = groups.map(g=>
+    `<button type="button" data-tab="${g.key}"${g.key === currentDailyTab ? ' class="active"' : ''}>${escapeHtml(g.label)}</button>`
+  ).join('');
+  const shown = list.filter(d=>expenseOwner(d) === currentDailyTab);
+  const vacio = isSharedPay(currentDailyTab)
+    ? `Todavía no hay gastos diarios compartidos en ${mes}.`
+    : `${nameOf(currentDailyTab)} no cargó gastos diarios en ${mes}.`;
+  $('dailyList').innerHTML = dailyListHtml(shown, vacio);
+}
+function dailyListHtml(list, vacio){
+  return list.length
+    ? list.map(dailyBillRow).join('') + billTotalRow(list)
+    : `<div class="empty">${escapeHtml(vacio)}<br>Usá el botón + para anotarlos a medida que pasan.</div>`;
+}
+function dailyMeterHtml(person, bolsa, gastado, credito){
+  const who = peopleCount() > 1 ? `<div class="sld-who">${escapeHtml(nameOf(person))}</div>` : '';
+  if(bolsa <= 0){
+    return `<div class="dly-meter${gastado > 0 ? ' over' : ''}">${who}
+      ${gastado > 0
+        ? `<div class="dly-head"><span>Sin monto en Salidas y Gustos</span></div>
+           <div class="dly-left">−${fmt(gastado)}</div>
+           <div class="dly-sub">Todo esto sale del ahorro.</div>`
+        : `<div class="dly-sub" style="margin-top:6px;">Cargá cuánto querés gastar en Salidas y Gustos (Gastos posibles) para ver cuánto te queda.</div>`}
+    </div>`;
+  }
+  const quedan = bolsa - gastado;
+  const pct = Math.min(100, Math.round(gastado / bolsa * 100));
+  const over = quedan <= 0;
+  const barCls = over ? 'over' : (pct >= 80 ? 'warn' : '');
+  const sub = quedan < 0
+    ? 'Eso sale del ahorro del mes.'
+    : quedan === 0 ? 'Llegaste al límite.'
+    : `Gastaste ${fmt(gastado)} de ${fmt(bolsa)}`;
+  const creditNote = credito > 0 ? `<div class="dly-sub">Incluye ${fmt(credito)} de crédito.</div>` : '';
+  return `<div class="dly-meter${over ? ' over' : ''}">${who}
+    <div class="dly-head"><span>${quedan < 0 ? 'Te pasaste' : 'Te quedan para Salidas y Gustos'}</span></div>
+    <div class="dly-left">${fmt(Math.abs(quedan))}</div>
+    <div class="goal-track"><i class="${barCls}" style="width:${pct}%"></i></div>
+    <div class="dly-sub">${sub}</div>
+    ${creditNote}
+  </div>`;
+}
+function dailyBillRow(d){
+  const dateStr = new Date(d.date+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'});
+  return `<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">${escapeHtml(d.desc)}</div>
+      <div class="bill-meta">
+        <span>${dateStr}</span>${splitInfoHtml(splitLabelOf(d))}
+        ${payerTagHtml(d)}
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(d.amount)}</div>
+    <button class="bill-edit" onclick="openDailyModal('${d.id}')" aria-label="Editar">✎</button>
+    <button class="bill-del" onclick="deleteDailyExpense('${d.id}')" aria-label="Eliminar">✕</button>
+  </div>`;
+}
+$('dailyTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentDailyTab = btn.dataset.tab;
+  renderDailyBlock(monthFinance(viewMonth));
+});
+
+function openDailyModal(id, opts){
+  opts = opts || {};
+  const d = id ? dailyExpenses.find(x=>x.id === id) : null;
+  const cr = opts.creditId ? cardPurchases.find(x=>x.id === opts.creditId && x.credit) : null;
+  $('dailyForm').reset();
+  editingDailyId = d ? d.id : null;
+  editingCreditId = cr ? cr.id : null;
+  $('dlyDate').value = d ? d.date : defaultDate();
+  resetCreditFields(cr);
+  // editando, no se cambia de tipo: un gasto sigue siendo gasto
+  $('dlyKindSeg').style.display = (d || cr) ? 'none' : '';
+  setDailyKind(cr ? 'ingreso' : 'gasto');
+  if(cr){
+    $('dailyModal').classList.add('open');
+    document.body.classList.add('modal-open');
+    $('dlyCrReceived').focus();
+    return;
+  }
+  if(d){
+    $('dlyAmount').value = groupThousands(String(d.amount));
+    $('dlyDesc').value = d.desc;
+    const owner = expenseOwner(d);
+    if(isSharedPay(owner)){
+      setDailySplit(d.splitType === 'equal' ? 'equal' : 'income');
+      setDailyPayer(isPerson(d.paidBy) ? d.paidBy : firstPid());
+    }
+    setDailyOwner(owner);
+  }else{
+    // arranca en la pestaña que estás mirando; desde el botón flotante, en
+    // la última que se usó en el bloque (Compartidos de entrada)
+    setDailyOwner(peopleCount() > 1 ? currentDailyTab : firstPid());
+  }
+  $('dailyModal').classList.add('open');
+  document.body.classList.add('modal-open');
+  $('dlyAmount').focus();
+}
+function closeDailyModal(){
+  $('dailyModal').classList.remove('open');
+  document.body.classList.remove('modal-open');
+  editingDailyId = null;
+  editingCreditId = null;
+}
+function setDailyKind(kind){
+  currentDailyKind = kind;
+  document.querySelectorAll('#dlyKindSeg button').forEach(b=>b.classList.toggle('active', b.dataset.kind === kind));
+  $('dlyExpenseFields').style.display = kind === 'gasto' ? '' : 'none';
+  $('dlyIncomeFields').style.display = kind === 'ingreso' ? '' : 'none';
+  if(kind === 'ingreso') setDailyIncKind(editingCreditId ? 'credito' : currentDailyInc);
+  syncDailySubmit();
+}
+function setDailyIncKind(inc){
+  currentDailyInc = inc;
+  document.querySelectorAll('#dlyIncKindSeg button').forEach(b=>b.classList.toggle('active', b.dataset.inc === inc));
+  $('dlyIncKindSeg').style.display = editingCreditId ? 'none' : '';
+  $('dlyCreditFields').style.display = inc === 'credito' ? '' : 'none';
+  $('dlyCommonFields').style.display = inc === 'comun' ? '' : 'none';
+  syncDailySubmit();
+}
+// título y botón según lo que se está cargando; "Ingreso común" usa el modal
+// de Ingresos de siempre, así que acá no hay nada que enviar
+function syncDailySubmit(){
+  const credit = currentDailyKind === 'ingreso';
+  const editing = credit ? !!editingCreditId : !!editingDailyId;
+  $('dailyModalTitle').textContent = credit
+    ? (editing ? 'Editar crédito' : 'Agregar ingreso')
+    : (editing ? 'Editar gasto diario' : 'Agregar gasto diario');
+  $('dlySubmitBtn').textContent = editing ? 'Guardar cambios' : (credit ? 'Agregar crédito' : 'Agregar gasto diario');
+  $('dlySubmitBtn').style.display = credit && currentDailyInc === 'comun' ? 'none' : '';
+}
+function openIncomeFromFab(){
+  const who = currentCrPerson;
+  closeDailyModal();
+  openIncomeModal(isPerson(who) ? who : firstPid());
+}
+
+// ---- crédito (desde el "+" > Ingreso > Crédito) ----
+function resetCreditFields(cr){
+  $('dlyCrDate').value = cr ? cr.credit.date : defaultDate();
+  $('dlyCrMonths').value = String(cr ? cr.months : 1);
+  $('dlyCrCard').value = cr ? cr.card : (lastCreditCard() || 'Crédito MP');
+  $('dlyCrReceived').value = cr ? groupThousands(String(cr.credit.received)) : '';
+  $('dlyCrRepay').value = cr ? groupThousands(String(cr.amount)) : '';
+  setCrPerson(cr ? cr.person : (isPerson(currentDailyTab) ? currentDailyTab : (isPerson(currentCrPerson) ? currentCrPerson : firstPid())));
+}
+function lastCreditCard(){
+  const last = cardPurchases.filter(p=>p.credit).slice(-1)[0];
+  return last ? last.card : '';
+}
+function setCrPerson(who){
+  currentCrPerson = who;
+  document.querySelectorAll('#dlyCrWhoSeg button').forEach(b=>b.classList.toggle('active', b.dataset.who === who));
+  // los orígenes que ya usó (créditos y tarjetas), para no tipearlo cada vez
+  const cards = [];
+  cardPurchases.filter(p=>p.person === who && cardNorm(p.card)).forEach(p=>{
+    if(!cards.some(c=>cardNorm(c) === cardNorm(p.card))) cards.push(p.card.trim());
+  });
+  $('dlyCrCardChips').innerHTML = cards.map(c=>`<button type="button" data-card="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+  updateCreditHint();
+}
+function creditFormValues(){
+  const received = numVal('dlyCrReceived') || 0;
+  const repay = numVal('dlyCrRepay') || received;
+  const months = Math.max(1, Math.round(numVal('dlyCrMonths') || 1));
+  const date = $('dlyCrDate').value || defaultDate();
+  return { received, repay, months, date, card: $('dlyCrCard').value.trim() || 'Crédito MP',
+           startMonth: addMonthsKey(monthKey(date), 1) };
+}
+function updateCreditHint(){
+  const v = creditFormValues();
+  if(!v.received){
+    $('dlyCrHint').textContent = 'Se suma a Salidas y Gustos de este mes y se devuelve desde el mes siguiente como gasto variable.';
+    return;
+  }
+  const cuota = v.repay / v.months;
+  const desde = monthShort(v.startMonth);
+  const devolucion = v.months === 1
+    ? `En ${desde} pagás ${fmt(v.repay)}`
+    : `Desde ${desde} pagás ${v.months} cuotas de ${fmt(cuota)}`;
+  const interes = v.repay > v.received ? ` (${fmt(v.repay - v.received)} de intereses)` : '';
+  $('dlyCrHint').textContent = `Suma ${fmt(v.received)} a Salidas y Gustos de ${monthShort(monthKey(v.date))}. ${devolucion}${interes}, como gasto variable "Cuotas ${v.card}".`;
+}
+$('dlyKindSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  setDailyKind(btn.dataset.kind);
+  $(btn.dataset.kind === 'gasto' ? 'dlyAmount' : 'dlyCrReceived').focus();
+});
+$('dlyIncKindSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(btn) setDailyIncKind(btn.dataset.inc);
+});
+$('dlyCrWhoSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(btn) setCrPerson(btn.dataset.who);
+});
+$('dlyCrCardChips').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  $('dlyCrCard').value = btn.dataset.card;
+  updateCreditHint();
+});
+['dlyCrReceived','dlyCrRepay','dlyCrMonths','dlyCrCard'].forEach(id=>$(id).addEventListener('input', updateCreditHint));
+$('dlyCrDate').addEventListener('change', updateCreditHint);
+function submitCredit(){
+  const v = creditFormValues();
+  if(!v.received) return;
+  const dateShort = new Date(v.date+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'});
+  const fields = {
+    person: currentCrPerson, card: v.card, name: `Crédito del ${dateShort}`,
+    amount: v.repay, months: v.months, startMonth: v.startMonth,
+    credit: { received: v.received, date: v.date }
+  };
+  const existing = editingCreditId ? cardPurchases.find(x=>x.id === editingCreditId) : null;
+  if(existing) Object.assign(existing, fields);
+  else cardPurchases.push({ id: genId(), ...fields });
+  saveCardPurchases();
+  persistCardExpenses();
+  closeDailyModal();
+  render();
+  const quedan = bolsaOf(fields.person, monthKey(v.date)) - dailyTotalOf(fields.person, monthKey(v.date));
+  const quien = peopleCount() > 1 ? `${nameOf(fields.person)}: ` : '';
+  notyf.success(`${quien}${existing ? 'crédito actualizado' : 'crédito cargado'}. Quedan ${fmt(quedan)} en Salidas y Gustos`);
+}
+const dailyIsShared = () => isSharedPay(currentDailyOwner) && peopleCount() > 1;
+function setDailyOwner(who){
+  if(!isSharedPay(who) && !isPerson(who)) who = firstPid();
+  if(peopleCount() < 2) who = firstPid();
+  currentDailyOwner = who;
+  document.querySelectorAll('#dlyOwnerSeg button').forEach(b=>b.classList.toggle('active', b.dataset.owner === who));
+  const shared = dailyIsShared();
+  $('dlyPayerField').style.display = shared ? '' : 'none';
+  $('dlySplitField').style.display = shared ? '' : 'none';
+  if(shared){
+    if(!isPerson(currentDailyPayer)) currentDailyPayer = firstPid();
+    setDailyPayer(currentDailyPayer);
+    setDailySplit(currentDailySplit);
+  }
+  renderDailyChips();
+  updateDailyHint();
+}
+function setDailyPayer(who){
+  currentDailyPayer = who;
+  document.querySelectorAll('#dlyPayerSeg button').forEach(b=>b.classList.toggle('active', b.dataset.paid === who));
+}
+function setDailySplit(split){
+  currentDailySplit = split;
+  document.querySelectorAll('#dlySplitToggle button').forEach(b=>b.classList.toggle('active', b.dataset.split === split));
+  updateDailyHint();
+}
+const dailyFormShares = () => dailyIsShared() ? sharesFor(currentDailySplit) : soloShares(currentDailyOwner);
+// las últimas descripciones distintas de ese mismo dueño, para cargar "Super" de un toque
+function renderDailyChips(){
+  const seen = new Set(), recent = [];
+  dailyExpenses.filter(d=>expenseOwner(d) === currentDailyOwner)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''))
+    .forEach(d=>{
+      const label = String(d.desc || '').trim();
+      const k = label.toLowerCase();
+      if(k && !seen.has(k) && recent.length < 6){ seen.add(k); recent.push(label); }
+    });
+  $('dlyDescChips').innerHTML = recent.map(r=>`<button type="button" data-desc="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
+}
+// cuánto le queda a cada persona afectada si se guarda lo que hay en el form
+function dailyRemainingAfter(entry, excludeId){
+  const key = monthKey(entry.date);
+  return pids().filter(p=>(entry.shares[p] || 0) > 0).map(p=>{
+    const prev = dailyExpenses.filter(d=>d.id !== excludeId && monthKey(d.date) === key)
+      .reduce((s,d)=>s+entryShareOf(d, p), 0);
+    return { p, quedan: bolsaOf(p, key) - prev - entryShareOf(entry, p) };
+  });
+}
+function remainingText(rows){
+  if(rows.length === 1 && peopleCount() < 2){
+    const q = rows[0].quedan;
+    return q >= 0 ? `te quedan ${fmt(q)} de Salidas y Gustos` : `te pasaste ${fmt(-q)} de Salidas y Gustos`;
+  }
+  return 'quedan en Salidas y Gustos: ' + rows.map(r=>
+    `${nameOf(r.p)} ${r.quedan >= 0 ? fmt(r.quedan) : '−' + fmt(-r.quedan)}`).join(' · ');
+}
+function updateDailyHint(){
+  const entry = { amount: numVal('dlyAmount') || 0, date: $('dlyDate').value || defaultDate(), shares: dailyFormShares() };
+  const rows = dailyRemainingAfter(entry, editingDailyId);
+  const txt = remainingText(rows);
+  $('dlyHint').textContent = entry.amount ? `Con este gasto, ${txt}.` : txt.charAt(0).toUpperCase() + txt.slice(1) + '.';
+}
+$('dailyModal').addEventListener('click', (e)=>{ if(e.target === $('dailyModal')) closeDailyModal(); });
+$('dlyOwnerSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(btn) setDailyOwner(btn.dataset.owner);
+});
+$('dlyPayerSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(btn) setDailyPayer(btn.dataset.paid);
+});
+$('dlySplitToggle').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(btn) setDailySplit(btn.dataset.split);
+});
+$('dlyDescChips').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(btn) $('dlyDesc').value = btn.dataset.desc;
+});
+$('dlyDate').addEventListener('change', updateDailyHint);
+$('dlyAmount').addEventListener('input', updateDailyHint);
+$('dailyForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  if(currentDailyKind === 'ingreso'){
+    if(currentDailyInc === 'credito') submitCredit();
+    return;
+  }
+  const desc = $('dlyDesc').value.trim();
+  const amount = numVal('dlyAmount');
+  if(!desc || !amount) return;
+  const shared = dailyIsShared();
+  const fields = {
+    desc, amount,
+    date: $('dlyDate').value || defaultDate(),
+    paidBy: shared ? currentDailyPayer : currentDailyOwner,
+    // reparto congelado en el gasto, igual que en variables
+    shares: dailyFormShares(),
+    splitType: shared ? currentDailySplit : undefined
+  };
+  const existing = editingDailyId ? dailyExpenses.find(x=>x.id === editingDailyId) : null;
+  if(existing) Object.assign(existing, fields);
+  else dailyExpenses.push({ id: genId(), ...fields });
+  saveDailyExpenses();
+  closeDailyModal();
+  if(peopleCount() > 1) currentDailyTab = shared ? SHARED_PAY : fields.paidBy;
+  render();
+
+  const key = monthKey(fields.date);
+  const rows = pids().filter(p=>(fields.shares[p] || 0) > 0)
+    .map(p=>({ p, quedan: bolsaOf(p, key) - dailyTotalOf(p, key) }));
+  const txt = remainingText(rows);
+  const msg = txt.charAt(0).toUpperCase() + txt.slice(1);
+  if(rows.some(r=>r.quedan <= 0)) notyf.error(msg);
+  else notyf.success(msg);
+});
+function deleteDailyExpense(id){
+  const d = dailyExpenses.find(x=>x.id === id);
+  if(!d) return;
+  openConfirmModal(`¿Eliminar "${d.desc}"? Esta acción no se puede deshacer.`, ()=>{
+    dailyExpenses = dailyExpenses.filter(x=>x.id !== id);
+    saveDailyExpenses();
+    render();
+    notyf.success('Gasto diario eliminado');
+  });
+}
 
 // ---- Ahorro tab ----
 // this person's share of one expense, per its `shares` split (not who paid it)
@@ -7216,6 +7899,7 @@ function netBalances(key){
   pids().forEach(id=>{ net[id] = 0; });
   accumulateNet(net, expenses.filter(inMonth));
   accumulateNet(net, varExpenses.filter(inMonth));
+  accumulateNet(net, dailyExpenses.filter(inMonth));
   return net;
 }
 
