@@ -149,6 +149,14 @@
     .head-right .icon-btn:disabled{background:transparent;}
     .head-right .icon-btn > svg{flex:0 0 18px;}
     .head-right .icon-btn::after{content:attr(aria-label);font-size:14px;font-weight:500;color:var(--ink);text-align:left;}
+    /* copiar / borrar mes mueven todo el mes: van en su propio grupo, entre
+       separadores, y borrar en rojo, para no tocarlos sin querer al buscar
+       otra opción (igual los dos piden confirmación) */
+    .head-right #copyMonthBtn{margin-top:5px;position:relative;}
+    .head-right #settingsBtn{margin-top:5px;position:relative;}
+    .head-right #copyMonthBtn::before, .head-right #settingsBtn::before{content:'';position:absolute;
+      left:10px;right:10px;top:-4px;border-top:1px solid var(--line);}
+    .head-right #clearMonthBtn, .head-right #clearMonthBtn::after{color:var(--a-clay-ink);}
     .head-right .session-dropdown{position:static;min-width:0;box-shadow:none;border:none;
       background:var(--pearl);margin:2px 0 4px;padding:6px;}
   }
