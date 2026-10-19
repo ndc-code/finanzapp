@@ -994,10 +994,11 @@
     <div class="card">
       <div class="section-title"><span id="dailyBlockTitle">Gastos diarios</span></div>
       <button type="button" class="btn-add" onclick="openDailyModal()">+ Agregar gasto diario</button>
+      <!-- sin pestaña "Compartidos": solo Nicolas/Valentina, cada una con su
+           propio saldo y su propia lista (los compartidos aparecen en las
+           dos, con el badge "Paga X") — ver renderDailyBlock() -->
       <div class="seg sub-seg" id="dailyTabs" style="margin-top:16px;"></div>
-      <!-- un medidor por persona, siempre todos a la vista: las pestañas de
-           arriba filtran solo la lista, igual que en fijos y variables -->
-      <div class="sld-grid" id="dailyMeter" style="margin-top:14px;"></div>
+      <div class="sld-grid" id="dailyMeter" style="margin-top:14px;--cols:1;--cols-sm:1;"></div>
       <div id="dailyList" style="margin-top:6px;"></div>
     </div>
 
@@ -1032,6 +1033,20 @@
       <div class="section-title">Compras en cuotas</div>
       <button type="button" class="btn-add" onclick="openCpModal()">+ Agregar compra</button>
       <div id="cardPurchasesBox" style="margin-top:14px;"></div>
+    </div>
+
+    <!-- lo mismo que arriba pero en 1 solo pago (sin cuotas): tarjetas como
+         T.Crédito MP/Uala, o un crédito (Ingreso > Crédito) — ver
+         renderCardPurchases(), que separa cardPurchases en los dos bloques
+         según p.months -->
+    <div class="card">
+      <div class="section-title" id="singlePaymentsTitle">Créditos</div>
+      <button type="button" class="btn-add" onclick="openCpModal()">+ Sacar crédito</button>
+      <div id="singlePaymentsBox" style="margin-top:14px;"></div>
+      <!-- cuánto de todo eso fue interés (no el crédito en sí) — para ser
+           consciente de lo que cuesta pedir crédito, no solo de lo que
+           devolvés — ver renderCardPurchases() -->
+      <div id="creditInterestTotal"></div>
     </div>
   </div>
 
@@ -1466,17 +1481,12 @@
       </div>
 
       <!-- Crédito: la plata recarga Salidas y Gustos de este mes y lo que se
-           devuelve entra como compra en cuotas desde el mes siguiente (ver
-           creditReceivedOf() y syncCardExpenses()) -->
+           devuelve entra como gasto variable al mes siguiente, en 1 solo
+           pago (ver creditReceivedOf() y syncCardExpenses()). No hay "Ingreso
+           común" acá: un ingreso de siempre (sueldo, cobro, venta) se carga
+           directo en la página de Ingresos — esto es solo para un crédito,
+           que es plata que hay que devolver, no un ingreso real. -->
       <div id="dlyIncomeFields" class="dly-group" style="display:none;">
-        <div class="seg" id="dlyIncKindSeg">
-          <button type="button" data-inc="credito" class="active">Crédito</button>
-          <button type="button" data-inc="comun">Ingreso común</button>
-        </div>
-        <div id="dlyCommonFields" style="display:none;">
-          <p class="income-note" style="margin:0 0 12px;">Sueldo, un cobro, una venta: se carga en Ingresos como siempre.</p>
-          <button type="button" class="btn-primary" onclick="openIncomeFromFab()">Cargar ingreso</button>
-        </div>
         <div id="dlyCreditFields" class="dly-group">
           <div>
             <label>¿Quién lo sacó?</label>
@@ -1487,25 +1497,17 @@
             <input type="text" id="dlyCrCard" placeholder="Ej: Crédito MP">
             <div class="chips" id="dlyCrCardChips"></div>
           </div>
-          <div class="row2">
-            <div>
-              <label for="dlyCrReceived">Te dieron (ARS)</label>
-              <input type="text" inputmode="numeric" class="ie-money" id="dlyCrReceived" placeholder="0">
-            </div>
-            <div>
-              <label for="dlyCrDate">Fecha</label>
-              <input type="date" id="dlyCrDate">
-            </div>
+          <div>
+            <label for="dlyCrReceived">Crédito + Interés</label>
+            <input type="text" inputmode="numeric" class="ie-money" id="dlyCrReceived" placeholder="0">
           </div>
-          <div class="row2">
-            <div>
-              <label for="dlyCrRepay">Vas a devolver (ARS)</label>
-              <input type="text" inputmode="numeric" class="ie-money" id="dlyCrRepay" placeholder="Con intereses">
-            </div>
-            <div>
-              <label for="dlyCrMonths">En cuántas cuotas</label>
-              <input type="text" inputmode="numeric" id="dlyCrMonths" value="1">
-            </div>
+          <div>
+            <label for="dlyCrInteres">Intereses</label>
+            <input type="text" inputmode="numeric" class="ie-money" id="dlyCrInteres" placeholder="0">
+          </div>
+          <div>
+            <label for="dlyCrDate">Fecha</label>
+            <input type="date" id="dlyCrDate">
           </div>
           <p class="income-note" id="dlyCrHint" style="margin:0;"></p>
         </div>
@@ -1859,7 +1861,6 @@ let editingDailyId = null;
 // 'credito' | 'comun'. Un crédito se guarda en cardPurchases con `credit`
 // ({received, date}) — ver creditReceivedOf()
 let currentDailyKind = 'gasto';
-let currentDailyInc = 'credito';
 let currentCrPerson = 'A';
 let editingCreditId = null;
 let editingDebtId = null;
@@ -5245,17 +5246,37 @@ function cpCardHtml(p){
       p.credit ? `<br>Te dieron ${fmt(p.credit.received || 0)} en ${escapeHtml(monthShort(monthKey(p.credit.date)))}.` : ''}</div>
   </div>`;
 }
-function renderCardPurchases(person){
-  const box = $('cardPurchasesBox');
+// fila de un crédito (1 solo pago): sin barra de progreso ni "X de 1
+// cuotas" — eso es justamente lo que lo distingue de una compra en cuotas
+function cpSingleCardHtml(p){
+  const paid = cpPaidArr(p)[0];
+  return `<div class="goal">
+    <div class="goal-h">
+      <span class="goal-n">${escapeHtml(p.name)}</span>
+      <span class="goal-t">${fmt(p.amount)}</span>
+      <span class="goal-acts">
+        <button type="button" onclick="openCpModal('${p.id}')" aria-label="Editar crédito">✎</button>
+        <button type="button" onclick="deleteCp('${p.id}')" aria-label="Eliminar crédito">✕</button>
+      </span>
+    </div>
+    <div class="goal-d">${paid ? (p.credit ? 'Crédito devuelto.' : 'Pagado.') : `Pendiente — faltan ${fmt(p.amount)}.`}${
+      p.credit ? `<br>Te dieron ${fmt(p.credit.received || 0)} en ${escapeHtml(monthShort(monthKey(p.credit.date)))}.` : ''}</div>
+  </div>`;
+}
+// agrupa una lista de compras por tarjeta (en el orden en que se cargó la
+// primera de cada una) y la pinta en `box`, con el mismo header "tarjeta +
+// lo que cae este mes" que usan tanto las cuotas como los créditos —
+// `rowHtml` es la fila (cpCardHtml para cuotas, cpSingleCardHtml para
+// créditos de 1 pago)
+function renderCpGroup(boxId, person, list, emptyMsg, rowHtml){
+  const box = $(boxId);
   if(!box) return;
-  const mine = cardPurchases.filter(p=>p.person === person && cpValid(p));
-  if(!mine.length){
-    box.innerHTML = '<div class="goal-empty">Cargá las compras que hiciste en cuotas con tarjeta. La cuota de cada mes se suma sola en Gastos variables como "Cuotas" + la tarjeta.</div>';
+  if(!list.length){
+    box.innerHTML = `<div class="goal-empty">${emptyMsg}</div>`;
     return;
   }
-  // agrupadas por tarjeta, en el orden en que se cargó la primera de cada una
   const groups = [];
-  mine.forEach(p=>{
+  list.forEach(p=>{
     let g = groups.find(x=>x.key === cardNorm(p.card));
     if(!g){ g = { key: cardNorm(p.card), label: p.card.trim(), list: [] }; groups.push(g); }
     g.list.push(p);
@@ -5264,8 +5285,34 @@ function renderCardPurchases(person){
     const thisMonth = cardPurchasesInMonth(person, g.label, viewMonth).reduce((s, x)=>s + x.cuota, 0);
     return `<div class="budget-subhead cp-subhead"${i ? ' style="margin-top:18px;"' : ''}>
         <span>${escapeHtml(g.label)}</span>${thisMonth > 0 ? `<span>${escapeHtml(monthShort(viewMonth))} ${fmt(thisMonth)}</span>` : ''}
-      </div>` + g.list.map(cpCardHtml).join('');
+      </div>` + g.list.map(rowHtml).join('');
   }).join('');
+}
+// "Compras en cuotas" (más de 1 cuota) y "Créditos" (1 solo pago — tarjetas
+// como T.Crédito MP/Uala, o un crédito pedido para cubrir el mes) son la
+// misma entidad (cardPurchases) separada en dos bloques según p.months, para
+// no mezclar lo que se paga de a poco con lo que es un pago único
+function renderCardPurchases(person){
+  $('singlePaymentsTitle').textContent = `Créditos de ${monthShort(viewMonth)}`;
+  const mine = cardPurchases.filter(p=>p.person === person && cpValid(p));
+  const cuotas = mine.filter(p=>p.months > 1);
+  const singles = mine.filter(p=>p.months === 1);
+  renderCpGroup('cardPurchasesBox', person, cuotas,
+    'Cargá las compras que hiciste en cuotas con tarjeta. La cuota de cada mes se suma sola en Gastos variables como "Cuotas" + la tarjeta.', cpCardHtml);
+  renderCpGroup('singlePaymentsBox', person, singles,
+    'Acá van los créditos de 1 solo pago (sin cuotas): tarjetas como T.Crédito MP o un crédito que pediste para cubrir el mes. Se cargan igual que una compra, con 1 cuota, o desde Ingreso › Crédito.', cpSingleCardHtml);
+  // solo los créditos de verdad (p.credit) tienen interés — una compra de 1
+  // pago con tarjeta (ej. T.Crédito MP) no. Es la suma de todos los que estén
+  // cargados, no solo los del mes, para que el número sea consciente de
+  // cuánto vas pagando de interés en total por pedir créditos
+  const totalInteres = singles.filter(p=>p.credit)
+    .reduce((s,p)=>s + Math.max(0, p.amount - (p.credit.received || 0)), 0);
+  $('creditInterestTotal').innerHTML = totalInteres > 0
+    ? `<div class="bill bill-total" style="margin-top:14px;">
+        <div class="bill-main"><div class="bill-name">Total de intereses</div></div>
+        <div class="bill-amt">${fmt(totalInteres)}</div>
+      </div>`
+    : '';
 }
 
 // ---- modal: agregar/editar compra en cuotas ----
@@ -6005,13 +6052,9 @@ function incomeRowHtml(p, e){
 // arriba: ese total es el que reparte los gastos "según ingresos", y la plata
 // prestada recarga Salidas y Gustos en vez de contar como sueldo
 function creditIncomeRowHtml(c){
-  const devolucion = c.months > 1
-    ? `${c.months} cuotas de ${fmt(cpCuota(c))} desde ${monthShort(c.startMonth)}`
-    : `devolvés ${fmt(c.amount)} en ${monthShort(c.startMonth)}`;
   return `
   <div class="income-entry-row">
-    <span class="ie-main"><span class="lbl">${escapeHtml(c.card)} <span class="tag">Crédito</span></span>
-      <span class="ie-sub" style="white-space:normal;">A Salidas y Gustos, no suma al total · ${devolucion}</span></span>
+    <span class="ie-main"><span class="lbl">${escapeHtml(c.card)}</span></span>
     <span class="amt-cur">${fmt(c.credit.received || 0)}</span>
     <button class="edit" onclick="openCpModal('${c.id}')" aria-label="Editar crédito">✎</button>
     <button class="del" onclick="deleteCp('${c.id}')" aria-label="Eliminar crédito">✕</button>
@@ -6881,68 +6924,44 @@ $('varTabs').addEventListener('click', (e)=>{
 // ---- Gastos diarios ----
 // Gastos hormiga del día a día. Como los variables, pueden ser de una persona
 // o compartidos (con quién pagó y cómo se divide, y generan deuda en "Entre
-// ustedes"). A cada persona le descuentan su parte de su bolsa de Salidas +
-// Gustos: los medidores van siempre todos a la vista y las pestañas filtran
-// solo la lista, igual que en fijos y variables.
+// ustedes"). A diferencia de fijos/variables, acá NO hay pestaña
+// "Compartidos" — generaba confusión —: solo una por persona, con su propio
+// saldo (antes todos los medidores iban siempre a la vista arriba) y su
+// propia lista. Un gasto compartido aparece en la lista de cada persona que
+// lo banca (personShareOf > 0) con el badge "Paga X" (payerTagHtml), no solo
+// en la de quien lo cargó — y sigue generando deuda en "Entre ustedes" igual
+// que siempre, porque el reparto (shares) no cambió, solo cómo se lista acá.
 function renderDailyBlock(fin){
   const tabs = $('dailyTabs');
   if(!tabs) return;
   const mes = monthShort(viewMonth);
   $('dailyBlockTitle').textContent = `Gastos diarios de ${mes}`;
-  $('dailyMeter').innerHTML = pids().map(p=>dailyMeterHtml(p, fin[p].bolsa, fin[p].diarios, fin[p].credito)).join('');
 
   const list = dailyExpenses.filter(d=>inViewMonth(d.date))
     .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   if(peopleCount() < 2){
     tabs.style.display = 'none';
     currentDailyTab = firstPid();
+    $('dailyMeter').innerHTML = saldoCell(nameOf(firstPid()), fin[firstPid()].bolsa - fin[firstPid()].diarios);
     $('dailyList').innerHTML = dailyListHtml(list, `Todavía no cargaste gastos diarios en ${mes}.`);
     return;
   }
   tabs.style.display = '';
-  const groups = [{ key:SHARED_PAY, label:'Compartidos' }, ...people.map(p=>({ key:p.id, label:p.name }))];
-  if(!groups.some(g=>g.key === currentDailyTab)) currentDailyTab = SHARED_PAY;
-  tabs.innerHTML = groups.map(g=>
-    `<button type="button" data-tab="${g.key}"${g.key === currentDailyTab ? ' class="active"' : ''}>${escapeHtml(g.label)}</button>`
+  if(!pids().includes(currentDailyTab)) currentDailyTab = firstPid();
+  tabs.innerHTML = people.map(p=>
+    `<button type="button" data-tab="${p.id}"${p.id === currentDailyTab ? ' class="active"' : ''}>${escapeHtml(p.name)}</button>`
   ).join('');
-  const shown = list.filter(d=>expenseOwner(d) === currentDailyTab);
-  const vacio = isSharedPay(currentDailyTab)
-    ? `Todavía no hay gastos diarios compartidos en ${mes}.`
-    : `${nameOf(currentDailyTab)} no cargó gastos diarios en ${mes}.`;
-  $('dailyList').innerHTML = dailyListHtml(shown, vacio);
+  // mismo "saldo solo" que las demás cards de Saldos (saldoCell), sin el
+  // copy de "gastaste de / incluye crédito" que tenía antes — y a todo el
+  // ancho (--cols:1 en el HTML) porque acá se ve una sola, no una por persona
+  $('dailyMeter').innerHTML = saldoCell(nameOf(currentDailyTab), fin[currentDailyTab].bolsa - fin[currentDailyTab].diarios);
+  const shown = list.filter(d=>personShareOf(d, currentDailyTab) > 0);
+  $('dailyList').innerHTML = dailyListHtml(shown, `${nameOf(currentDailyTab)} no cargó gastos diarios en ${mes}.`);
 }
 function dailyListHtml(list, vacio){
   return list.length
     ? list.map(dailyBillRow).join('') + billTotalRow(list)
     : `<div class="empty">${escapeHtml(vacio)}<br>Usá el botón + para anotarlos a medida que pasan.</div>`;
-}
-function dailyMeterHtml(person, bolsa, gastado, credito){
-  const who = peopleCount() > 1 ? `<div class="sld-who">${escapeHtml(nameOf(person))}</div>` : '';
-  if(bolsa <= 0){
-    return `<div class="dly-meter${gastado > 0 ? ' over' : ''}">${who}
-      ${gastado > 0
-        ? `<div class="dly-head"><span>Sin monto en Salidas y Gustos</span></div>
-           <div class="dly-left">−${fmt(gastado)}</div>
-           <div class="dly-sub">Todo esto sale del ahorro.</div>`
-        : `<div class="dly-sub" style="margin-top:6px;">Cargá cuánto querés gastar en Salidas y Gustos (Gastos posibles) para ver cuánto te queda.</div>`}
-    </div>`;
-  }
-  const quedan = bolsa - gastado;
-  const pct = Math.min(100, Math.round(gastado / bolsa * 100));
-  const over = quedan <= 0;
-  const barCls = over ? 'over' : (pct >= 80 ? 'warn' : '');
-  const sub = quedan < 0
-    ? 'Eso sale del ahorro del mes.'
-    : quedan === 0 ? 'Llegaste al límite.'
-    : `Gastaste ${fmt(gastado)} de ${fmt(bolsa)}`;
-  const creditNote = credito > 0 ? `<div class="dly-sub">Incluye ${fmt(credito)} de crédito.</div>` : '';
-  return `<div class="dly-meter${over ? ' over' : ''}">${who}
-    <div class="dly-head"><span>${quedan < 0 ? 'Te pasaste' : 'Te quedan para Salidas y Gustos'}</span></div>
-    <div class="dly-left">${fmt(Math.abs(quedan))}</div>
-    <div class="goal-track"><i class="${barCls}" style="width:${pct}%"></i></div>
-    <div class="dly-sub">${sub}</div>
-    ${creditNote}
-  </div>`;
 }
 function dailyBillRow(d){
   const dateStr = new Date(d.date+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'});
@@ -7013,41 +7032,25 @@ function setDailyKind(kind){
   document.querySelectorAll('#dlyKindSeg button').forEach(b=>b.classList.toggle('active', b.dataset.kind === kind));
   $('dlyExpenseFields').style.display = kind === 'gasto' ? '' : 'none';
   $('dlyIncomeFields').style.display = kind === 'ingreso' ? '' : 'none';
-  if(kind === 'ingreso') setDailyIncKind(editingCreditId ? 'credito' : currentDailyInc);
   syncDailySubmit();
 }
-function setDailyIncKind(inc){
-  currentDailyInc = inc;
-  document.querySelectorAll('#dlyIncKindSeg button').forEach(b=>b.classList.toggle('active', b.dataset.inc === inc));
-  $('dlyIncKindSeg').style.display = editingCreditId ? 'none' : '';
-  $('dlyCreditFields').style.display = inc === 'credito' ? '' : 'none';
-  $('dlyCommonFields').style.display = inc === 'comun' ? '' : 'none';
-  syncDailySubmit();
-}
-// título y botón según lo que se está cargando; "Ingreso común" usa el modal
-// de Ingresos de siempre, así que acá no hay nada que enviar
+// "Ingreso" acá es siempre un crédito (plata que hay que devolver) — un
+// ingreso de siempre se carga en la página de Ingresos, no en este modal
 function syncDailySubmit(){
   const credit = currentDailyKind === 'ingreso';
   const editing = credit ? !!editingCreditId : !!editingDailyId;
   $('dailyModalTitle').textContent = credit
-    ? (editing ? 'Editar crédito' : 'Agregar ingreso')
+    ? (editing ? 'Editar crédito' : 'Sacar crédito')
     : (editing ? 'Editar gasto diario' : 'Agregar gasto diario');
   $('dlySubmitBtn').textContent = editing ? 'Guardar cambios' : (credit ? 'Agregar crédito' : 'Agregar gasto diario');
-  $('dlySubmitBtn').style.display = credit && currentDailyInc === 'comun' ? 'none' : '';
-}
-function openIncomeFromFab(){
-  const who = currentCrPerson;
-  closeDailyModal();
-  openIncomeModal(isPerson(who) ? who : firstPid());
 }
 
 // ---- crédito (desde el "+" > Ingreso > Crédito) ----
 function resetCreditFields(cr){
   $('dlyCrDate').value = cr ? cr.credit.date : defaultDate();
-  $('dlyCrMonths').value = String(cr ? cr.months : 1);
   $('dlyCrCard').value = cr ? cr.card : (lastCreditCard() || 'Crédito MP');
   $('dlyCrReceived').value = cr ? groupThousands(String(cr.credit.received)) : '';
-  $('dlyCrRepay').value = cr ? groupThousands(String(cr.amount)) : '';
+  $('dlyCrInteres').value = cr && cr.amount > cr.credit.received ? groupThousands(String(cr.amount - cr.credit.received)) : '';
   setCrPerson(cr ? cr.person : (isPerson(currentDailyTab) ? currentDailyTab : (isPerson(currentCrPerson) ? currentCrPerson : firstPid())));
 }
 function lastCreditCard(){
@@ -7065,12 +7068,15 @@ function setCrPerson(who){
   $('dlyCrCardChips').innerHTML = cards.map(c=>`<button type="button" data-card="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
   updateCreditHint();
 }
+// un crédito es siempre 1 solo pago en pesos (sin cuotas) — ver el bloque
+// "Créditos" de Deudas, separado de "Compras en cuotas" por p.months. Lo que
+// se devuelve es el crédito + los intereses que se tipeen (0 si no hay)
 function creditFormValues(){
   const received = numVal('dlyCrReceived') || 0;
-  const repay = numVal('dlyCrRepay') || received;
-  const months = Math.max(1, Math.round(numVal('dlyCrMonths') || 1));
+  const interes = numVal('dlyCrInteres') || 0;
+  const repay = received + interes;
   const date = $('dlyCrDate').value || defaultDate();
-  return { received, repay, months, date, card: $('dlyCrCard').value.trim() || 'Crédito MP',
+  return { received, interes, repay, months: 1, date, card: $('dlyCrCard').value.trim() || 'Crédito MP',
            startMonth: addMonthsKey(monthKey(date), 1) };
 }
 function updateCreditHint(){
@@ -7079,23 +7085,15 @@ function updateCreditHint(){
     $('dlyCrHint').textContent = 'Se suma a Salidas y Gustos de este mes y se devuelve desde el mes siguiente como gasto variable.';
     return;
   }
-  const cuota = v.repay / v.months;
   const desde = monthShort(v.startMonth);
-  const devolucion = v.months === 1
-    ? `En ${desde} pagás ${fmt(v.repay)}`
-    : `Desde ${desde} pagás ${v.months} cuotas de ${fmt(cuota)}`;
-  const interes = v.repay > v.received ? ` (${fmt(v.repay - v.received)} de intereses)` : '';
-  $('dlyCrHint').textContent = `Suma ${fmt(v.received)} a Salidas y Gustos de ${monthShort(monthKey(v.date))}. ${devolucion}${interes}, como gasto variable "Cuotas ${v.card}".`;
+  const interesTxt = v.interes > 0 ? ` (${fmt(v.interes)} de intereses)` : '';
+  $('dlyCrHint').textContent = `Suma ${fmt(v.received)} a Salidas y Gustos de ${monthShort(monthKey(v.date))}. En ${desde} pagás ${fmt(v.repay)}${interesTxt}, como gasto variable "Cuotas ${v.card}".`;
 }
 $('dlyKindSeg').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
   if(!btn) return;
   setDailyKind(btn.dataset.kind);
   $(btn.dataset.kind === 'gasto' ? 'dlyAmount' : 'dlyCrReceived').focus();
-});
-$('dlyIncKindSeg').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button');
-  if(btn) setDailyIncKind(btn.dataset.inc);
 });
 $('dlyCrWhoSeg').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
@@ -7107,7 +7105,7 @@ $('dlyCrCardChips').addEventListener('click', (e)=>{
   $('dlyCrCard').value = btn.dataset.card;
   updateCreditHint();
 });
-['dlyCrReceived','dlyCrRepay','dlyCrMonths','dlyCrCard'].forEach(id=>$(id).addEventListener('input', updateCreditHint));
+['dlyCrReceived','dlyCrInteres','dlyCrCard'].forEach(id=>$(id).addEventListener('input', updateCreditHint));
 $('dlyCrDate').addEventListener('change', updateCreditHint);
 function submitCredit(){
   const v = creditFormValues();
@@ -7213,7 +7211,7 @@ $('dlyAmount').addEventListener('input', updateDailyHint);
 $('dailyForm').addEventListener('submit', (e)=>{
   e.preventDefault();
   if(currentDailyKind === 'ingreso'){
-    if(currentDailyInc === 'credito') submitCredit();
+    submitCredit();
     return;
   }
   const desc = $('dlyDesc').value.trim();
@@ -7233,7 +7231,9 @@ $('dailyForm').addEventListener('submit', (e)=>{
   else dailyExpenses.push({ id: genId(), ...fields });
   saveDailyExpenses();
   closeDailyModal();
-  if(peopleCount() > 1) currentDailyTab = shared ? SHARED_PAY : fields.paidBy;
+  // sin pestaña "Compartidos": aterriza en la de quien pagó (la plata salió
+  // de su bolsillo), compartido o no — ahí también se ve igual
+  if(peopleCount() > 1) currentDailyTab = fields.paidBy;
   render();
 
   const key = monthKey(fields.date);
