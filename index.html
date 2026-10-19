@@ -697,6 +697,8 @@
   .tag-p1{background:var(--a-clay-bg);color:var(--a-clay-ink);}
   .tag-p2{background:#D9E6DC;color:#2F5C3F;}
   .tag-p3{background:#DAE0EE;color:#3A4A78;}
+  /* gasto diario pagado con tarjeta, no transferencia — ver dailyCardTagHtml() */
+  .tag-card{background:var(--pearl);color:var(--body-muted);}
   .bill-amt{font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;white-space:nowrap;text-align:right;}
   .bill-name-row{display:flex;align-items:center;gap:6px;}
   .bill-cur-toggle{background:none;border:none;color:var(--body-muted);cursor:pointer;font-size:13px;
@@ -918,6 +920,9 @@
       <!-- una columna por persona del espacio, armada en renderIncomeLists() -->
       <div class="people-grid" id="incomeGrid"></div>
       <button type="button" class="btn-add" style="margin:18px 0 0;" onclick="openIncomeModal()">+ Agregar ingreso</button>
+      <!-- un crédito no es ingreso real (no entra en el reparto "según
+           ingresos"), pero es plata que se pide acá — ver openCreditModal() -->
+      <button type="button" class="btn-add" style="margin:10px 0 0;" onclick="openCreditModal()">+ Agregar crédito</button>
       <div class="income-preview" id="incomePreview" style="display:none;"></div>
     </div>
   </div>
@@ -989,7 +994,22 @@
       </div>
     </div>
 
-    <!-- BLOQUE 4: gastos hormiga del día a día. Salen de la bolsa de Salidas +
+    <!-- BLOQUE 4: créditos pedidos este mes (plata para cubrir gastos diarios
+         por transferencia, ej. un adelanto de Mercado Pago) — se agregan
+         desde Ingresos, acá solo se ven y se editan. Distinto de pagar un
+         gasto diario con tarjeta: eso no es plata nueva, es una forma de
+         pago — ver el bloque de abajo. -->
+    <div class="card">
+      <div class="section-title"><span id="creditsBlockTitle">Créditos</span></div>
+      <div class="seg sub-seg" id="creditsTabs" style="margin-top:16px;"></div>
+      <div id="creditsList" style="margin-top:14px;"></div>
+      <div class="sld-block">
+        <div class="sld-title">Saldos</div>
+        <div class="sld-grid" id="creditsSaldos"></div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 5: gastos hormiga del día a día. Salen de la bolsa de Salidas +
          Gustos de cada persona — ver financeFor() -->
     <div class="card">
       <div class="section-title"><span id="dailyBlockTitle">Gastos diarios</span></div>
@@ -998,8 +1018,18 @@
            propio saldo y su propia lista (los compartidos aparecen en las
            dos, con el badge "Paga X") — ver renderDailyBlock() -->
       <div class="seg sub-seg" id="dailyTabs" style="margin-top:16px;"></div>
-      <div class="sld-grid" id="dailyMeter" style="margin-top:14px;--cols:1;--cols-sm:1;"></div>
       <div id="dailyList" style="margin-top:6px;"></div>
+    </div>
+
+    <!-- BLOQUE 6: la plata real que tenés (Mercado Pago/efectivo) — tu propia
+         plata más los créditos que pediste, menos lo que gastaste por
+         transferencia. Lo pagado con tarjeta no resta acá: esa plata todavía
+         no salió de la cuenta, sale el mes que viene — ver financeFor(). -->
+    <div class="card">
+      <div class="sld-block bare">
+        <div class="sld-title">Saldo</div>
+        <div class="sld-grid" id="finalSaldos"></div>
+      </div>
     </div>
 
   </div>
@@ -1466,6 +1496,18 @@
           <label for="dlyDate">Fecha</label>
           <input type="date" id="dlyDate">
         </div>
+        <div>
+          <label>¿Cómo lo pagaste?</label>
+          <div class="seg" id="dlyPaymentSeg">
+            <button type="button" data-payment="transfer" class="active">Transferencia</button>
+            <button type="button" data-payment="card">Tarjeta de crédito</button>
+          </div>
+        </div>
+        <div id="dlyCardField" style="display:none;">
+          <label for="dlyCard">¿Con qué tarjeta?</label>
+          <input type="text" id="dlyCard" placeholder="Ej: Uala, Visa">
+          <div class="chips" id="dlyCardChips"></div>
+        </div>
         <div id="dlyPayerField" style="display:none;">
           <label>¿Quién lo pagó?</label>
           <div class="seg" id="dlyPayerSeg"></div>
@@ -1849,19 +1891,25 @@ let editingGoalId = null;
 let debts = [];
 // [{id, person, card, name, amount, months, startMonth}] — ver syncCardExpenses()
 let cardPurchases = [];
-// [{id, desc, amount, date, paidBy, shares, splitType}] — mismo molde que
-// varExpenses: propio de una persona o compartido (con quién pagó y reparto)
+// [{id, desc, amount, date, paidBy, shares, splitType, card}] — mismo molde
+// que varExpenses, más `card`: si está, el gasto se pagó con esa tarjeta (no
+// transferencia/efectivo) y no resta de Salidas y Gustos de este mes — se
+// devuelve como "Cuotas <tarjeta>" en Gastos variables el mes que viene, por
+// el mismo desiredCardExpenses()/syncCardExpenses() que ya usan las compras
+// en cuotas y los créditos. Sin `card`, es transferencia/efectivo, como antes.
 let dailyExpenses = [];
 let currentDailyTab = 'shared';
 let currentDailyOwner = 'A';
 let currentDailyPayer = 'A';
 let currentDailySplit = 'income';
+let currentDailyPayment = 'transfer';
 let editingDailyId = null;
 // el "+" también carga ingresos: 'gasto' | 'ingreso', y dentro de ingreso
 // 'credito' | 'comun'. Un crédito se guarda en cardPurchases con `credit`
 // ({received, date}) — ver creditReceivedOf()
 let currentDailyKind = 'gasto';
 let currentCrPerson = 'A';
+let currentCreditsTab = 'A';
 let editingCreditId = null;
 let editingDebtId = null;
 // deudas recurrentes de Ajustes, solo nombre y monto de siempre — {personId:
@@ -5084,6 +5132,21 @@ function desiredCardExpenses(){
       out.set(k, cur);
     }
   });
+  // gastos diarios pagados con tarjeta: no son una "compra" cargada en
+  // Deudas, pero se devuelven igual, 1 solo pago el mes siguiente — se suman
+  // al mismo total por persona/tarjeta/mes que una compra en cuotas, así una
+  // tarjeta que ya tiene cuotas ese mes no termina con dos filas "Cuotas X"
+  dailyExpenses.filter(d=>cardNorm(d.card)).forEach(d=>{
+    const month = addMonthsKey(monthKey(d.date), 1);
+    pids().forEach(person=>{
+      const share = entryShareOf(d, person);
+      if(!share) return;
+      const k = cardExpenseKey(person, d.card, month);
+      const cur = out.get(k) || { person, card: d.card.trim(), month, amount: 0 };
+      cur.amount += share;
+      out.set(k, cur);
+    });
+  });
   return out;
 }
 // deja varExpenses en línea con las compras: actualiza el monto de los que ya
@@ -6405,9 +6468,19 @@ function financeFor(person, key){
   // como gasto variable, por syncCardExpenses()
   const credito = creditReceivedOf(person, key);
   const bolsa = wantsBudgetOf(person, key) + credito;
+  // diarios es solo lo pagado por transferencia/efectivo — lo pagado con
+  // tarjeta no salió de la cuenta todavía (ver dailyTotalOf)
   const diarios = dailyTotalOf(person, key);
   const excedente = Math.max(0, diarios - bolsa);
-  return { inc, fijos, variables, afterFijos, afterVar, podes, credito, bolsa, diarios, excedente,
+  // saldo = la plata real que tenés (Mercado Pago/efectivo): lo que ya
+  // quedaba después de fijos/variables, menos lo presupuestado (igual que
+  // ahorro), más el crédito que pediste (entró a la cuenta) y menos lo que
+  // gastaste por transferencia en gastos diarios. A diferencia de ahorro, el
+  // crédito suma siempre entero acá (no solo para cubrir un excedente), y lo
+  // que sobre del presupuesto no se repone — sigue siendo el mismo criterio
+  // de "reservado hasta fin de mes" que ahorro.
+  const saldo = afterVar - podes + credito - diarios;
+  return { inc, fijos, variables, afterFijos, afterVar, podes, credito, bolsa, diarios, excedente, saldo,
            ahorro: afterVar - podes - excedente };
 }
 function creditReceivedOf(person, key){
@@ -6420,10 +6493,13 @@ function wantsBudgetOf(person, key){
   return (budgetTemplatesForMonth(key || viewMonth)[person] || [])
     .filter(c=>c.label !== 'Compra dólares').reduce((s,c)=>s+(c.amount||0), 0);
 }
-// la parte de cada uno: un compartido le descuenta a cada persona solo su slice
+// la parte de cada uno: un compartido le descuenta a cada persona solo su
+// slice. Solo transferencia/efectivo — lo pagado con tarjeta no cuenta acá
+// (ver dailyCardTotalOf), se devuelve el mes que viene en Gastos variables.
 function dailyTotalOf(person, key){
   key = key || viewMonth;
-  return dailyExpenses.filter(d=>monthKey(d.date) === key).reduce((s,d)=>s+entryShareOf(d, person), 0);
+  return dailyExpenses.filter(d=>monthKey(d.date) === key && !cardNorm(d.card))
+    .reduce((s,d)=>s+entryShareOf(d, person), 0);
 }
 
 function monthFinance(key){
@@ -6595,6 +6671,7 @@ function render(){
 
   renderVarExpenseTabs();
   renderBudgetTabs();
+  renderCreditsBlock(fin);
   renderDailyBlock(fin);
   $('dailyFab').hidden = !coupleCode;
   $('bottomNav').hidden = !coupleCode;
@@ -6676,6 +6753,9 @@ function renderBlockSaldos(fin){
   renderSaldos('fixedSaldos', fin, f=>f.afterFijos);
   renderSaldos('varSaldos', fin, f=>f.afterVar);
   renderDolaresSaldos(fin);
+  // el último de todos: la plata real que tenés — ver el campo `saldo` de
+  // financeFor(). Con tono, como Ahorro: es un veredicto, no un paso más.
+  renderSaldos('finalSaldos', fin, f=>f.saldo, true);
 }
 
 // lo que ya está cargado en el rubro "Compra dólares" de esa persona
@@ -6921,6 +7001,60 @@ $('varTabs').addEventListener('click', (e)=>{
   renderVarExpenseTabs();
 });
 
+// ---- Créditos (bloque de Gastos, entre Gastos posibles y Gastos diarios) ----
+// Los créditos (plata prestada, ej. un adelanto de Mercado Pago, para cubrir
+// gastos diarios por transferencia) se agregan desde Ingresos — acá solo se
+// ven y se editan/borran. Misma data que Deudas > Créditos (cardPurchases con
+// `credit`), sin pestaña "Compartidos" porque un crédito es siempre de una
+// persona.
+function renderCreditsBlock(fin){
+  const tabs = $('creditsTabs');
+  if(!tabs) return;
+  const mes = monthShort(viewMonth);
+  $('creditsBlockTitle').textContent = `Créditos de ${mes}`;
+  const list = cardPurchases.filter(c=>c.credit && monthKey(c.credit.date) === viewMonth);
+  if(peopleCount() < 2){
+    tabs.style.display = 'none';
+    currentCreditsTab = firstPid();
+    $('creditsList').innerHTML = creditsListHtml(list.filter(c=>c.person === firstPid()), mes);
+    renderSaldos('creditsSaldos', fin, f=>f.credito);
+    return;
+  }
+  tabs.style.display = '';
+  if(!pids().includes(currentCreditsTab)) currentCreditsTab = firstPid();
+  tabs.innerHTML = people.map(p=>
+    `<button type="button" data-tab="${p.id}"${p.id === currentCreditsTab ? ' class="active"' : ''}>${escapeHtml(p.name)}</button>`
+  ).join('');
+  const shown = list.filter(c=>c.person === currentCreditsTab);
+  $('creditsList').innerHTML = creditsListHtml(shown, mes, currentCreditsTab);
+  renderSaldos('creditsSaldos', fin, f=>f.credito);
+}
+function creditsListHtml(list, mes, person){
+  if(!list.length){
+    const quien = person ? nameOf(person) : 'Todavía no';
+    return `<div class="empty">${person ? `${quien} no pidió` : quien} créditos en ${mes}.<br>Se agregan desde la pestaña Ingresos.</div>`;
+  }
+  return list.map(creditRowHtml).join('') + billTotalRow(list.map(c=>({amount: c.credit.received || 0})));
+}
+function creditRowHtml(c){
+  const dateStr = new Date(c.credit.date+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'});
+  return `<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">${escapeHtml(c.card)}</div>
+      <div class="bill-meta"><span>${dateStr}</span></div>
+    </div>
+    <div class="bill-amt">${fmt(c.credit.received || 0)}</div>
+    <button class="bill-edit" onclick="openCpModal('${c.id}')" aria-label="Editar crédito">✎</button>
+    <button class="bill-del" onclick="deleteCp('${c.id}')" aria-label="Eliminar crédito">✕</button>
+  </div>`;
+}
+$('creditsTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentCreditsTab = btn.dataset.tab;
+  renderCreditsBlock(monthFinance(viewMonth));
+});
+
 // ---- Gastos diarios ----
 // Gastos hormiga del día a día. Como los variables, pueden ser de una persona
 // o compartidos (con quién pagó y cómo se divide, y generan deuda en "Entre
@@ -6942,7 +7076,6 @@ function renderDailyBlock(fin){
   if(peopleCount() < 2){
     tabs.style.display = 'none';
     currentDailyTab = firstPid();
-    $('dailyMeter').innerHTML = saldoCell(nameOf(firstPid()), fin[firstPid()].bolsa - fin[firstPid()].diarios);
     $('dailyList').innerHTML = dailyListHtml(list, `Todavía no cargaste gastos diarios en ${mes}.`);
     return;
   }
@@ -6951,10 +7084,6 @@ function renderDailyBlock(fin){
   tabs.innerHTML = people.map(p=>
     `<button type="button" data-tab="${p.id}"${p.id === currentDailyTab ? ' class="active"' : ''}>${escapeHtml(p.name)}</button>`
   ).join('');
-  // mismo "saldo solo" que las demás cards de Saldos (saldoCell), sin el
-  // copy de "gastaste de / incluye crédito" que tenía antes — y a todo el
-  // ancho (--cols:1 en el HTML) porque acá se ve una sola, no una por persona
-  $('dailyMeter').innerHTML = saldoCell(nameOf(currentDailyTab), fin[currentDailyTab].bolsa - fin[currentDailyTab].diarios);
   const shown = list.filter(d=>personShareOf(d, currentDailyTab) > 0);
   $('dailyList').innerHTML = dailyListHtml(shown, `${nameOf(currentDailyTab)} no cargó gastos diarios en ${mes}.`);
 }
@@ -6963,6 +7092,11 @@ function dailyListHtml(list, vacio){
     ? list.map(dailyBillRow).join('') + billTotalRow(list)
     : `<div class="empty">${escapeHtml(vacio)}<br>Usá el botón + para anotarlos a medida que pasan.</div>`;
 }
+// gasto diario pagado con tarjeta: queda a la vista cuál, así se sabe en qué
+// se gastó, aunque no reste nada de Salidas y Gustos de este mes
+function dailyCardTagHtml(d){
+  return cardNorm(d.card) ? `<span class="tag tag-card">💳 ${escapeHtml(d.card)}</span>` : '';
+}
 function dailyBillRow(d){
   const dateStr = new Date(d.date+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'});
   return `<div class="bill">
@@ -6970,7 +7104,7 @@ function dailyBillRow(d){
       <div class="bill-name">${escapeHtml(d.desc)}</div>
       <div class="bill-meta">
         <span>${dateStr}</span>${splitInfoHtml(splitLabelOf(d))}
-        ${payerTagHtml(d)}
+        ${payerTagHtml(d)}${dailyCardTagHtml(d)}
       </div>
     </div>
     <div class="bill-amt">${fmt(d.amount)}</div>
@@ -6993,10 +7127,10 @@ function openDailyModal(id, opts){
   editingDailyId = d ? d.id : null;
   editingCreditId = cr ? cr.id : null;
   $('dlyDate').value = d ? d.date : defaultDate();
-  resetCreditFields(cr);
+  resetCreditFields(cr, opts.person);
   // editando, no se cambia de tipo: un gasto sigue siendo gasto
   $('dlyKindSeg').style.display = (d || cr) ? 'none' : '';
-  setDailyKind(cr ? 'ingreso' : 'gasto');
+  setDailyKind(cr ? 'ingreso' : (opts.kind === 'ingreso' ? 'ingreso' : 'gasto'));
   if(cr){
     $('dailyModal').classList.add('open');
     document.body.classList.add('modal-open');
@@ -7012,10 +7146,13 @@ function openDailyModal(id, opts){
       setDailyPayer(isPerson(d.paidBy) ? d.paidBy : firstPid());
     }
     setDailyOwner(owner);
+    setDailyPayment(cardNorm(d.card) ? 'card' : 'transfer');
+    if(cardNorm(d.card)) $('dlyCard').value = d.card;
   }else{
     // arranca en la pestaña que estás mirando; desde el botón flotante, en
     // la última que se usó en el bloque (Compartidos de entrada)
     setDailyOwner(peopleCount() > 1 ? currentDailyTab : firstPid());
+    setDailyPayment('transfer');
   }
   $('dailyModal').classList.add('open');
   document.body.classList.add('modal-open');
@@ -7026,6 +7163,10 @@ function closeDailyModal(){
   document.body.classList.remove('modal-open');
   editingDailyId = null;
   editingCreditId = null;
+}
+// botón "+ Agregar crédito" de Ingresos: mismo modal, arranca directo en Ingreso
+function openCreditModal(person){
+  openDailyModal(null, { kind: 'ingreso', person });
 }
 function setDailyKind(kind){
   currentDailyKind = kind;
@@ -7045,13 +7186,14 @@ function syncDailySubmit(){
   $('dlySubmitBtn').textContent = editing ? 'Guardar cambios' : (credit ? 'Agregar crédito' : 'Agregar gasto diario');
 }
 
-// ---- crédito (desde el "+" > Ingreso > Crédito) ----
-function resetCreditFields(cr){
+// ---- crédito (desde Ingresos > Agregar crédito, o el "+" > Ingreso) ----
+function resetCreditFields(cr, preferredPerson){
   $('dlyCrDate').value = cr ? cr.credit.date : defaultDate();
   $('dlyCrCard').value = cr ? cr.card : (lastCreditCard() || 'Crédito MP');
   $('dlyCrReceived').value = cr ? groupThousands(String(cr.credit.received)) : '';
   $('dlyCrInteres').value = cr && cr.amount > cr.credit.received ? groupThousands(String(cr.amount - cr.credit.received)) : '';
-  setCrPerson(cr ? cr.person : (isPerson(currentDailyTab) ? currentDailyTab : (isPerson(currentCrPerson) ? currentCrPerson : firstPid())));
+  setCrPerson(cr ? cr.person : (isPerson(preferredPerson) ? preferredPerson
+    : (isPerson(currentDailyTab) ? currentDailyTab : (isPerson(currentCrPerson) ? currentCrPerson : firstPid()))));
 }
 function lastCreditCard(){
   const last = cardPurchases.filter(p=>p.credit).slice(-1)[0];
@@ -7153,6 +7295,28 @@ function setDailySplit(split){
   document.querySelectorAll('#dlySplitToggle button').forEach(b=>b.classList.toggle('active', b.dataset.split === split));
   updateDailyHint();
 }
+// transferencia/efectivo resta de Salidas y Gustos de este mes; tarjeta no
+// resta nada acá, se devuelve como gasto variable el mes que viene (ver
+// desiredCardExpenses())
+function setDailyPayment(method){
+  currentDailyPayment = method;
+  document.querySelectorAll('#dlyPaymentSeg button').forEach(b=>b.classList.toggle('active', b.dataset.payment === method));
+  $('dlyCardField').style.display = method === 'card' ? '' : 'none';
+  if(method === 'card') renderDailyCardChips();
+  updateDailyHint();
+}
+// tarjetas que esa persona ya usó (en gastos diarios o en compras/créditos),
+// para no tipearlo cada vez
+function renderDailyCardChips(){
+  const cards = [];
+  dailyExpenses.filter(d=>expenseOwner(d) === currentDailyOwner && cardNorm(d.card)).forEach(d=>{
+    if(!cards.some(c=>cardNorm(c) === cardNorm(d.card))) cards.push(d.card.trim());
+  });
+  cardPurchases.filter(p=>p.person === currentDailyOwner && !p.credit && cardNorm(p.card)).forEach(p=>{
+    if(!cards.some(c=>cardNorm(c) === cardNorm(p.card))) cards.push(p.card.trim());
+  });
+  $('dlyCardChips').innerHTML = cards.map(c=>`<button type="button" data-card="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+}
 const dailyFormShares = () => dailyIsShared() ? sharesFor(currentDailySplit) : soloShares(currentDailyOwner);
 // las últimas descripciones distintas de ese mismo dueño, para cargar "Super" de un toque
 function renderDailyChips(){
@@ -7167,10 +7331,12 @@ function renderDailyChips(){
   $('dlyDescChips').innerHTML = recent.map(r=>`<button type="button" data-desc="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
 }
 // cuánto le queda a cada persona afectada si se guarda lo que hay en el form
+// — solo cuenta lo pagado por transferencia (lo pagado con tarjeta no resta
+// de Salidas y Gustos, ver setDailyPayment)
 function dailyRemainingAfter(entry, excludeId){
   const key = monthKey(entry.date);
   return pids().filter(p=>(entry.shares[p] || 0) > 0).map(p=>{
-    const prev = dailyExpenses.filter(d=>d.id !== excludeId && monthKey(d.date) === key)
+    const prev = dailyExpenses.filter(d=>d.id !== excludeId && monthKey(d.date) === key && !cardNorm(d.card))
       .reduce((s,d)=>s+entryShareOf(d, p), 0);
     return { p, quedan: bolsaOf(p, key) - prev - entryShareOf(entry, p) };
   });
@@ -7184,7 +7350,14 @@ function remainingText(rows){
     `${nameOf(r.p)} ${r.quedan >= 0 ? fmt(r.quedan) : '−' + fmt(-r.quedan)}`).join(' · ');
 }
 function updateDailyHint(){
-  const entry = { amount: numVal('dlyAmount') || 0, date: $('dlyDate').value || defaultDate(), shares: dailyFormShares() };
+  const date = $('dlyDate').value || defaultDate();
+  if(currentDailyPayment === 'card'){
+    const card = $('dlyCard').value.trim() || 'la tarjeta';
+    const next = monthShort(addMonthsKey(monthKey(date), 1));
+    $('dlyHint').textContent = `Se paga en ${next} como gasto variable "Cuotas ${card}". No resta de Salidas y Gustos de este mes.`;
+    return;
+  }
+  const entry = { amount: numVal('dlyAmount') || 0, date, shares: dailyFormShares() };
   const rows = dailyRemainingAfter(entry, editingDailyId);
   const txt = remainingText(rows);
   $('dlyHint').textContent = entry.amount ? `Con este gasto, ${txt}.` : txt.charAt(0).toUpperCase() + txt.slice(1) + '.';
@@ -7208,6 +7381,17 @@ $('dlyDescChips').addEventListener('click', (e)=>{
 });
 $('dlyDate').addEventListener('change', updateDailyHint);
 $('dlyAmount').addEventListener('input', updateDailyHint);
+$('dlyPaymentSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(btn) setDailyPayment(btn.dataset.payment);
+});
+$('dlyCard').addEventListener('input', updateDailyHint);
+$('dlyCardChips').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  $('dlyCard').value = btn.dataset.card;
+  updateDailyHint();
+});
 $('dailyForm').addEventListener('submit', (e)=>{
   e.preventDefault();
   if(currentDailyKind === 'ingreso'){
@@ -7217,6 +7401,8 @@ $('dailyForm').addEventListener('submit', (e)=>{
   const desc = $('dlyDesc').value.trim();
   const amount = numVal('dlyAmount');
   if(!desc || !amount) return;
+  const card = currentDailyPayment === 'card' ? $('dlyCard').value.trim() : '';
+  if(currentDailyPayment === 'card' && !card) return;
   const shared = dailyIsShared();
   const fields = {
     desc, amount,
@@ -7224,12 +7410,16 @@ $('dailyForm').addEventListener('submit', (e)=>{
     paidBy: shared ? currentDailyPayer : currentDailyOwner,
     // reparto congelado en el gasto, igual que en variables
     shares: dailyFormShares(),
-    splitType: shared ? currentDailySplit : undefined
+    splitType: shared ? currentDailySplit : undefined,
+    card: card || undefined
   };
   const existing = editingDailyId ? dailyExpenses.find(x=>x.id === editingDailyId) : null;
   if(existing) Object.assign(existing, fields);
   else dailyExpenses.push({ id: genId(), ...fields });
   saveDailyExpenses();
+  // un gasto con tarjeta puede cambiar lo que le toca a "Cuotas <tarjeta>" el
+  // mes que viene — ver desiredCardExpenses()
+  persistCardExpenses();
   closeDailyModal();
   // sin pestaña "Compartidos": aterriza en la de quien pagó (la plata salió
   // de su bolsillo), compartido o no — ahí también se ve igual
@@ -7237,12 +7427,17 @@ $('dailyForm').addEventListener('submit', (e)=>{
   render();
 
   const key = monthKey(fields.date);
-  const rows = pids().filter(p=>(fields.shares[p] || 0) > 0)
-    .map(p=>({ p, quedan: bolsaOf(p, key) - dailyTotalOf(p, key) }));
-  const txt = remainingText(rows);
-  const msg = txt.charAt(0).toUpperCase() + txt.slice(1);
-  if(rows.some(r=>r.quedan <= 0)) notyf.error(msg);
-  else notyf.success(msg);
+  if(fields.card){
+    const next = monthShort(addMonthsKey(key, 1));
+    notyf.success(`Se paga en ${next} como "Cuotas ${fields.card}" en Gastos variables.`);
+  }else{
+    const rows = pids().filter(p=>(fields.shares[p] || 0) > 0)
+      .map(p=>({ p, quedan: bolsaOf(p, key) - dailyTotalOf(p, key) }));
+    const txt = remainingText(rows);
+    const msg = txt.charAt(0).toUpperCase() + txt.slice(1);
+    if(rows.some(r=>r.quedan <= 0)) notyf.error(msg);
+    else notyf.success(msg);
+  }
 });
 function deleteDailyExpense(id){
   const d = dailyExpenses.find(x=>x.id === id);
@@ -7250,6 +7445,7 @@ function deleteDailyExpense(id){
   openConfirmModal(`¿Eliminar "${d.desc}"? Esta acción no se puede deshacer.`, ()=>{
     dailyExpenses = dailyExpenses.filter(x=>x.id !== id);
     saveDailyExpenses();
+    persistCardExpenses();
     render();
     notyf.success('Gasto diario eliminado');
   });
