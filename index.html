@@ -745,6 +745,10 @@
   .tag-card{background:var(--pearl);color:var(--body-muted);}
   .bill-amt{font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;white-space:nowrap;text-align:right;}
   /* Viajes: el link de la reserva y los datos importantes (check-in, código…) */
+  /* Deudas: Pagar / Ya estaba pagado en un gasto que quedó sin pagar */
+  .debt-actions{display:flex;gap:16px;margin-top:8px;}
+  .debt-actions .btn-link{font-size:13px;font-weight:600;text-decoration:none;}
+  .debt-actions .btn-link:hover{text-decoration:underline;}
   .trip-link{display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:12.5px;font-weight:600;
     color:var(--primary);text-decoration:none;max-width:100%;}
   .trip-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -5091,8 +5095,12 @@ function toggleVarExpensePaid(id){
 function deleteVarExpense(id){
   const ex = varExpenses.find(x=>x.id === id);
   if(!ex) return;
-  openConfirmModal(`¿Eliminar "${ex.desc}"? Esta acción no se puede deshacer.`, ()=>{
+  const esPagoDeDeuda = !!ex.fromDebt;
+  openConfirmModal(esPagoDeDeuda
+    ? `¿Eliminar "${ex.desc}"? Es el pago de una deuda: vuelve a quedar como pendiente en Deudas.`
+    : `¿Eliminar "${ex.desc}"? Esta acción no se puede deshacer.`, ()=>{
     varExpenses = varExpenses.filter(x=>x.id!==id);
+    undoDebtSettlement(ex);
     saveVarExpenses();
     render();
     notyf.success('Gasto variable eliminado');
@@ -7215,6 +7223,39 @@ function expensePaidAmount(ex){
 function expenseUnpaidAmount(ex){
   return (ex.amount||0) - expensePaidAmount(ex);
 }
+
+// ---- deudas que quedaron de meses anteriores ----
+// Un gasto fijo o variable de un mes que ya terminó y que no se tildó como
+// pagado es una deuda: no se descuenta en su mes (esa plata no salió) y
+// aparece en Deudas › Tus deudas hasta que se paga. Pagarla desde ahí la carga
+// como gasto variable del mes en curso (settleUnpaidExpense), así se descuenta
+// cuando se paga de verdad. Los "Cuotas <tarjeta>" automáticos no cuentan:
+// se manejan en Compras en cuotas.
+const isPastMonth = (key) => !!key && key < monthNow();
+function unpaidDebtAmount(ex){
+  if(ex.cardAuto || ex.settledLater || !isPastMonth(monthKey(ex.date))) return 0;
+  return Math.max(0, expenseUnpaidAmount(ex));
+}
+// qué fracción del gasto se descuenta en su propio mes: lo pendiente no, y
+// lo que se pagó después desde Deudas tampoco (se descuenta en ese otro mes)
+function countedRatio(ex){
+  const amount = ex.amount || 0;
+  if(!(amount > 0)) return 1;
+  const fuera = unpaidDebtAmount(ex) + ((ex.settledLater && ex.settledLater.amount) || 0);
+  return Math.max(0, Math.min(1, (amount - fuera) / amount));
+}
+// todo lo que se debe de meses anteriores, fijos y variables
+// en la tarjeta del gasto en Gastos: por qué ese mes no lo descuenta
+function debtTagHtml(ex){
+  if(ex.settledLater) return `<span class="bill-occ-badge">Pagado en ${escapeHtml(monthShort(ex.settledLater.month))}</span>`;
+  return unpaidDebtAmount(ex) > 0 ? `<span class="tag tag-p1">En Deudas</span>` : '';
+}
+function unpaidPastExpenses(){
+  return [
+    ...expenses.map(ex=>({ ex, kind:'fixed' })),
+    ...varExpenses.map(ex=>({ ex, kind:'variable' }))
+  ].filter(o=>unpaidDebtAmount(o.ex) > 0);
+}
 let expandedExpenseIds = new Set();
 function toggleExpenseExpanded(id){
   if(expandedExpenseIds.has(id)) expandedExpenseIds.delete(id);
@@ -7242,7 +7283,7 @@ function billRow(ex){
       <div class="bill-name">${escapeHtml(ex.desc)}</div>
       <div class="bill-meta">
         <span>${dateStr}</span>${splitInfoHtml(splitLabel)}
-        ${payerTagHtml(ex)}
+        ${payerTagHtml(ex)}${debtTagHtml(ex)}
         <label class="bill-paid" title="${ex.paid ? 'Pagado' : 'Marcar como pagado'}">
           <input type="checkbox" ${ex.paid ? 'checked' : ''} onchange="toggleExpensePaid('${ex.id}')">
         </label>
@@ -7272,7 +7313,7 @@ function billRowRepeating(ex, n, dateStr, splitLabel){
       </div>
       <div class="bill-meta">
         <span>${dateStr}</span>${splitInfoHtml(splitLabel)}
-        ${payerTagHtml(ex)}
+        ${payerTagHtml(ex)}${debtTagHtml(ex)}
         <span class="bill-occ-badge">${paidCount} de ${n} pagadas</span>
       </div>
     </div>
@@ -7319,7 +7360,7 @@ function varExpenseBillRow(ex){
       <div class="bill-name">${escapeHtml(ex.desc)}</div>
       <div class="bill-meta">
         <span>${dateStr}</span>${splitInfoHtml(splitLabel)}
-        ${payerTagHtml(ex)}
+        ${payerTagHtml(ex)}${debtTagHtml(ex)}
         <label class="bill-paid" title="${ex.paid ? 'Pagado' : 'Marcar como pagado'}">
           <input type="checkbox" ${ex.paid ? 'checked' : ''} onchange="toggleVarExpensePaid('${ex.id}')">
         </label>
@@ -7339,10 +7380,12 @@ function financeFor(person, key){
   key = key || viewMonth;
   const list = expenses.filter(x=>monthKey(x.date) === key);
   const inc = incomeTotalArs(person, key);
-  const fijos = personShareTotal(list, person);
+  // lo que quedó sin pagar en un mes ya cerrado es deuda, no gasto de ese mes
+  // (ver unpaidDebtAmount): se descuenta solo la parte que sí se pagó
+  const fijos = list.reduce((s,ex)=>s + personShareOf(ex, person) * countedRatio(ex), 0);
   const variables = varExpenses
     .filter(e=>monthKey(e.date) === key)
-    .reduce((s,e)=>s+entryShareOf(e, person), 0);
+    .reduce((s,e)=>s+entryShareOf(e, person) * countedRatio(e), 0);
   const afterFijos = inc - fijos;
   const afterVar = afterFijos - variables;
   // Compra dólares es lo único que se resta en Gastos posibles (el ahorro, el
@@ -8672,9 +8715,12 @@ function debtSubtotalRowHtml(label, amount, items, key){
 }
 // mismo patrón que billTotalRow: "Totales" queda cerrado por defecto y, al
 // abrirlo, se parte en "Pagado" / "A pagar" — igual que Gastos fijos/variables
-function debtsTotalRowHtml(mine){
-  if(!mine.length) return '';
-  const total = mine.reduce((s,d)=>s+debtTargetArs(d), 0);
+// `sinPagar`: [{name, amount}] de los gastos de meses anteriores sin pagar —
+// suman al total y van enteros a "A pagar"
+function debtsTotalRowHtml(mine, sinPagar){
+  sinPagar = sinPagar || [];
+  if(!mine.length && !sinPagar.length) return '';
+  const total = mine.reduce((s,d)=>s+debtTargetArs(d), 0) + sinPagar.reduce((s,x)=>s+x.amount, 0);
   const key = 'debts';
   const open = expandedTotalsMain.has(key);
   const header = `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
@@ -8690,7 +8736,7 @@ function debtsTotalRowHtml(mine){
   if(!open) return header;
 
   const paidItems = mine.map(d=>({name: d.name, amount: Math.min(debtSavedArs(d), debtTargetArs(d))})).filter(x=>x.amount > 0);
-  const unpaidItems = mine.map(d=>({name: d.name, amount: Math.max(0, debtTargetArs(d) - debtSavedArs(d))})).filter(x=>x.amount > 0);
+  const unpaidItems = sinPagar.concat(mine.map(d=>({name: d.name, amount: Math.max(0, debtTargetArs(d) - debtSavedArs(d))}))).filter(x=>x.amount > 0);
   const paidTotal = paidItems.reduce((s,x)=>s+x.amount, 0);
   const extra = debtSubtotalRowHtml('Pagado', paidTotal, paidItems, key+':paid')
               + debtSubtotalRowHtml('A pagar', total - paidTotal, unpaidItems, key+':unpaid');
@@ -8700,10 +8746,12 @@ function renderDeudas(){
   const person = currentDeudasPerson;
   $('deudasTitle').textContent = `Deudas de ${monthShort(viewMonth)}`;
   const mine = debts.filter(d=>d.person === person);
+  // gastos de meses anteriores que quedaron sin tildar como pagados
+  const sinPagar = unpaidDebtRowsFor(person);
 
   // lo que falta de las compras en cuotas también se debe
   const pendiente = mine.reduce((s,d)=> s + (debtIsDone(d) ? 0 : Math.max(0, debtTargetArs(d) - debtSavedArs(d))), 0)
-    + cardPendingFor(person);
+    + cardPendingFor(person) + sinPagar.reduce((s,o)=>s + o.mine, 0);
   const saldadas = mine.filter(debtIsDone).length;
   const cell = (k, v, cls='') => `<div class="totals-cell">
       <div class="totals-k">${k}</div><div class="totals-v ${cls}">${v}</div></div>`;
@@ -8714,11 +8762,11 @@ function renderDeudas(){
   renderCardPurchases(person);
 
   const box = $('debtsBox');
-  if(!mine.length){
+  if(!mine.length && !sinPagar.length){
     box.innerHTML = '<div class="empty">Todavía no cargaste deudas propias. Agregá una: todo el monto junto, o en un plan de varios meses.</div>';
     return;
   }
-  box.innerHTML = mine.map(d=>{
+  box.innerHTML = sinPagar.map(unpaidDebtRowHtml).join('') + mine.map(d=>{
     // todo en la moneda que se eligió para la deuda, sin la conversión a la
     // otra al lado — solo Totales (que suma deudas de monedas mezcladas) pasa a pesos
     const fmtCur = v => d.currency === 'USD' ? fmtUsd(v) : fmt(v);
@@ -8730,7 +8778,94 @@ function renderDeudas(){
       meta: badge ? `<span class="bill-occ-badge">${badge}</span>` : '',
       edit: `openDebtModal('${d.id}')`, del: `deleteDebt('${d.id}')`
     });
-  }).join('') + debtsTotalRowHtml(mine);
+  }).join('') + debtsTotalRowHtml(mine, sinPagar.map(o=>({ name: o.ex.desc, amount: o.mine })));
+}
+
+// ---- Tus deudas: lo que quedó sin pagar de meses anteriores ----
+// una fila por gasto, con la parte de esta persona (en uno compartido, la suya)
+function unpaidDebtRowsFor(person){
+  return unpaidPastExpenses().map(o=>{
+    const pend = unpaidDebtAmount(o.ex);
+    const r = pend / (o.ex.amount || 1);
+    return { ...o, pend, mine: entryShareOf(o.ex, person) * r };
+  }).filter(o=>o.mine > 0.5)
+    .sort((a,b)=>(a.ex.date||'').localeCompare(b.ex.date||''));
+}
+function unpaidDebtRowHtml(o){
+  const mes = monthShort(monthKey(o.ex.date));
+  const deTodos = Math.abs(o.mine - o.pend) > 0.5;
+  return `<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">${escapeHtml(o.ex.desc)}</div>
+      <div class="bill-meta">
+        <span class="bill-occ-badge">Sin pagar</span>
+        <span>${o.kind === 'fixed' ? 'Gasto fijo' : 'Gasto variable'} de ${mes}</span>
+        ${deTodos ? `<span>·</span><span>tu parte de ${fmt(o.pend)}</span>` : ''}
+      </div>
+      <div class="debt-actions">
+        <button type="button" class="btn-link" onclick="settleUnpaidExpense('${o.kind}','${o.ex.id}')">Pagar</button>
+        <button type="button" class="btn-link" onclick="markUnpaidAsPaid('${o.kind}','${o.ex.id}')">Ya estaba pagado</button>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(o.mine)}</div>
+  </div>`;
+}
+const unpaidSource = (kind, id) => (kind === 'fixed' ? expenses : varExpenses).find(x=>x.id === id);
+// tildar como pagado (todas las veces, si se repite): se pagó en su mes,
+// sólo que no se había marcado — vuelve a descontarse ahí
+function setExpenseFullyPaid(ex, paid){
+  ex.paid = paid;
+  if(occurrenceCount(ex) > 1) ex.occurrencesPaid = Array.from({length: occurrenceCount(ex)}, ()=>paid);
+}
+function markUnpaidAsPaid(kind, id){
+  const ex = unpaidSource(kind, id);
+  if(!ex) return;
+  setExpenseFullyPaid(ex, true);
+  if(kind === 'fixed') saveExpenses(); else saveVarExpenses();
+  render();
+  notyf.success(`"${ex.desc}" quedó como pagado en ${monthShort(monthKey(ex.date))}`);
+}
+// pagarla ahora: se carga como gasto variable del mes en curso, ya pagado y
+// con el mismo reparto, así se descuenta este mes; el original queda tildado
+// y marcado con settledLater para que su mes no lo vuelva a descontar.
+// Borrar ese gasto variable deshace el pago (ver deleteVarExpense)
+function settleUnpaidExpense(kind, id){
+  const ex = unpaidSource(kind, id);
+  if(!ex) return;
+  const pend = unpaidDebtAmount(ex);
+  if(!(pend > 0)) return;
+  const mesDeuda = monthShort(monthKey(ex.date));
+  const mesHoy = monthShort(monthNow());
+  const compartido = pids().filter(p=>entryShareOf(ex, p) > 0).length > 1;
+  openConfirmModal(`"${ex.desc}" (${fmt(pend)}) se carga como gasto variable de ${mesHoy}, ya pagado${compartido ? ' y repartido igual que el original' : ''}. En ${mesDeuda} sigue sin descontarse.`, ()=>{
+    const pago = {
+      id: genId(), desc: `${ex.desc} (deuda de ${mesDeuda})`, amount: pend, date: todayStr(),
+      category: ex.category || categoryOfVariable(ex.desc),
+      paidBy: ex.paidBy,
+      shares: ex.shares ? { ...ex.shares } : soloShares(isPerson(ex.paidBy) ? ex.paidBy : firstPid()),
+      splitType: ex.splitType, paid: true,
+      fromDebt: { kind, id: ex.id }
+    };
+    ex.settledLater = { month: monthNow(), amount: pend, varId: pago.id,
+      prevPaid: !!ex.paid, prevOccurrencesPaid: Array.isArray(ex.occurrencesPaid) ? ex.occurrencesPaid.slice() : null };
+    setExpenseFullyPaid(ex, true);
+    varExpenses.push(pago);
+    if(kind === 'fixed') saveExpenses();
+    saveVarExpenses();
+    render();
+    notyf.success(`Pagado: quedó en Gastos variables de ${mesHoy}`);
+  }, { title:'Pagar deuda', okLabel:'Pagar', danger:false });
+}
+// borrar el gasto variable de un pago de deuda vuelve la deuda a su lugar
+function undoDebtSettlement(pago){
+  if(!pago || !pago.fromDebt) return;
+  const ex = unpaidSource(pago.fromDebt.kind, pago.fromDebt.id);
+  if(!ex || !ex.settledLater || ex.settledLater.varId !== pago.id) return;
+  ex.paid = ex.settledLater.prevPaid;
+  if(ex.settledLater.prevOccurrencesPaid) ex.occurrencesPaid = ex.settledLater.prevOccurrencesPaid;
+  else delete ex.occurrencesPaid;
+  delete ex.settledLater;
+  if(pago.fromDebt.kind === 'fixed') saveExpenses();
 }
 
 function renderRule5030(person){
@@ -9128,12 +9263,15 @@ function renderResumen(fin){
 // salda por separado (ver el ✓ de la card), así que no se arrastra. Gastos
 // posibles no entra acá: es una plantilla recurrente sin fecha, no una
 // transacción puntual.
-function accumulateNet(net, list){
+// `ratio` (opcional): qué parte de cada gasto cuenta — en los meses, lo que
+// quedó sin pagar no lo puso nadie todavía (countedRatio)
+function accumulateNet(net, list, ratio){
   list.forEach(ex=>{
     // en un gasto compartido cada uno puso exactamente su parte: no hay deuda
     if(isSharedPay(ex.paidBy)) return;
-    if(net[ex.paidBy] != null) net[ex.paidBy] += ex.amount;
-    pids().forEach(id=>{ net[id] -= personShareOf(ex, id); });
+    const r = ratio ? ratio(ex) : 1;
+    if(net[ex.paidBy] != null) net[ex.paidBy] += ex.amount * r;
+    pids().forEach(id=>{ net[id] -= personShareOf(ex, id) * r; });
   });
 }
 function netBalances(key){
@@ -9141,8 +9279,8 @@ function netBalances(key){
   const inMonth = x=>monthKey(x.date) === key;
   const net = {};
   pids().forEach(id=>{ net[id] = 0; });
-  accumulateNet(net, expenses.filter(inMonth));
-  accumulateNet(net, varExpenses.filter(inMonth));
+  accumulateNet(net, expenses.filter(inMonth), countedRatio);
+  accumulateNet(net, varExpenses.filter(inMonth), countedRatio);
   accumulateNet(net, dailyExpenses.filter(inMonth));
   return net;
 }
