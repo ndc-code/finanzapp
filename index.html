@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FinanzApp</title>
+<!-- instalable en el celular (PWA): manifest + sw.js, ver registro al final -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f5f5f7">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="FinanzApp">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -79,6 +88,12 @@
   .view-dot{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;
     border:1.5px solid var(--card);}
   .view-dot[hidden]{display:none;}
+  /* cantidad de vencimientos pendientes sobre la campana del header */
+  #dueBtn{position:relative;}
+  .icon-badge{position:absolute;top:-5px;right:-5px;min-width:14px;height:15px;padding:0 3px;border-radius:9999px;
+    background:var(--a-clay);color:#fff;font-size:9.5px;font-weight:700;line-height:15px;text-align:center;
+    border:1.5px solid var(--card);box-sizing:content-box;}
+  .icon-badge[hidden]{display:none;}
   .usd-dropdown-body{padding:6px 10px;font-size:13px;color:var(--ink);}
   .usd-dropdown-body .usd-title{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;
     color:var(--body-muted);font-weight:600;margin-bottom:8px;}
@@ -184,6 +199,9 @@
     .head-right .icon-btn:disabled{background:transparent;}
     .head-right .icon-btn > svg{flex:0 0 18px;}
     .head-right .icon-btn::after{content:attr(aria-label);font-size:14px;font-weight:500;color:var(--ink);text-align:left;}
+    /* en el menú, el globito de vencimientos va al final de la fila */
+    .head-right #dueBtn::after{order:1;}
+    .head-right #dueBtn .icon-badge{position:static;order:2;margin-left:auto;}
     /* copiar / borrar mes mueven todo el mes: van en su propio grupo, entre
        separadores, y borrar en rojo, para no tocarlos sin querer al buscar
        otra opción (igual los dos piden confirmación) */
@@ -938,6 +956,12 @@
       <!-- Resumen vive acá, entre la cotización y Ajustes, y no en la barra de
            tabs — switchTab() ya soporta activar un panel sin botón ahí (ver
            settingsBtn), así que Resumen sigue el mismo patrón -->
+      <!-- Próximos vencimientos: su propia página, con la cantidad pendiente en
+           un globito — ver renderDueSoon() -->
+      <button type="button" class="icon-btn" id="dueBtn" onclick="switchTab('vencimientos')" aria-label="Próximos vencimientos">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        <span class="icon-badge" id="dueBadge" hidden></span>
+      </button>
       <button type="button" class="icon-btn" id="resumenBtn" onclick="switchTab('resumen')" aria-label="Resumen">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
       </button>
@@ -1220,6 +1244,20 @@
 
   </div>
 
+  <!-- ============ TAB: VENCIMIENTOS ============ -->
+  <!-- se abre con el ícono de campana del header (como Resumen y Ajustes):
+       gastos fijos de este mes sin tildar que ya vencieron o vencen en los
+       próximos días — ver renderDueSoon(). Siempre el mes real de hoy, no el
+       que se esté mirando en el selector -->
+  <div class="tab-panel" id="panel-vencimientos" role="tabpanel">
+    <div class="card">
+      <div class="section-title" id="dueSoonTitle">Próximos vencimientos</div>
+      <!-- una pestaña por persona: lo que le toca pagar a cada uno -->
+      <div class="seg sub-seg" id="dueSoonTabs" style="margin-bottom:14px;"></div>
+      <div id="dueSoonList"></div>
+    </div>
+  </div>
+
   <!-- ============ TAB: RESUMEN ============ -->
   <div class="tab-panel" id="panel-resumen" role="tabpanel">
     <!-- Mismo patrón que Ahorro: filtro de persona arriba, card con título + totales.
@@ -1265,6 +1303,14 @@
       <div id="tripSettingsBody" style="display:none;margin-top:16px;">
         <label for="tripNameInput">Nombre del viaje</label>
         <input type="text" id="tripNameInput" placeholder="Ej: Bariloche" maxlength="40">
+        <!-- la moneda en la que se carga todo el viaje por defecto -->
+        <label for="tripCurrencySel" style="margin-top:14px;">Moneda del viaje</label>
+        <select id="tripCurrencySel"></select>
+        <div id="tripFxSetting" style="display:none;margin-top:10px;">
+          <label for="tripFxInput" id="tripFxSettingLabel">Cotización</label>
+          <input type="text" inputmode="decimal" id="tripFxInput" autocomplete="off">
+          <p class="income-note" id="tripFxSettingNote" style="margin:6px 0 0;"></p>
+        </div>
         <button type="button" class="btn-link" style="margin-top:14px;color:var(--a-clay-ink);" onclick="endTrip()">Terminar el viaje y empezar uno nuevo</button>
       </div>
     </div>
@@ -1695,12 +1741,24 @@
       </div>
       <div class="row2">
         <div>
-          <label for="tpAmount">Monto (ARS)</label>
+          <label for="tpAmount" id="tpAmountLabel">Monto (ARS)</label>
           <input type="text" inputmode="numeric" class="ie-money" id="tpAmount" placeholder="0" required>
         </div>
         <div>
           <label for="tpDate">Fecha</label>
           <input type="date" id="tpDate">
+        </div>
+      </div>
+      <!-- la moneda del viaje (Ajustes › Viajes) o pesos; se guarda también en
+           pesos con la cotización de ese momento — ver setTripCurrency(). Con
+           el viaje en pesos no se muestra -->
+      <div id="tpCurField">
+        <label>Moneda</label>
+        <div class="seg seg-fit" id="tpCurSeg"></div>
+        <div id="tpFxWrap" style="display:none;margin-top:10px;">
+          <label for="tpFx" id="tpFxLabel">Cotización</label>
+          <input type="text" inputmode="decimal" id="tpFx" autocomplete="off">
+          <p class="income-note" id="tpFxNote" style="margin:6px 0 0;"></p>
         </div>
       </div>
       <!-- de dónde sale el monto cuando se eligió "Ahorro" (dólares × cotización) -->
@@ -2883,7 +2941,7 @@ function syncTabsToGlobalView(){
   const v = globalView;
   currentIncomeTab = currentStartTab = currentFixedTab = currentVarTab = currentResumenTab = v;
   TRIP_KINDS.forEach(k=>{ tripTab[k] = v; });
-  if(isPerson(v)) currentBudgetTab = currentDailyTab = currentDeudasPerson = currentAhorroPerson = v;
+  if(isPerson(v)) currentBudgetTab = currentDailyTab = currentDeudasPerson = currentAhorroPerson = currentDueTab = v;
   document.querySelectorAll('#ahorroPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentAhorroPerson));
   document.querySelectorAll('#deudasPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentDeudasPerson));
 }
@@ -5113,12 +5171,16 @@ function deleteVarExpense(id){
 // viaje − su parte de los fijos − variables − diarios = Saldos. Nada de esto
 // entra en financeFor(), netBalances() ni el Resumen.
 const TRIP_KINDS = ['income', 'fixed', 'variable', 'daily'];
-function emptyTrip(){ return { enabled:false, name:'', income:[], fixed:[], variable:[], daily:[] }; }
+// currency/fx: la moneda del viaje (Ajustes › Viajes) y su cotización fija
+// (null = la de hoy). Es solo el valor por defecto de cada entrada nueva.
+function emptyTrip(){ return { enabled:false, name:'', currency:'ARS', fx:null, income:[], fixed:[], variable:[], daily:[] }; }
 function normalizeTrip(t){
   const out = emptyTrip();
   if(t && typeof t === 'object' && !Array.isArray(t)){
     out.enabled = !!t.enabled;
     out.name = typeof t.name === 'string' ? t.name : '';
+    if(typeof t.currency === 'string' && /^[A-Z]{3}$/.test(t.currency)) out.currency = t.currency;
+    if(Number(t.fx) > 0) out.fx = Number(t.fx);
     TRIP_KINDS.forEach(k=>{ if(Array.isArray(t[k])) out[k] = t[k]; });
   }
   return out;
@@ -5178,6 +5240,7 @@ function tripSavingsPick(owner){
 }
 let tpSavings = null;   // lo que trajo el chip Ahorro, mientras siga sin tocarse
 function applyTripSavingsPick(){
+  if(tpCur !== 'ARS') setTripCurrency('ARS');   // el total ahorrado se trae en pesos
   const p = tripSavingsPick(tpOwner);
   const quien = p.who.length === 1 ? nameOf(p.who[0]) : 'Entre todos';
   if(!(p.fx > 0)){
@@ -5253,7 +5316,8 @@ function tripBillRow(e, kind){
     <div class="bill-main">
       <div class="bill-name">${escapeHtml(e.desc)}</div>
       <div class="bill-meta">
-        <span>${shortDate(e.date)}</span>${splitTxt}
+        <span>${shortDate(e.date)}</span>${e.currency && e.original
+          ? `<span>·</span><span>${fmtCurAmount(e.currency, e.original)} a ${fmtRate(e.fx)}</span>` : ''}${splitTxt}
         ${ownerTag}${kind === 'income' ? '' : payerTagHtml(e)}
         ${paidBox}
       </div>
@@ -5323,6 +5387,7 @@ function renderTrip(){
   $('tripEnabledToggle').setAttribute('aria-checked', String(on));
   $('tripSettingsBody').style.display = on ? '' : 'none';
   if(document.activeElement !== $('tripNameInput')) $('tripNameInput').value = trip.name || '';
+  renderTripCurrencySetting();
   if(!on){
     // apagado desde otro dispositivo mientras se miraba la página
     if($('panel-viajes').classList.contains('active')) switchTab('ingresos');
@@ -5358,6 +5423,40 @@ $('tripNameInput').addEventListener('change', ()=>{
   saveTrip();
   renderTrip();
 });
+// Moneda del viaje: lo que arranca elegido en cada entrada nueva. La
+// cotización es opcional: vacía usa la de hoy; escrita queda fija para el viaje
+function renderTripCurrencySetting(){
+  const sel = $('tripCurrencySel');
+  const cur = trip.currency || 'ARS';
+  sel.innerHTML = TRIP_CURRENCIES.map(c=>
+    `<option value="${c.code}"${c.code === cur ? ' selected' : ''}>${c.code === 'ARS' ? 'Pesos argentinos' : `${c.label} (${c.code})`}</option>`).join('');
+  const foreign = cur !== 'ARS';
+  $('tripFxSetting').style.display = foreign ? '' : 'none';
+  if(!foreign) return;
+  $('tripFxSettingLabel').textContent = `Cotización (pesos por 1 ${cur}, opcional)`;
+  if(document.activeElement !== $('tripFxInput')) $('tripFxInput').value = trip.fx > 0 ? fmtRate(trip.fx) : '';
+  const hoy = todayRateFor(cur);
+  $('tripFxInput').placeholder = hoy ? fmtRate(hoy) : '';
+  const fuente = cur === 'USD' ? 'el dólar blue' : 'la cotización oficial';
+  $('tripFxSettingNote').textContent = trip.fx > 0
+    ? `Todo el viaje usa ${fmtRate(trip.fx)} por defecto. Borrala para usar ${fuente} de cada día.`
+    : `Vacía, cada gasto usa ${fuente} del día en que lo cargás${hoy ? ` (hoy ${fmtRate(hoy)})` : ''}.`;
+  if(!hoy && cur !== 'USD') loadOtherRates().then(()=>{ if(todayRateFor(cur)) renderTripCurrencySetting(); });
+}
+$('tripCurrencySel').addEventListener('change', ()=>{
+  trip.currency = $('tripCurrencySel').value;
+  trip.fx = null;   // la cotización fija era de la moneda anterior
+  saveTrip();
+  renderTripCurrencySetting();
+});
+$('tripFxInput').addEventListener('change', ()=>{
+  const raw = $('tripFxInput').value.trim();
+  const v = parseRate(raw);
+  if(raw && !(v > 0)){ notyf.error('La cotización no es un número válido.'); return; }
+  trip.fx = raw ? v : null;
+  saveTrip();
+  renderTripCurrencySetting();
+});
 function endTrip(){
   const word = (trip.name || '').trim() || 'viaje';
   openConfirmModal(`Se borra todo lo cargado en el viaje (ingresos y gastos) para empezar uno nuevo. Antes se guarda una copia de seguridad.`, async ()=>{
@@ -5371,6 +5470,98 @@ function endTrip(){
     notyf.success('Viaje terminado. Listo para el próximo');
   }, { title:'Terminar el viaje', okLabel:'Terminar viaje', confirmWord: word });
 }
+
+// ---- monedas: un gasto afuera se carga en su moneda ----
+// Se guarda {currency, original, fx} y además `amount` en pesos (original ×
+// fx, redondeado), así toda la cascada del viaje sigue sumando pesos sin
+// cambiar nada. La cotización queda fija en la entrada, como en Ahorro.
+const TRIP_CURRENCIES = [
+  { code:'ARS', label:'Pesos',   sym:'$' },
+  { code:'USD', label:'Dólares', sym:'US$' },
+  { code:'EUR', label:'Euros',   sym:'€' },
+  { code:'BRL', label:'Reales',  sym:'R$' },
+  { code:'CLP', label:'Pesos chilenos',   sym:'CLP$' },
+  { code:'UYU', label:'Pesos uruguayos',  sym:'$U' }
+];
+const tripCur = (code) => TRIP_CURRENCIES.find(c=>c.code === code) || TRIP_CURRENCIES[0];
+const RATES_API = 'https://dolarapi.com/v1/cotizaciones';
+let otherRates = null;   // {EUR: venta, BRL: …}: se pide la primera vez que hace falta
+async function loadOtherRates(){
+  if(otherRates) return otherRates;
+  try{
+    const r = await fetch(RATES_API, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const out = {};
+    (await r.json()).forEach(x=>{ const v = Number(x.venta); if(x.moneda && v > 0) out[x.moneda] = v; });
+    otherRates = out;
+  }catch(e){ otherRates = null; }
+  return otherRates;
+}
+// la de hoy: el dólar es el blue, el mismo de toda la app; el resto, la oficial
+function todayRateFor(code){
+  if(code === 'ARS') return 1;
+  if(code === 'USD') return usdRate() || null;
+  return (otherRates && otherRates[code]) || null;
+}
+const fmtRate = (v) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: v < 10 ? 4 : 2 }).format(v);
+const fmtCurAmount = (code, v) => `${tripCur(code).sym} ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(v)}`;
+// "1555", "1.555", "1.555,5" o "1,5492" (es-AR) → número
+function parseRate(s){
+  s = String(s || '').replace(/\s/g, '');
+  if(!s) return NaN;
+  if(s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  const v = Number(s);
+  return v > 0 ? v : NaN;
+}
+// la cotización por defecto de una moneda: la fija del viaje si es su moneda
+// y se cargó una en Ajustes, si no la de hoy
+function tripDefaultRate(code){
+  if(code === trip.currency && trip.fx > 0) return trip.fx;
+  return todayRateFor(code);
+}
+let tpCur = 'ARS';
+// en el modal se elige solo entre la moneda del viaje y pesos (los pasajes,
+// por ejemplo, se suelen pagar acá); con el viaje en pesos no hay nada que elegir
+function setTripCurrency(code, fx){
+  tpCur = code;
+  const opts = [...new Set([trip.currency || 'ARS', 'ARS', code])];
+  $('tpCurField').style.display = opts.length > 1 ? '' : 'none';
+  $('tpCurSeg').innerHTML = opts.map(k=>{ const c = tripCur(k);
+    return `<button type="button" data-cur="${c.code}"${c.code === code ? ' class="active"' : ''}>${c.code === 'ARS' ? 'Pesos' : `${c.sym} ${c.label}`}</button>`; }).join('');
+  $('tpAmountLabel').textContent = `Monto (${code})`;
+  const foreign = code !== 'ARS';
+  $('tpFxWrap').style.display = foreign ? '' : 'none';
+  if(foreign){
+    $('tpFxLabel').textContent = `Cotización (pesos por 1 ${code})`;
+    const rate = fx || tripDefaultRate(code);
+    $('tpFx').value = rate ? fmtRate(rate) : '';
+    // euro, real…: la primera vez la cotización llega un toque después
+    if(!rate) loadOtherRates().then(()=>{
+      const r = todayRateFor(code);
+      if(r && tpCur === code && !$('tpFx').value){ $('tpFx').value = fmtRate(r); updateTripFxNote(); }
+    });
+  }
+  updateTripFxNote();
+}
+function updateTripFxNote(){
+  if(tpCur === 'ARS'){ $('tpFxNote').textContent = ''; return; }
+  const amt = numVal('tpAmount'), fx = parseRate($('tpFx').value);
+  const fuente = tpCur === trip.currency && trip.fx > 0
+    ? 'Por defecto es la cotización del viaje (Ajustes); podés cambiarla.'
+    : `Por defecto es ${tpCur === 'USD' ? 'el dólar blue' : 'la cotización oficial'} de hoy; podés cambiarla.`;
+  $('tpFxNote').textContent = amt > 0 && fx > 0
+    ? `${fmtCurAmount(tpCur, amt)} × ${fmtRate(fx)} = ${fmt(Math.round(amt * fx))}. ${fuente}`
+    : (fx > 0 ? fuente : `Escribí cuántos pesos vale 1 ${tpCur}.`);
+}
+$('tpCurSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  // el total ahorrado ya viene en pesos
+  if(tpSavings){ tpSavings = null; setTripHint(''); }
+  setTripCurrency(btn.dataset.cur);
+});
+$('tpFx').addEventListener('input', updateTripFxNote);
 
 // ---- modal ----
 let tripModalKind = 'fixed';
@@ -5386,7 +5577,8 @@ function openTripModal(kind, id){
   if(e){
     editingTripId = e.id;
     $('tpDesc').value = e.desc;
-    $('tpAmount').value = groupThousands(String(e.amount));
+    // uno en otra moneda se edita en esa moneda
+    $('tpAmount').value = groupThousands(String(e.currency ? Math.round(e.original) : e.amount));
     $('tpDate').value = e.date || todayStr();
     const owner = expenseOwner(e);
     tpOwner = owner;
@@ -5411,6 +5603,8 @@ function openTripModal(kind, id){
   $('tripModalTitle').textContent = (e ? 'Editar ' : 'Agregar ') + what;
   $('tpSubmitBtn').textContent = e ? 'Guardar cambios' : 'Agregar ' + what;
   $('tpDesc').placeholder = 'Ej: ' + TRIP_KIND_INFO[kind].chips.slice(0, 2).join(', ');
+  // una entrada nueva arranca en la moneda del viaje; una que ya existe, en la suya
+  setTripCurrency(e ? (e.currency || 'ARS') : (trip.currency || 'ARS'), e && e.currency ? e.fx : null);
   renderTripModalSegs();
   $('tripModal').classList.add('open');
   document.body.classList.add('modal-open');
@@ -5474,6 +5668,7 @@ $('tpDescChips').addEventListener('click', (e)=>{
 // tocar el monto a mano deja de ser "el total ahorrado"
 $('tpAmount').addEventListener('input', ()=>{
   if(tpSavings && numVal('tpAmount') !== tpSavings.amount){ tpSavings = null; setTripHint(''); }
+  updateTripFxNote();
 });
 $('tpDesc').addEventListener('input', ()=>{
   const v = $('tpDesc').value.trim().toLowerCase();
@@ -5482,8 +5677,16 @@ $('tpDesc').addEventListener('input', ()=>{
 $('tripForm').addEventListener('submit', (e)=>{
   e.preventDefault();
   const desc = $('tpDesc').value.trim();
-  const amount = numVal('tpAmount');
+  let amount = numVal('tpAmount');
   if(!desc || !amount) return;
+  // en otra moneda: lo tipeado es en esa moneda, `amount` queda en pesos
+  const foreign = tpCur !== 'ARS';
+  const original = foreign ? amount : undefined;
+  const rate = foreign ? parseRate($('tpFx').value) : undefined;
+  if(foreign){
+    if(!(rate > 0)){ notyf.error(`Falta la cotización del ${tpCur}.`); $('tpFx').focus(); return; }
+    amount = Math.round(original * rate);
+  }
   const kind = tripModalKind;
   const shared = isSharedPay(tpOwner) && peopleCount() > 1;
   const isIncome = kind === 'income';
@@ -5495,7 +5698,8 @@ $('tripForm').addEventListener('submit', (e)=>{
     paidBy: shared ? (isIncome ? SHARED_PAY : tpPayer) : owner,
     shares: shared ? (!isIncome && tpSplit === 'contrib' ? tripContribShares() : equalShares()) : soloShares(owner),
     splitType: shared ? (isIncome ? 'equal' : tpSplit) : undefined,
-    source: undefined, usd: undefined, fx: undefined,
+    source: undefined, usd: undefined,
+    currency: foreign ? tpCur : undefined, original, fx: rate,
     link: isIncome ? undefined : (tripLinkHref($('tpLink').value) || undefined),
     notes: isIncome ? undefined : ($('tpNotes').value.trim() || undefined)
   };
@@ -5505,7 +5709,7 @@ $('tripForm').addEventListener('submit', (e)=>{
     return;
   }
   // el total ahorrado: reparto según cuánto ahorró cada uno, y de dónde salió
-  if(isIncome && tpSavings && amount === tpSavings.amount){
+  if(isIncome && !foreign && tpSavings && amount === tpSavings.amount){
     Object.assign(fields, {
       paidBy: shared ? SHARED_PAY : owner,
       shares: tpSavings.shares,
@@ -5514,6 +5718,12 @@ $('tripForm').addEventListener('submit', (e)=>{
     });
   }
   const existing = editingTripId ? trip[kind].find(x=>x.id === editingTripId) : null;
+  // editar uno que vino del ahorro sin tocar el monto (la fecha, el nombre)
+  // no lo convierte en un ingreso común
+  if(existing && existing.source === 'savings' && !fields.source && !foreign && amount === existing.amount){
+    Object.assign(fields, { source: 'savings', usd: existing.usd, fx: existing.fx, shares: existing.shares,
+      splitType: existing.splitType, paidBy: existing.paidBy });
+  }
   if(existing) Object.assign(existing, fields);
   else trip[kind].push({ id: genId(), ...fields });
   saveTrip();
@@ -7245,6 +7455,87 @@ function countedRatio(ex){
   return Math.max(0, Math.min(1, (amount - fuera) / amount));
 }
 // todo lo que se debe de meses anteriores, fijos y variables
+// ---- Próximos vencimientos (su propia página, desde la campana del header) ----
+// gastos fijos del mes en curso que no están tildados como pagados y cuya
+// fecha ya pasó o cae en los próximos DUE_SOON_DAYS días. Solo el mes real de
+// hoy: un mes cerrado ya lo resuelve Deudas, uno futuro todavía no vence.
+const DUE_SOON_DAYS = 7;
+function daysUntil(dateStr){
+  const d = new Date(dateStr + 'T00:00:00'), t = new Date(todayStr() + 'T00:00:00');
+  return Math.round((d - t) / 86400000);
+}
+function dueSoonItems(){
+  const mes = monthNow();
+  return expenses.filter(ex=>monthKey(ex.date) === mes && expenseUnpaidAmount(ex) > 0 && daysUntil(ex.date) <= DUE_SOON_DAYS)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+}
+function dueLabel(days){
+  if(days < 0) return { text: days === -1 ? 'Venció ayer' : `Venció hace ${-days} días`, late: true };
+  if(days === 0) return { text: 'Vence hoy', late: true };
+  if(days === 1) return { text: 'Vence mañana', late: false };
+  return { text: `Vence en ${days} días`, late: false };
+}
+// separado por persona: cada uno ve lo suyo y su parte de lo compartido
+let currentDueTab = 'A';
+function renderDueSoon(){
+  // siempre el mes real de hoy, aunque el selector esté en otro
+  const all = dueSoonItems();
+  // el globito de la campana: cuántos hay en total, de todos
+  const badge = $('dueBadge');
+  badge.hidden = !all.length;
+  badge.textContent = all.length > 9 ? '9+' : String(all.length);
+  // el número va solo en el globito: en el menú de mobile el aria-label se ve
+  // como texto al lado, y quedaba repetido
+  $('dueBtn').title = all.length ? `Próximos vencimientos: ${all.length} pendientes` : 'Próximos vencimientos';
+  $('dueSoonTitle').textContent = `Próximos vencimientos de ${monthShort(monthNow())}`;
+  const solo = peopleCount() < 2;
+  if(!isPerson(currentDueTab)) currentDueTab = firstPid();
+  const tabs = $('dueSoonTabs');
+  tabs.style.display = solo ? 'none' : '';
+  if(!solo) personTabsHtml(tabs, currentDueTab);
+  const who = currentDueTab;
+  const items = solo ? all : all.filter(ex=>personShareOf(ex, who) > 0);
+  if(!items.length){
+    $('dueSoonList').innerHTML = `<div class="empty">${escapeHtml(nameOf(who))} no tiene nada por vencer en los próximos ${DUE_SOON_DAYS} días.</div>`;
+    return;
+  }
+  $('dueSoonList').innerHTML = items.map(ex=>{
+    const lbl = dueLabel(daysUntil(ex.date));
+    // uno que se repite: tildarlo acá marca todas las veces que faltan
+    const pend = expenseUnpaidAmount(ex);
+    const mine = solo ? pend : personShareOf(ex, who) * pend / (ex.amount || 1);
+    const compartido = !solo && Math.abs(mine - pend) > 0.5;
+    return `<div class="bill">
+      <div class="bill-main">
+        <div class="bill-name">${escapeHtml(ex.desc)}</div>
+        <div class="bill-meta">
+          <span class="tag ${lbl.late ? 'tag-p1' : 'tag-card'}">${lbl.text}</span>
+          <span>${shortDate(ex.date)}</span>
+          ${compartido ? `<span>·</span><span>su parte de ${fmt(pend)}</span>` : ''}${payerTagHtml(ex)}
+        </div>
+      </div>
+      <div class="bill-amt">${fmt(mine)}</div>
+      <label class="bill-paid" title="Marcar como pagado">
+        <input type="checkbox" onchange="payDueSoon('${ex.id}')" aria-label="Marcar ${escapeHtml(ex.desc)} como pagado">
+      </label>
+    </div>`;
+  }).join('');
+}
+$('dueSoonTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentDueTab = btn.dataset.tab;
+  renderDueSoon();
+});
+function payDueSoon(id){
+  const ex = expenses.find(x=>x.id === id);
+  if(!ex) return;
+  setExpenseFullyPaid(ex, true);
+  saveExpenses();
+  render();
+  notyf.success(`"${ex.desc}" marcado como pagado`);
+}
+
 // en la tarjeta del gasto en Gastos: por qué ese mes no lo descuenta
 function debtTagHtml(ex){
   if(ex.settledLater) return `<span class="bill-occ-badge">Pagado en ${escapeHtml(monthShort(ex.settledLater.month))}</span>`;
@@ -7600,6 +7891,7 @@ function render(){
   $('varBlockTitle').textContent = `Gastos variables de ${mes}`;
   $('budgetBlockTitle').textContent = `Gastos posibles de ${mes}`;
 
+  renderDueSoon();
   renderFixedTabs(list, mes);
 
   renderVarExpenseTabs();
@@ -9406,6 +9698,11 @@ initCouple().then(loadAll);
 // fire-and-forget: the app works fine without it, and re-render once it lands so
 // the dollar figures on Ahorro fill in
 loadUsdToday().then(()=>render());
+// instalable + abre sin señal (ver sw.js). Sólo servida por http(s): abierta
+// como archivo suelto no hay service worker posible
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
+}
 </script>
 </body>
 </html>
