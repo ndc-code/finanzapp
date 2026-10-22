@@ -1965,13 +1965,6 @@ let currentCpPerson = 'A';
 let editingCpId = null;
 let expandedCps = new Set();
 let expandedCardExpenses = new Set();
-// Vista detallada (botón detailBtn del header): con detailMode cada set
-// expanded* pasa a guardar las filas que se CERRARON a mano en vez de las
-// abiertas, así todo arranca abierto sin conocer las claves de cada render.
-// Toda lectura de esos sets va por isOpen(); los toggles no cambian.
-const DETAIL_MODE_KEY = 'detail_mode';
-let detailMode = (()=>{ try{ return localStorage.getItem(DETAIL_MODE_KEY) === '1'; }catch(e){ return false; } })();
-const isOpen = (set, key) => set.has(key) !== detailMode;
 let currentDebtKind = 'total';
 let currentDebtCurrency = 'ARS';
 let currentSplit = 'equal';
@@ -2744,9 +2737,12 @@ $('viewDropdown').addEventListener('click', (e)=>{
   toggleHeadMenu(false);
   applyGlobalView(btn.dataset.view);
 });
-// Simplificada / detallada: en un toque cierra o abre todos los bloques y,
-// en detallada, también cada fila expandible (cuotas, Totales, ocurrencias de
-// un fijo…) vía isOpen(). Preferencia de este dispositivo, como amounts_hidden
+// Simplificada / detallada: en un toque cierra o abre todos los bloques. Solo
+// los bloques: las filas desglosables (Totales, cuotas…) quedan como estaban,
+// para que detallada muestre las cards sin abrir cada desglose. Preferencia
+// de este dispositivo, como amounts_hidden
+const DETAIL_MODE_KEY = 'detail_mode';
+let detailMode = (()=>{ try{ return localStorage.getItem(DETAIL_MODE_KEY) === '1'; }catch(e){ return false; } })();
 const EXPAND_ALL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/></svg>';
 const COLLAPSE_ALL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20l5-5 5 5"/><path d="M7 4l5 5 5-5"/></svg>';
 function renderDetailBtn(){
@@ -2761,14 +2757,8 @@ function renderDetailBtn(){
 function toggleDetailMode(){
   detailMode = !detailMode;
   try{ localStorage.setItem(DETAIL_MODE_KEY, detailMode ? '1' : '0'); }catch(e){}
-  // los sets vuelven a cero: con el modo nuevo, vacío = todo abierto (o todo cerrado)
-  [expandedCps, expandedCardExpenses, expandedCredits, expandedCardSpend, expandedExpenseIds,
-   expandedTotalsMain, expandedTotalRows, expandedGoals, expandedDebts, expandedCategoryCards]
-    .forEach(s=>s.clear());
-  balanceExpanded = detailMode;
   setAllCardsCollapsed(!detailMode);
   renderDetailBtn();
-  render();
 }
 // menú del header en mobile: abre/cierra .head-right como panel (ver CSS)
 function toggleHeadMenu(force){
@@ -5351,7 +5341,7 @@ function goToCardPurchases(person){
   switchTab('deudas');
 }
 function cardExpenseBillRow(ex){
-  const open = isOpen(expandedCardExpenses, ex.id);
+  const open = expandedCardExpenses.has(ex.id);
   const items = cardPurchasesInMonth(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date));
   const dailies = cardDailiesRepaidIn(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date));
   const n = items.length + dailies.length;
@@ -5444,7 +5434,7 @@ function cpCardHtml(p){
   return deudaBillHtml({
     name: p.name, amount: fmt(p.amount),
     meta: `<span class="bill-occ-badge">${paidCount} de ${p.months} pagadas</span><span class="tag tag-card">💳 ${escapeHtml(p.card.trim())}</span>`,
-    open: isOpen(expandedCps, p.id), onToggle: `toggleCpOpen('${p.id}')`, children,
+    open: expandedCps.has(p.id), onToggle: `toggleCpOpen('${p.id}')`, children,
     edit: `openCpModal('${p.id}')`, del: `deleteCp('${p.id}')`
   });
 }
@@ -5470,7 +5460,7 @@ function renderCpGroup(boxId, list, emptyMsg, rowHtml){
 // despliega (igual que Totales en Gastos) en el total de cada una
 function cuotasTotalRowHtml(list){
   const key = 'cuotas';
-  const open = isOpen(expandedTotalsMain, key);
+  const open = expandedTotalsMain.has(key);
   const total = list.reduce((s, p)=>s + (p.amount || 0), 0);
   return `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
       <div class="bill-main">
@@ -5541,7 +5531,7 @@ function creditGroupHtml(g){
   })).join('');
   return deudaBillHtml({
     name: g.label, amount: fmt(total),
-    open: isOpen(expandedCredits, g.key), onToggle: `toggleCreditOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
+    open: expandedCredits.has(g.key), onToggle: `toggleCreditOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
   });
 }
 // el total de abajo es lo que se debe por todos los créditos del mes;
@@ -5637,7 +5627,7 @@ function cardSpendGroupHtml(g){
   })).join('');
   return deudaBillHtml({
     name: g.label, amount: fmt(total),
-    open: isOpen(expandedCardSpend, g.key), onToggle: `toggleCardSpendOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
+    open: expandedCardSpend.has(g.key), onToggle: `toggleCardSpendOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
   });
 }
 function renderCardSpendDeudas(person){
@@ -6660,7 +6650,7 @@ function billRow(ex){
 function billRowRepeating(ex, n, dateStr, splitLabel){
   const paidArr = occurrencesPaidArr(ex);
   const paidCount = paidArr.filter(Boolean).length;
-  const expanded = isOpen(expandedExpenseIds, ex.id);
+  const expanded = expandedExpenseIds.has(ex.id);
   const per = occurrenceAmount(ex);
   const parent = `<div class="bill bill-clickable" onclick="toggleExpenseExpanded('${ex.id}')">
     <div class="bill-main">
@@ -6871,7 +6861,7 @@ function toggleTotalRow(key){
   render();
 }
 function subtotalRowHtml(label, amount, items, key, isPaidRow, amountFn){
-  const open = isOpen(expandedTotalRows, key);
+  const open = expandedTotalRows.has(key);
   const clickable = items.length > 0;
   const header = `<div class="bill bill-subtotal${isPaidRow ? ' is-paid' : ''}${clickable ? ' bill-clickable' : ''}"
       ${clickable ? `onclick="toggleTotalRow('${key}')"` : ''}>
@@ -6907,7 +6897,7 @@ function billTotalRow(list, opts){
     </div>`;
   }
   const key = opts.key || 'list';
-  const open = isOpen(expandedTotalsMain, key);
+  const open = expandedTotalsMain.has(key);
   const header = `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
     <div class="bill-main">
       <div class="bill-name-row">
@@ -7873,7 +7863,7 @@ function toggleGoalOpen(id){
 function goalCardHtml(g){
   const { id, name, ownAmount, usdAmount, arsAmount, pct, detail, extra, acts, dateLabel } = g;
   const done = pct >= 100;
-  const open = isOpen(expandedGoals, id);
+  const open = expandedGoals.has(id);
   const pctText = (pct < 1 && pct > 0 ? '<1' : Math.round(pct)) + '%';
   // cada fila es independiente: una meta "por mes" no tiene fecha límite, y
   // una en pesos no tiene nada que convertir — no tiene sentido mostrar la
@@ -8040,7 +8030,7 @@ function debtPlanCardHtml(d, fmtCur){
   return deudaBillHtml({
     name: d.name, amount: fmtCur(Math.max(0, d.amount || 0)),
     meta: `<span class="bill-occ-badge">${paidArr.filter(Boolean).length} de ${d.months} pagadas</span>`,
-    open: isOpen(expandedDebts, d.id), onToggle: `toggleDebtOpen('${d.id}')`, children,
+    open: expandedDebts.has(d.id), onToggle: `toggleDebtOpen('${d.id}')`, children,
     edit: `openDebtModal('${d.id}')`, del: `deleteDebt('${d.id}')`
   });
 }
@@ -8048,7 +8038,7 @@ function debtPlanCardHtml(d, fmtCur){
 // mismo patrón que subtotalRowHtml (Gastos fijos): un renglón "Pagado" o "A
 // pagar" que se puede desplegar para ver qué deuda compone ese número
 function debtSubtotalRowHtml(label, amount, items, key){
-  const open = isOpen(expandedTotalRows, key);
+  const open = expandedTotalRows.has(key);
   const clickable = items.length > 0;
   const header = `<div class="bill bill-subtotal${clickable ? ' bill-clickable' : ''}"
       ${clickable ? `onclick="toggleTotalRow('${key}')"` : ''}>
@@ -8074,7 +8064,7 @@ function debtsTotalRowHtml(mine){
   if(!mine.length) return '';
   const total = mine.reduce((s,d)=>s+debtTargetArs(d), 0);
   const key = 'debts';
-  const open = isOpen(expandedTotalsMain, key);
+  const open = expandedTotalsMain.has(key);
   const header = `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
     <div class="bill-main">
       <div class="bill-name-row">
@@ -8372,7 +8362,7 @@ function renderCategoryRank(lists){
     const pct = Math.round(d.value/total*100);
     const icon = (d.label||'?').trim().charAt(0) || '?';
     const key = kind + ':' + d.label;
-    const open = peopleCount() >= 2 && isOpen(expandedCategoryCards, key);
+    const open = peopleCount() >= 2 && expandedCategoryCards.has(key);
     const detail = open ? (()=>{
       const share = shareBreakdown(items[d.label] || []);
       return `<div class="rank-detail">${pids().map(id=>
@@ -8599,7 +8589,7 @@ function balancePersonHtml(id, net, key){
 // who owes whom en el mes que se está viendo, como una tarjeta más (mismo
 // look que un gasto). Al tocarla se desglosa por persona; el ✓ marca ese mes
 // como saldado y pasa el monto de rojo a verde.
-let balanceExpanded = detailMode;
+let balanceExpanded = false;
 function toggleBalanceExpanded(){
   balanceExpanded = !balanceExpanded;
   renderBalance();
