@@ -58,11 +58,6 @@
   .head-right{grid-area:right;display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
 
   .session-menu,.popover-menu{position:relative;flex:0 0 auto;}
-  /* la fecha de hoy: un ícono más de la fila (calendario con el número del
-     día), con el día completo en su popover — ver renderTodayDate() */
-  .today-chip{flex:0 0 auto;font-size:13px;font-weight:500;color:var(--body-muted);
-    white-space:nowrap;letter-spacing:-0.1px;}
-  .date-icon-wrap{display:inline-flex;}
   .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-strong);
     background:var(--card);color:var(--body-muted);display:flex;align-items:center;justify-content:center;
     cursor:pointer;transition:background-color .15s ease,color .15s ease;flex:0 0 auto;
@@ -73,9 +68,8 @@
   .session-dropdown{display:none;position:absolute;top:calc(100% + 8px);right:0;min-width:200px;
     background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;
     box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:40;}
-  /* el ícono de fecha es el más a la izquierda de la fila: su dropdown abre
-     hacia la derecha en vez de hacia la izquierda, o se sale de pantalla */
-  .date-icon-wrap .session-dropdown{right:auto;left:0;min-width:170px;}
+  /* separador entre grupos de un menú (Vista: personas / bloques / montos) */
+  .session-dropdown .session-code.menu-sep{margin-top:6px;border-top:1px solid var(--line);padding-top:10px;}
   .session-dropdown.open{display:block;}
   .session-code{font-size:11.5px;color:var(--body-muted);padding:6px 10px 8px;border-bottom:1px solid var(--line);
     margin-bottom:6px;word-break:break-all;}
@@ -94,13 +88,6 @@
     background:var(--a-clay);color:#fff;font-size:9.5px;font-weight:700;line-height:15px;text-align:center;
     border:1.5px solid var(--card);box-sizing:content-box;}
   .icon-badge[hidden]{display:none;}
-  .usd-dropdown-body{padding:6px 10px;font-size:13px;color:var(--ink);}
-  .usd-dropdown-body .usd-title{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;
-    color:var(--body-muted);font-weight:600;margin-bottom:8px;}
-  .usd-dropdown-body .usd-row{display:flex;justify-content:space-between;gap:16px;padding:3px 0;
-    font-variant-numeric:tabular-nums;}
-  .usd-dropdown-body .usd-row.total{border-top:1px solid var(--line);margin-top:6px;padding-top:7px;font-weight:600;}
-  .usd-dropdown-body.err{color:var(--ink-muted-48);}
   .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:16px;}
   /* bloques que se abren y cierran (setupCollapsibleCards): la flecha va
      arriba a la derecha. Cerrado se ve título, botón, pestañas, totales y
@@ -155,8 +142,8 @@
   .month-nav .m{font-weight:600;font-size:14px;letter-spacing:-0.224px;min-width:132px;text-align:center;}
   .month-nav .today{flex:0 0 auto;width:auto;padding:0 10px;font-size:13px;color:var(--primary);background:none;}
   .month-nav .today:hover{background:var(--pearl);}
-  /* .lbl-full/.lbl-short: mismo texto en dos largos (ver monthLabelHtml() y
-     renderTodayDate()) — el mobile de acá abajo elige la corta para que el
+  /* .lbl-full/.lbl-short: mismo texto en dos largos (ver monthLabelHtml())
+     — el mobile de acá abajo elige la corta para que el
      selector de mes entre al lado de "FinanzApp" en el mismo renglón */
   .lbl-short{display:none;}
   @media(max-width:600px){
@@ -174,8 +161,8 @@
      Los íconos de .head-right no entran en una fila: se juntan detrás de un
      solo botón (headMenuBtn) y .head-right pasa a ser su panel desplegable.
      Cada ícono muestra su aria-label como texto al lado, y los popovers que
-     ya tenían (fecha, dólar, sesión) se abren adentro del panel, debajo de
-     su fila, en vez de flotar. */
+     ya tenían (Vista, sesión) se abren adentro del panel, debajo de su fila,
+     en vez de flotar. */
   #headMenuBtn{display:none;}
   @media(max-width:479px){
     /* mismo orden que desktop: título + menú arriba y el selector de mes a
@@ -192,7 +179,6 @@
       box-shadow:0 8px 24px rgba(0,0,0,0.12);}
     .app-head.menu-open .head-right{display:flex;}
     .head-right .popover-menu, .head-right .session-menu{width:100%;}
-    .head-right .date-icon-wrap{display:block;}
     .head-right .icon-btn{width:100%;height:44px;border:none;border-radius:10px;background:transparent;
       justify-content:flex-start;gap:12px;padding:0 10px;}
     .head-right .icon-btn:hover{background:var(--pearl);}
@@ -202,14 +188,10 @@
     /* en el menú, el globito de vencimientos va al final de la fila */
     .head-right #dueBtn::after{order:1;}
     .head-right #dueBtn .icon-badge{position:static;order:2;margin-left:auto;}
-    /* copiar / borrar mes mueven todo el mes: van en su propio grupo, entre
-       separadores, y borrar en rojo, para no tocarlos sin querer al buscar
-       otra opción (igual los dos piden confirmación) */
-    .head-right #copyMonthBtn{margin-top:5px;position:relative;}
+    /* Ajustes y Cuenta, separados de las páginas */
     .head-right #settingsBtn{margin-top:5px;position:relative;}
-    .head-right #copyMonthBtn::before, .head-right #settingsBtn::before{content:'';position:absolute;
+    .head-right #settingsBtn::before{content:'';position:absolute;
       left:10px;right:10px;top:-4px;border-top:1px solid var(--line);}
-    .head-right #clearMonthBtn, .head-right #clearMonthBtn::after{color:var(--a-clay-ink);}
     .head-right .session-dropdown{position:static;min-width:0;box-shadow:none;border:none;
       background:var(--pearl);margin:2px 0 4px;padding:6px;}
   }
@@ -763,6 +745,13 @@
   .tag-card{background:var(--pearl);color:var(--body-muted);}
   .bill-amt{font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;white-space:nowrap;text-align:right;}
   /* Viajes: el link de la reserva y los datos importantes (check-in, código…) */
+  /* Ajustes › Este mes: copiar / borrar todo el mes */
+  .month-actions{display:flex;flex-direction:column;gap:10px;}
+  .btn-month{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line-strong);background:var(--card);
+    font-family:'Inter',system-ui,sans-serif;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;text-align:center;}
+  .btn-month:hover{background:var(--pearl);}
+  .btn-month.danger{color:var(--a-clay-ink);border-color:rgba(156,75,60,0.35);}
+  .btn-month:disabled{opacity:.45;cursor:default;background:var(--card);}
   /* Deudas: Pagar / Ya estaba pagado en un gasto que quedó sin pagar */
   .debt-actions{display:flex;gap:16px;margin-top:8px;}
   .debt-actions .btn-link{font-size:13px;font-weight:600;text-decoration:none;}
@@ -924,60 +913,27 @@
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
     <div class="head-right">
-      <div class="popover-menu date-icon-wrap">
-        <button type="button" class="icon-btn" id="dateBtn" onclick="toggleDatePopover()" aria-label="Fecha de hoy" aria-haspopup="true" aria-expanded="false">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        </button>
-        <div class="session-dropdown" id="dateDropdown">
-          <div class="today-chip" id="todayDatePopover" style="color:var(--ink);white-space:normal;"></div>
-        </div>
-      </div>
-      <!-- oculta todos los montos de la app con •••, para mostrar la pantalla
-           sin exponer cifras — ver toggleAmountsHidden() -->
-      <button type="button" class="icon-btn" id="hideAmountsBtn" onclick="toggleAmountsHidden()" aria-pressed="false"></button>
-      <!-- Vista: elige de una vez la pestaña de todos los bloques (Compartido /
-           Todos o una persona) — ver applyGlobalView(). Oculto con una sola persona -->
+      <!-- Vista: todo lo que cambia CÓMO se ve la app, en un solo menú — de
+           quién son los bloques (Compartido / una persona, applyGlobalView),
+           simplificada/detallada (toggleDetailMode) y ocultar montos
+           (toggleAmountsHidden). Ver renderViewMenu() -->
       <div class="popover-menu" id="viewMenu">
         <button type="button" class="icon-btn" id="viewBtn" onclick="toggleViewPopover()" aria-label="Vista" aria-haspopup="true" aria-expanded="false">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
           <span class="view-dot" id="viewDot" hidden></span>
         </button>
         <div class="session-dropdown" id="viewDropdown"></div>
       </div>
-      <!-- vista simplificada (bloques cerrados) / detallada (bloques y filas
-           abiertos) — ver toggleDetailMode() -->
-      <button type="button" class="icon-btn" id="detailBtn" onclick="toggleDetailMode()" aria-pressed="false"></button>
-      <div class="popover-menu">
-        <button type="button" class="icon-btn" id="usdBtn" onclick="toggleUsdPopover()" aria-label="Cotización del dólar blue" aria-haspopup="true" aria-expanded="false">$</button>
-        <div class="session-dropdown" id="usdDropdown">
-          <div id="usdDropdownBody" class="usd-dropdown-body">Cargando…</div>
-        </div>
-      </div>
-      <!-- Resumen vive acá, entre la cotización y Ajustes, y no en la barra de
-           tabs — switchTab() ya soporta activar un panel sin botón ahí (ver
-           settingsBtn), así que Resumen sigue el mismo patrón -->
       <!-- Próximos vencimientos: su propia página, con la cantidad pendiente en
            un globito — ver renderDueSoon() -->
       <button type="button" class="icon-btn" id="dueBtn" onclick="switchTab('vencimientos')" aria-label="Próximos vencimientos">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
         <span class="icon-badge" id="dueBadge" hidden></span>
       </button>
+      <!-- Resumen vive acá y no en la barra de tabs — switchTab() activa un
+           panel aunque no tenga botón ahí (igual que Ajustes) -->
       <button type="button" class="icon-btn" id="resumenBtn" onclick="switchTab('resumen')" aria-label="Resumen">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
-      </button>
-      <button type="button" class="icon-btn" id="copyMonthBtn" onclick="copyMonthToNext()"
-        aria-label="Copiar al mes siguiente" title="Copiar los gastos e ingresos de este mes al siguiente">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-        </svg>
-      </button>
-      <button type="button" class="icon-btn" id="clearMonthBtn" onclick="clearMonth()"
-        aria-label="Borrar los datos de este mes" title="Borrar los gastos e ingresos de este mes">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>
-        </svg>
       </button>
       <button type="button" class="icon-btn" id="settingsBtn" onclick="switchTab('ajustes')" aria-label="Ajustes">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -1290,6 +1246,18 @@
       <label>Cantidad de personas</label>
       <div class="seg" id="peopleCountSeg" style="margin-bottom:16px;"></div>
       <div class="people-grid" id="namesGrid"></div>
+    </div>
+    <!-- acciones sobre todo el mes elegido en el selector (antes eran íconos
+         del header): se usan poco y Borrar es peligroso tenerlo a un toque.
+         Las dos piden escribir el nombre del mes — ver copyMonthToNext() y
+         clearMonth() -->
+    <div class="card">
+      <div class="section-title" id="monthActionsTitle">Este mes</div>
+      <p class="income-note" style="margin:-4px 0 14px;">Se aplican al mes que tenés elegido arriba.</p>
+      <div class="month-actions">
+        <button type="button" class="btn-month" id="copyMonthBtn" onclick="copyMonthToNext()">Copiar al mes siguiente</button>
+        <button type="button" class="btn-month danger" id="clearMonthBtn" onclick="clearMonth()">Borrar los datos del mes</button>
+      </div>
     </div>
     <!-- Viajes no es de todos los días: la página aparece solo mientras esto
          está prendido. Apagarlo no borra nada — ver toggleTripEnabled() -->
@@ -2866,38 +2834,12 @@ function toggleSessionMenu(force){
   dropdown.classList.toggle('open', open);
   btn.setAttribute('aria-expanded', open);
 }
-function toggleUsdPopover(force){
-  const dropdown = $('usdDropdown');
-  const btn = $('usdBtn');
-  const open = typeof force === 'boolean' ? force : !dropdown.classList.contains('open');
-  dropdown.classList.toggle('open', open);
-  btn.setAttribute('aria-expanded', open);
-}
-function toggleDatePopover(force){
-  const dropdown = $('dateDropdown');
-  const btn = $('dateBtn');
-  const open = typeof force === 'boolean' ? force : !dropdown.classList.contains('open');
-  dropdown.classList.toggle('open', open);
-  btn.setAttribute('aria-expanded', open);
-}
-
-const EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
-const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-6.06"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.6 20.6 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
-function renderHideAmountsBtn(){
-  const btn = $('hideAmountsBtn');
-  if(!btn) return;
-  btn.innerHTML = amountsHidden ? EYE_OFF_SVG : EYE_OPEN_SVG;
-  btn.setAttribute('aria-pressed', amountsHidden ? 'true' : 'false');
-  const label = amountsHidden ? 'Mostrar montos' : 'Ocultar montos';
-  btn.setAttribute('aria-label', label);
-  btn.title = label;
-}
 // preferencia de este dispositivo (localStorage), no dato de la pareja: no
 // pasa por store.set ni toca Supabase
 function toggleAmountsHidden(){
   amountsHidden = !amountsHidden;
   try{ localStorage.setItem(AMOUNTS_HIDDEN_KEY, amountsHidden ? '1' : '0'); }catch(e){}
-  renderHideAmountsBtn();
+  renderViewMenu();
   // mismo combo de renders que usa el resto de la app para refrescar todas
   // las pestañas a la vez (ver applySnapshot/commitPeopleCountChange)
   render();
@@ -2917,16 +2859,41 @@ function toggleViewPopover(force){
   dropdown.classList.toggle('open', open);
   btn.setAttribute('aria-expanded', open);
 }
+// Simplificada / detallada: en un toque cierra o abre todos los bloques. Solo
+// los bloques: las filas desglosables (Totales, cuotas…) quedan como estaban,
+// para que detallada muestre las cards sin abrir cada desglose. Preferencia
+// de este dispositivo, como amounts_hidden
+const DETAIL_MODE_KEY = 'detail_mode';
+let detailMode = (()=>{ try{ return localStorage.getItem(DETAIL_MODE_KEY) === '1'; }catch(e){ return false; } })();
+function toggleDetailMode(){
+  detailMode = !detailMode;
+  try{ localStorage.setItem(DETAIL_MODE_KEY, detailMode ? '1' : '0'); }catch(e){}
+  setAllCardsCollapsed(!detailMode);
+  renderViewMenu();
+}
+// el menú Vista junta las tres cosas que cambian cómo se ve la app: de quién
+// son los bloques (solo con dos o más personas), simplificada/detallada y
+// ocultar los montos. El puntito de color en el ícono avisa que hay una
+// persona elegida
 function renderViewMenu(){
   const menu = $('viewMenu');
   if(!menu) return;
-  menu.hidden = peopleCount() < 2;
+  const solo = peopleCount() < 2;
   if(!isSharedPay(globalView) && !isPerson(globalView)) globalView = SHARED_PAY;
-  const opts = [{ key:SHARED_PAY, label:'Compartido / Todos' }, ...pids().map(id=>({ key:id, label:nameOf(id) }))];
-  $('viewDropdown').innerHTML = `<div class="session-code">Ver todos los bloques como</div>` +
-    opts.map(o=>`<button type="button" data-view="${o.key}"${o.key === globalView ? ' class="active"' : ''}>${escapeHtml(o.label)}</button>`).join('');
-  const shared = isSharedPay(globalView);
-  const label = `Vista: ${shared ? 'Compartido / Todos' : nameOf(globalView)}`;
+  const item = (attr, val, label, on) =>
+    `<button type="button" ${attr}="${val}"${on ? ' class="active"' : ''}>${escapeHtml(label)}</button>`;
+  const personas = solo ? '' : `<div class="session-code">Ver los bloques de</div>` +
+    [{ key:SHARED_PAY, label:'Compartido / Todos' }, ...pids().map(id=>({ key:id, label:nameOf(id) }))]
+      .map(o=>item('data-view', o.key, o.label, o.key === globalView)).join('');
+  $('viewDropdown').innerHTML = personas +
+    `<div class="session-code${solo ? '' : ' menu-sep'}">Bloques</div>` +
+    item('data-detail', '0', 'Simplificada (cerrados)', !detailMode) +
+    item('data-detail', '1', 'Detallada (abiertos)', detailMode) +
+    `<div class="session-code menu-sep">Montos</div>` +
+    item('data-amounts', 'show', 'Mostrar', !amountsHidden) +
+    item('data-amounts', 'hide', 'Ocultar (•••)', amountsHidden);
+  const shared = solo || isSharedPay(globalView);
+  const label = shared ? 'Vista' : `Vista: ${nameOf(globalView)}`;
   $('viewBtn').setAttribute('aria-label', label);
   $('viewBtn').title = label;
   const dot = $('viewDot');
@@ -2953,35 +2920,22 @@ function applyGlobalView(view){
   render();
 }
 $('viewDropdown').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button[data-view]');
+  const btn = e.target.closest('button');
   if(!btn) return;
-  toggleViewPopover(false);
-  toggleHeadMenu(false);
-  applyGlobalView(btn.dataset.view);
+  // renderViewMenu() reemplaza el botón tocado: sin esto, el click "de
+  // afuera" de abajo lo vería fuera del menú y lo cerraría
+  e.stopPropagation();
+  // elegir persona cierra el menú; bloques y montos lo dejan abierto
+  if(btn.dataset.view != null){
+    toggleViewPopover(false);
+    toggleHeadMenu(false);
+    applyGlobalView(btn.dataset.view);
+  }else if(btn.dataset.detail != null){
+    if((btn.dataset.detail === '1') !== detailMode) toggleDetailMode();
+  }else if(btn.dataset.amounts != null){
+    if((btn.dataset.amounts === 'hide') !== amountsHidden) toggleAmountsHidden();
+  }
 });
-// Simplificada / detallada: en un toque cierra o abre todos los bloques. Solo
-// los bloques: las filas desglosables (Totales, cuotas…) quedan como estaban,
-// para que detallada muestre las cards sin abrir cada desglose. Preferencia
-// de este dispositivo, como amounts_hidden
-const DETAIL_MODE_KEY = 'detail_mode';
-let detailMode = (()=>{ try{ return localStorage.getItem(DETAIL_MODE_KEY) === '1'; }catch(e){ return false; } })();
-const EXPAND_ALL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/></svg>';
-const COLLAPSE_ALL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20l5-5 5 5"/><path d="M7 4l5 5 5-5"/></svg>';
-function renderDetailBtn(){
-  const btn = $('detailBtn');
-  if(!btn) return;
-  btn.innerHTML = detailMode ? COLLAPSE_ALL_SVG : EXPAND_ALL_SVG;
-  btn.setAttribute('aria-pressed', detailMode ? 'true' : 'false');
-  const label = detailMode ? 'Ver simplificado' : 'Ver detallado';
-  btn.setAttribute('aria-label', label);
-  btn.title = label;
-}
-function toggleDetailMode(){
-  detailMode = !detailMode;
-  try{ localStorage.setItem(DETAIL_MODE_KEY, detailMode ? '1' : '0'); }catch(e){}
-  setAllCardsCollapsed(!detailMode);
-  renderDetailBtn();
-}
 // menú del header en mobile: abre/cierra .head-right como panel (ver CSS)
 function toggleHeadMenu(force){
   const head = document.querySelector('.app-head');
@@ -3002,8 +2956,6 @@ document.addEventListener('click', (e)=>{
   const sessionMenu = document.querySelector('.session-menu');
   if(sessionMenu && !sessionMenu.contains(e.target)) toggleSessionMenu(false);
   document.querySelectorAll('.popover-menu').forEach(menu=>{
-    if(!menu.contains(e.target) && menu.querySelector('#usdDropdown')) toggleUsdPopover(false);
-    if(!menu.contains(e.target) && menu.querySelector('#dateDropdown')) toggleDatePopover(false);
     if(!menu.contains(e.target) && menu.querySelector('#viewDropdown')) toggleViewPopover(false);
   });
 });
@@ -3180,11 +3132,16 @@ function monthHasAnyData(key){
   if(varExpenses.some(x=>monthKey(x.date) === key)) return true;
   return pids().some(p=>(income.entries[p]||[]).some(e=>monthKey(e.date) === key));
 }
+// Ajustes › Este mes: los dos botones dicen con qué meses van a trabajar
 function updateCopyMonthBtn(){
   const btn = $('copyMonthBtn');
   if(!btn) return;
+  const mes = monthShort(viewMonth);
+  btn.textContent = `Copiar ${mes} a ${monthShort(addMonthsKey(viewMonth, 1))}`;
   btn.disabled = !monthHasAnyData(viewMonth);
+  $('clearMonthBtn').textContent = `Borrar los datos de ${mes}`;
   $('clearMonthBtn').disabled = !monthClearCounts(viewMonth).total;
+  $('monthActionsTitle').textContent = `Mes de ${mes}`;
 }
 
 // ---- "Borrar mes": saca gastos fijos, variables, diarios e ingresos del mes
@@ -3300,25 +3257,6 @@ function copyMonthToNext(){
 const USD_API = 'https://dolarapi.com/v1/dolares/blue';
 let todayUsdRate = null;   // average of compra/venta, null until it loads
 
-// mismo motivo que monthLabelHtml: dos versiones del mismo texto, el CSS
-// decide cuál mostrar según el ancho de pantalla
-// la fecha de hoy vive en un ícono de la fila de botones: un calendario con el
-// número del día; su popover (y su texto en el menú de mobile) dice el día
-// completo, "Miércoles 21" — sin el mes, que ya está en el selector de mes
-function renderTodayDate(){
-  const now = new Date();
-  const weekday = now.toLocaleDateString('es-AR', {weekday:'long'});
-  const label = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${now.getDate()}`;
-  const btn = $('dateBtn');
-  btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 9h18"/>
-    <text x="12" y="19" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" stroke="none" font-family="inherit">${now.getDate()}</text>
-  </svg>`;
-  btn.setAttribute('aria-label', label);
-  btn.title = label;
-  $('todayDatePopover').textContent = label;
-}
-
 // ---- personas del espacio ----
 // La columna `names` guardaba `{A:'Juan', B:'Maria'}` cuando el espacio era
 // siempre de dos. Ahora guarda un array ordenado [{id,name}] para soportar de 1
@@ -3383,8 +3321,9 @@ function setPeople(list){
   if(!isPerson(currentDebtTplPerson)) currentDebtTplPerson = firstPid();
 }
 
+// el dólar blue de hoy: ya no tiene ícono propio, pero lo usan Ahorro (en
+// dólares), la opción Ahorro y las monedas de Viajes — ver usdRate()
 async function loadUsdToday(){
-  const el = $('usdDropdownBody');
   try{
     const r = await fetch(USD_API, {cache:'no-store'});
     if(!r.ok) throw new Error('HTTP ' + r.status);
@@ -3392,15 +3331,7 @@ async function loadUsdToday(){
     const compra = Number(d.compra), venta = Number(d.venta);
     if(!(compra > 0) || !(venta > 0)) throw new Error('respuesta inesperada');
     todayUsdRate = Math.round((compra + venta) / 2);
-    el.classList.remove('err');
-    el.innerHTML = `<div class="usd-title">Dólar blue</div>
-      <div class="usd-row"><span>Compra</span><span>$${fmtNum(compra)}</span></div>
-      <div class="usd-row"><span>Venta</span><span>$${fmtNum(venta)}</span></div>
-      <div class="usd-row total"><span>Promedio</span><span>$${fmtNum(todayUsdRate)}</span></div>`;
-  }catch(e){
-    el.classList.add('err');
-    el.textContent = 'No se pudo consultar la cotización del dólar.';
-  }
+  }catch(e){ /* sin cotización: usdRate() cae en la del ingreso en dólares */ }
 }
 // the rate a new USD income uses when its field is left blank
 function defaultUsdRate(){ return todayUsdRate || income.fx || 1500; }
@@ -9685,13 +9616,10 @@ function toggleSettled(on){
 }
 
 viewMonth = monthNow();
-renderTodayDate();
-renderHideAmountsBtn();
 // la vista guardada en este dispositivo arranca aplicada; las guardas de cada
 // render corrigen una persona que ya no esté en el espacio
 syncTabsToGlobalView();
 renderViewMenu();
-renderDetailBtn();
 resetForm();
 resetIncomeForm();
 initCouple().then(loadAll);
