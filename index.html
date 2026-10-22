@@ -40,21 +40,20 @@
   .wrap{max-width:900px;margin:0 auto;padding:32px 20px 96px;}
   @media(max-width:540px){.wrap{padding:20px 10px 48px;}}
   h1{font-weight:600;font-size:34px;margin:0;letter-spacing:-0.374px;line-height:1.15;}
-  .app-head{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:16px;margin-bottom:20px;}
-  .app-head h1{justify-self:start;}
-  .app-head .month-nav{justify-self:start;}
-  .head-right{display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
+  /* desktop: título + íconos arriba, el selector de mes a todo el ancho
+     abajo (en mobile, ver los @media de abajo, los íconos van en un menú) */
+  .app-head{display:grid;grid-template-columns:1fr auto;grid-template-areas:"title right" "month month";
+    align-items:center;gap:14px 16px;margin-bottom:20px;}
+  .app-head h1{grid-area:title;justify-self:start;}
+  .app-head .month-nav{grid-area:month;justify-self:stretch;justify-content:space-between;}
+  .head-right{grid-area:right;display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
 
   .session-menu,.popover-menu{position:relative;flex:0 0 auto;}
-  /* la fecha de hoy: chip de texto en desktop (hay lugar); en mobile se
-     esconde y el ícono de calendario (date-icon-wrap) ocupa su lugar */
+  /* la fecha de hoy: un ícono más de la fila (calendario con el número del
+     día), con el día completo en su popover — ver renderTodayDate() */
   .today-chip{flex:0 0 auto;font-size:13px;font-weight:500;color:var(--body-muted);
     white-space:nowrap;letter-spacing:-0.1px;}
-  .date-icon-wrap{display:none;}
-  @media(max-width:600px){
-    #todayDate{display:none;}
-    .date-icon-wrap{display:inline-flex;}
-  }
+  .date-icon-wrap{display:inline-flex;}
   .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-strong);
     background:var(--card);color:var(--body-muted);display:flex;align-items:center;justify-content:center;
     cursor:pointer;transition:background-color .15s ease,color .15s ease;flex:0 0 auto;
@@ -82,6 +81,29 @@
   .usd-dropdown-body .usd-row.total{border-top:1px solid var(--line);margin-top:6px;padding-top:7px;font-weight:600;}
   .usd-dropdown-body.err{color:var(--ink-muted-48);}
   .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:16px;}
+  /* bloques que se abren y cierran (setupCollapsibleCards): la flecha va
+     arriba a la derecha. Cerrado se ve título, botón, pestañas, totales y
+     saldos — se ocultan las filas de cada lista */
+  .card.collapsible{position:relative;}
+  .card.collapsible > .section-title{padding-right:36px;}
+  .collapse-btn{position:absolute;top:26px;right:20px;width:22px;height:22px;border-radius:50%;
+    border:1px solid var(--line-strong);background:none;color:var(--body-muted);cursor:pointer;padding:0;
+    display:flex;align-items:center;justify-content:center;}
+  /* chevron hacia arriba abierto (cierra), hacia abajo cerrado (abre) */
+  .collapse-btn svg{transform:rotate(180deg);transition:transform .15s ease;}
+  .card.collapsed .collapse-btn svg{transform:none;}
+  .card.collapsed .bill:not(.bill-total),
+  .card.collapsed .bill:not(.bill-total) + .bill-occurrences,
+  .card.collapsed .empty,
+  .card.collapsed .goal-empty,
+  .card.collapsed .income-entries,
+  .card.collapsed .goal,
+  .card.collapsed .sv-row,
+  .card.collapsed .collapse-body{display:none !important;}
+  /* los Totales se siguen pudiendo desplegar con el bloque cerrado: todo lo
+     que cuelga de un Totales (Pagado/A pagar, monto/intereses…) se ve */
+  .card.collapsed .bill-total + .bill-occurrences .bill{display:flex !important;}
+  .card.collapsed .bill-total + .bill-occurrences .bill-occurrences{display:block !important;}
   @media(max-width:540px){.card{padding:18px 10px;}}
 
   .name-a{color:var(--a-gold-ink);}
@@ -134,9 +156,15 @@
      su fila, en vez de flotar. */
   #headMenuBtn{display:none;}
   @media(max-width:479px){
-    .app-head{position:relative;grid-template-columns:auto 1fr auto;grid-template-areas:"title month menu";gap:8px;}
+    /* mismo orden que desktop: título + menú arriba y el selector de mes a
+       todo el ancho (con el nombre del mes completo, entra) */
+    .app-head{position:relative;grid-template-columns:1fr auto;grid-template-areas:"title menu" "month month";gap:12px 8px;}
+    .app-head .month-nav{grid-area:month;justify-self:stretch;}
+    .app-head .month-nav .lbl-full{display:inline;}
+    .app-head .month-nav .lbl-short{display:none;}
+    .month-nav .m{font-size:14px;}
     #headMenuBtn{display:flex;grid-area:menu;}
-    .head-right{display:none;position:absolute;top:calc(100% + 8px);right:0;z-index:45;width:250px;
+    .head-right{display:none;position:absolute;top:46px;right:0;z-index:45;width:250px;
       flex-direction:column;align-items:stretch;gap:2px;padding:6px;
       background:var(--card);border:1px solid var(--line);border-radius:14px;
       box-shadow:0 8px 24px rgba(0,0,0,0.12);}
@@ -280,7 +308,6 @@
   .bal-bill.is-settled .bill-amt{color:var(--good);}
   .bal-person .bill-amt.pos{color:var(--good);}
   .bal-person .bill-amt.neg{color:var(--a-clay);}
-  .cp-subhead{display:flex;justify-content:space-between;gap:10px;}
   .bal-item-calc{font-size:11.5px;color:var(--body-muted);margin-top:1px;font-variant-numeric:tabular-nums;}
   @media(max-width:480px){.avail{grid-template-columns:1fr;}}
   /* the two-person columns sit inside a big block card now, so they can't
@@ -359,6 +386,9 @@
     margin-top:5px;line-height:1.15;}
   .sld-amt.neg{color:var(--a-clay);}
   .sld-sub{font-size:12px;color:var(--body-muted);margin-top:3px;font-variant-numeric:tabular-nums;}
+  /* saldo que suma el crédito (al pie de Gastos posibles): borde punteado,
+     porque el crédito no es plata propia */
+  .sld-cell.sld-dashed{border:1.5px dashed var(--line-strong);background:transparent;}
   /* the last block (Ahorro) is a verdict, not a running total — it reads green
      when you cerraste el mes en positivo y rojo cuando no */
   .sld-cell.tone-good{background:var(--good-bg);border-color:transparent;}
@@ -646,6 +676,9 @@
   .seg button:last-child{border-right:none;}
   .seg button.active{background:var(--primary);color:#fff;border-color:var(--primary);}
   .seg button:active{transform:scale(0.97);}
+  /* la persona ya está dada por la sub-pestaña (Deudas): se ve, no se cambia */
+  .seg.seg-locked button{pointer-events:none;cursor:default;}
+  .seg.seg-locked button:not(.active){opacity:.4;}
   @media(min-width:541px){#splitToggle button{flex-basis:0;}}
   /* tres opciones cortas entran en un solo renglón en vez de envolverse 2+1
      (lo pone refreshPeopleUI cuando son pocas) */
@@ -851,9 +884,6 @@
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
     <div class="head-right">
-      <!-- la fecha de hoy, a la vista en desktop (hay lugar); en mobile pasa a
-           ser un ícono más de la fila, igual que el resto — ver dateBtn -->
-      <div class="today-chip" id="todayDate"></div>
       <div class="popover-menu date-icon-wrap">
         <button type="button" class="icon-btn" id="dateBtn" onclick="toggleDatePopover()" aria-label="Fecha de hoy" aria-haspopup="true" aria-expanded="false">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
@@ -917,12 +947,12 @@
   <div class="tab-panel active" id="panel-ingresos" role="tabpanel">
     <div class="card">
       <div class="section-title" id="incomeSectionTitle">Ingresos mensuales</div>
+      <!-- Todos muestra a cada persona; la pestaña de una persona, solo sus
+           ingresos — ver renderIncomeLists() -->
+      <div class="seg sub-seg" id="incomeTabs" style="margin-bottom:14px;"></div>
       <!-- una columna por persona del espacio, armada en renderIncomeLists() -->
       <div class="people-grid" id="incomeGrid"></div>
-      <button type="button" class="btn-add" style="margin:18px 0 0;" onclick="openIncomeModal()">+ Agregar ingreso</button>
-      <!-- un crédito no es ingreso real (no entra en el reparto "según
-           ingresos"), pero es plata que se pide acá — ver openCreditModal() -->
-      <button type="button" class="btn-add" style="margin:10px 0 0;" onclick="openCreditModal()">+ Agregar crédito</button>
+      <button type="button" class="btn-add" style="margin:18px 0 0;" onclick="openIncomeModal(isPerson(currentIncomeTab) ? currentIncomeTab : undefined)">+ Agregar ingreso</button>
       <div class="income-preview" id="incomePreview" style="display:none;"></div>
     </div>
   </div>
@@ -933,6 +963,9 @@
     <div class="card">
       <div class="sld-block bare">
         <div class="sld-title">Saldos iniciales</div>
+        <!-- Todos muestra a cada persona, la de una persona solo su saldo —
+             ver renderStartSaldos() -->
+        <div class="seg sub-seg" id="startTabs" style="margin-bottom:12px;"></div>
         <div class="sld-grid" id="startSaldos"></div>
       </div>
     </div>
@@ -965,70 +998,41 @@
       </div>
     </div>
 
-    <!-- BLOQUE 3: presupuesto discrecional. Compra dólares va primero — es el
-         ahorro, tiene prioridad — con lo disponible apenas se pagan fijos y
-         variables; Salidas/Gustos van después, con lo que queda una vez
-         apartado el ahorro. -->
+    <!-- BLOQUE 3: Compra dólares — el ahorro, lo único que resta acá: saldo
+         de variables − dólares = Saldos, lo que queda para el mes (Salidas y
+         gustos, ver financeFor().wants). Su reparto 60/40 y la comparación
+         con la teoría 50/30/20 están en Ahorro › Cómo venís este mes. -->
     <div class="card">
       <div class="section-title"><span id="budgetBlockTitle">Gastos posibles</span></div>
-      <button type="button" class="btn-add" id="budgetSuggestBtn" onclick="sugerirMontosBudget(currentBudgetTab)">Sugerir montos</button>
-      <p class="income-note" id="budgetIdealHint" style="margin-top:8px;"></p>
-      <div class="seg sub-seg" id="budgetTabs" style="margin-top:16px;"></div>
+      <div class="seg sub-seg" id="budgetTabs"></div>
 
-      <!-- un solo contenedor para los dos listeners de edición de monto
-           (#budgetAllLists) — Compra dólares y Salidas/Gustos son listas
-           separadas para mostrarse, pero comparten el mismo edit-in-place -->
-      <div id="budgetAllLists">
-        <div class="budget-subhead">Compra dólares</div>
-        <div id="dolaresList"></div>
-        <div class="sld-block">
-          <div class="sld-title">Saldos</div>
-          <!-- una sola persona a la vez (la de la sub-pestaña abierta), no
-               todas como en fijos/variables — Gastos posibles no tiene
-               "Compartidos" -->
-          <div class="sld-grid" id="dolaresSaldos" style="--cols:1;--cols-sm:1;"></div>
-        </div>
-
-        <div class="budget-subhead" style="margin-top:22px;">Salidas y gustos</div>
-        <div id="budgetList"></div>
-      </div>
-    </div>
-
-    <!-- BLOQUE 4: créditos pedidos este mes (plata para cubrir gastos diarios
-         por transferencia, ej. un adelanto de Mercado Pago) — se agregan
-         desde Ingresos, acá solo se ven y se editan. Distinto de pagar un
-         gasto diario con tarjeta: eso no es plata nueva, es una forma de
-         pago — ver el bloque de abajo. -->
-    <div class="card">
-      <div class="section-title"><span id="creditsBlockTitle">Créditos</span></div>
-      <div class="seg sub-seg" id="creditsTabs" style="margin-top:16px;"></div>
-      <div id="creditsList" style="margin-top:14px;"></div>
+      <div class="budget-edit" id="dolaresList" style="margin-top:14px;"></div>
+      <!-- una persona a la vez, la de la sub-pestaña abierta -->
       <div class="sld-block">
-        <div class="sld-title">Saldos</div>
-        <div class="sld-grid" id="creditsSaldos"></div>
+        <div class="sld-title">Saldo</div>
+        <div class="sld-grid" id="budgetSaldos" style="--cols:1;--cols-sm:1;"></div>
+        <!-- debajo: el crédito del mes (punteado, no es plata propia) y el
+             total, saldo + crédito = lo que hay para Gastos diarios
+             (renderBudgetTabs) -->
+        <div class="sld-grid" id="budgetCreditTotal" style="--cols:1;--cols-sm:1;margin-top:12px;"></div>
       </div>
     </div>
 
-    <!-- BLOQUE 5: gastos hormiga del día a día. Salen de la bolsa de Salidas +
-         Gustos de cada persona — ver financeFor() -->
+    <!-- BLOQUE 4: gastos hormiga del día a día. Arrancan del total punteado
+         de Gastos posibles (saldo + crédito) y restan lo gastado — ver financeFor() -->
     <div class="card">
       <div class="section-title"><span id="dailyBlockTitle">Gastos diarios</span></div>
       <button type="button" class="btn-add" onclick="openDailyModal()">+ Agregar gasto diario</button>
       <!-- sin pestaña "Compartidos": solo Nicolas/Valentina, cada una con su
-           propio saldo y su propia lista (los compartidos aparecen en las
-           dos, con el badge "Paga X") — ver renderDailyBlock() -->
+           propia lista y saldo (los compartidos aparecen en las dos, con el
+           badge "Paga X") — ver renderDailyBlock() -->
       <div class="seg sub-seg" id="dailyTabs" style="margin-top:16px;"></div>
-      <div id="dailyList" style="margin-top:6px;"></div>
-    </div>
-
-    <!-- BLOQUE 6: la plata real que tenés (Mercado Pago/efectivo) — tu propia
-         plata más los créditos que pediste, menos lo que gastaste por
-         transferencia. Lo pagado con tarjeta no resta acá: esa plata todavía
-         no salió de la cuenta, sale el mes que viene — ver financeFor(). -->
-    <div class="card">
-      <div class="sld-block bare">
+      <div id="dailyList" style="margin-top:14px;"></div>
+      <!-- saldo final: el total punteado de Gastos posibles (saldo + crédito) − lo gastado por transferencia (lo pagado con tarjeta se paga el mes que viene) —
+           ver renderDailySaldoFinal() -->
+      <div class="sld-block">
         <div class="sld-title">Saldo</div>
-        <div class="sld-grid" id="finalSaldos"></div>
+        <div class="sld-grid" id="dailySaldoFinal" style="--cols:1;--cols-sm:1;"></div>
       </div>
     </div>
 
@@ -1037,7 +1041,8 @@
   <!-- ============ TAB: DEUDAS ============ -->
   <div class="tab-panel" id="panel-deudas" role="tabpanel">
     <div class="seg" id="deudasPersonSeg" style="margin-bottom:14px;"></div>
-    <div class="card">
+    <!-- solo totales: no tiene nada para cerrar (data-collapse="off") -->
+    <div class="card" data-collapse="off">
       <div class="section-title" id="deudasTitle">Deudas</div>
       <div class="totals totals-2" id="deudasStrip"></div>
     </div>
@@ -1046,7 +1051,7 @@
          variables de ese mes), con la misma tarjeta que un gasto — ver
          renderBalance(). No depende de la persona elegida arriba: es entre
          todos. El bloque entero se oculta cuando no hay deuda. -->
-    <div class="card" id="balanceBlock">
+    <div class="card" id="balanceBlock" data-collapse="off">
       <div class="section-title">Entre ustedes</div>
       <div id="balanceCard"></div>
     </div>
@@ -1065,37 +1070,43 @@
       <div id="cardPurchasesBox" style="margin-top:14px;"></div>
     </div>
 
-    <!-- lo mismo que arriba pero en 1 solo pago (sin cuotas): tarjetas como
-         T.Crédito MP/Uala, o un crédito (Ingreso > Crédito) — ver
-         renderCardPurchases(), que separa cardPurchases en los dos bloques
-         según p.months -->
+    <!-- los créditos (préstamos) sacados en el mes que se está viendo, que se
+         devuelven con intereses el mes siguiente — ver renderCreditsDeudas() -->
     <div class="card">
       <div class="section-title" id="singlePaymentsTitle">Créditos</div>
-      <button type="button" class="btn-add" onclick="openCpModal()">+ Sacar crédito</button>
+      <p class="income-note" id="creditsPayNote" style="margin:-4px 0 12px;"></p>
+      <button type="button" class="btn-add" onclick="openCreditExpense()">+ Sacar crédito</button>
       <div id="singlePaymentsBox" style="margin-top:14px;"></div>
-      <!-- cuánto de todo eso fue interés (no el crédito en sí) — para ser
-           consciente de lo que cuesta pedir crédito, no solo de lo que
-           devolvés — ver renderCardPurchases() -->
-      <div id="creditInterestTotal"></div>
+      <!-- lo que se debe en total por esos créditos; abierto, separa el
+           crédito en sí de los intereses — ver creditsTotalHtml() -->
+      <div id="creditsTotal"></div>
+    </div>
+
+    <!-- gastos del mes pagados con tarjeta de crédito (gastos diarios con
+         `card`, y compras de 1 pago): se pagan el mes siguiente como "Cuotas
+         <tarjeta>" — ver renderCardSpendDeudas() -->
+    <div class="card">
+      <div class="section-title" id="cardSpendTitle">Tarjeta de crédito</div>
+      <div id="cardSpendBox"></div>
     </div>
   </div>
 
   <!-- ============ TAB: AHORRO ============ -->
   <div class="tab-panel" id="panel-ahorro" role="tabpanel">
     <div class="seg" id="ahorroPersonSeg" style="margin-bottom:14px;"></div>
-    <div class="card">
+    <div class="card" data-collapse="off">
       <div class="section-title" id="ahorroTitle">Tu ahorro</div>
       <div class="totals" id="ahorroStrip"></div>
     </div>
 
     <div class="card">
       <div class="section-title">Tu plan en 3 números</div>
-      <div id="planBox"></div>
+      <div id="planBox" class="collapse-body"></div>
     </div>
 
     <div class="card">
       <div class="section-title">Cómo venís este mes</div>
-      <div id="ruleBox"></div>
+      <div id="ruleBox" class="collapse-body"></div>
     </div>
 
     <div class="card">
@@ -1471,20 +1482,13 @@
       <button type="button" class="modal-close" onclick="closeDailyModal()" aria-label="Cerrar">✕</button>
     </div>
     <form class="add-form" id="dailyForm" novalidate>
-      <!-- el "+" carga un gasto (lo de todos los días) o un ingreso; los dos
-           tipos viven en este mismo form, se muestra uno u otro -->
-      <div class="seg" id="dlyKindSeg">
-        <button type="button" data-kind="gasto" class="active">Gasto</button>
-        <button type="button" data-kind="ingreso">Ingreso</button>
-      </div>
-
       <div id="dlyExpenseFields" class="dly-group">
         <div>
           <label>¿De quién es?</label>
           <div class="seg" id="dlyOwnerSeg"></div>
         </div>
         <div>
-          <label for="dlyAmount">Monto (ARS)</label>
+          <label for="dlyAmount">Monto</label>
           <input type="text" inputmode="numeric" class="ie-money" id="dlyAmount" placeholder="0">
         </div>
         <div>
@@ -1503,9 +1507,12 @@
             <button type="button" data-payment="card">Tarjeta de crédito</button>
           </div>
         </div>
+        <!-- pagado con tarjeta: no resta del saldo de este mes, va a Deudas ›
+             Tarjeta de crédito y se paga el mes siguiente como gasto variable
+             "Cuotas <tarjeta>" — ver desiredCardExpenses() -->
         <div id="dlyCardField" style="display:none;">
           <label for="dlyCard">¿Con qué tarjeta?</label>
-          <input type="text" id="dlyCard" placeholder="Ej: Uala, Visa">
+          <input type="text" id="dlyCard" placeholder="Ej: Visa, Uala">
           <div class="chips" id="dlyCardChips"></div>
         </div>
         <div id="dlyPayerField" style="display:none;">
@@ -1522,12 +1529,11 @@
         <p class="income-note" id="dlyHint" style="margin:0;"></p>
       </div>
 
-      <!-- Crédito: la plata recarga Salidas y Gustos de este mes y lo que se
-           devuelve entra como gasto variable al mes siguiente, en 1 solo
-           pago (ver creditReceivedOf() y syncCardExpenses()). No hay "Ingreso
-           común" acá: un ingreso de siempre (sueldo, cobro, venta) se carga
-           directo en la página de Ingresos — esto es solo para un crédito,
-           que es plata que hay que devolver, no un ingreso real. -->
+      <!-- crédito (préstamo: plata que te dan y devolvés con intereses el mes
+           siguiente) — se abre desde Deudas › "+ Sacar crédito" con la
+           persona fija; se guarda en cardPurchases con `credit` ({received,
+           date}). Mismo form que el gasto diario, se muestra uno u otro
+           (ver setDailyKind) -->
       <div id="dlyIncomeFields" class="dly-group" style="display:none;">
         <div id="dlyCreditFields" class="dly-group">
           <div>
@@ -1540,7 +1546,7 @@
             <div class="chips" id="dlyCrCardChips"></div>
           </div>
           <div>
-            <label for="dlyCrReceived">Crédito + Interés</label>
+            <label for="dlyCrReceived">Monto</label>
             <input type="text" inputmode="numeric" class="ie-money" id="dlyCrReceived" placeholder="0">
           </div>
           <div>
@@ -1561,7 +1567,7 @@
 </div>
 
 <!-- carga rápida de un gasto diario desde cualquier pestaña -->
-<button type="button" class="fab" id="dailyFab" onclick="openDailyModal()" aria-label="Agregar gasto o ingreso" title="Agregar gasto o ingreso">
+<button type="button" class="fab" id="dailyFab" onclick="openDailyModal()" aria-label="Agregar gasto diario" title="Agregar gasto diario">
   <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
 </button>
 
@@ -1576,7 +1582,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
       <span>Gastos</span>
     </button>
-    <button type="button" class="bnav-add" onclick="openDailyModal()" aria-label="Agregar gasto o ingreso">
+    <button type="button" class="bnav-add" onclick="openDailyModal()" aria-label="Agregar gasto diario">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
     </button>
     <button type="button" data-tab="deudas">
@@ -1891,12 +1897,14 @@ let editingGoalId = null;
 let debts = [];
 // [{id, person, card, name, amount, months, startMonth}] — ver syncCardExpenses()
 let cardPurchases = [];
-// [{id, desc, amount, date, paidBy, shares, splitType, card}] — mismo molde
-// que varExpenses, más `card`: si está, el gasto se pagó con esa tarjeta (no
-// transferencia/efectivo) y no resta de Salidas y Gustos de este mes — se
-// devuelve como "Cuotas <tarjeta>" en Gastos variables el mes que viene, por
-// el mismo desiredCardExpenses()/syncCardExpenses() que ya usan las compras
-// en cuotas y los créditos. Sin `card`, es transferencia/efectivo, como antes.
+// [{id, desc, amount, date, paidBy, shares, splitType, card, interest}] —
+// mismo molde que varExpenses, más `card`: si está, el gasto se pagó con
+// crédito sacado de ahí (ej. "Crédito MP"), no por transferencia, y no resta
+// del saldo de este mes. Es deuda de quien lo pagó (paidBy): aparece en
+// Deudas › Créditos del mes y se devuelve entero, más `interest`, como
+// "Cuotas <origen>" en Gastos variables el mes que viene, por el mismo
+// desiredCardExpenses()/syncCardExpenses() que usan las compras en cuotas.
+// Sin `card`, es transferencia/efectivo, como antes.
 let dailyExpenses = [];
 let currentDailyTab = 'shared';
 let currentDailyOwner = 'A';
@@ -1904,12 +1912,11 @@ let currentDailyPayer = 'A';
 let currentDailySplit = 'income';
 let currentDailyPayment = 'transfer';
 let editingDailyId = null;
-// el "+" también carga ingresos: 'gasto' | 'ingreso', y dentro de ingreso
-// 'credito' | 'comun'. Un crédito se guarda en cardPurchases con `credit`
-// ({received, date}) — ver creditReceivedOf()
+// 'gasto' | 'ingreso' — 'ingreso' es solo para editar un crédito viejo
+// (cardPurchases con `credit`, {received, date}), que ya no se cargan nuevos
+// — ver creditReceivedOf()
 let currentDailyKind = 'gasto';
 let currentCrPerson = 'A';
-let currentCreditsTab = 'A';
 let editingCreditId = null;
 let editingDebtId = null;
 // deudas recurrentes de Ajustes, solo nombre y monto de siempre — {personId:
@@ -2811,6 +2818,12 @@ function monthLabelHtml(key){
   const [,m] = key.split('-');
   return `<span class="lbl-full">${monthLabel(key)}</span><span class="lbl-short">${MONTH_ABBR[parseInt(m,10)-1]} ${key.split('-')[0]}</span>`;
 }
+// mes con el mismo formato corto que las fechas de las tarjetas ("19-oct"):
+// "sep-2026"
+function monthTag(key){
+  const [y,m] = key.split('-');
+  return `${MONTH_ABBR[parseInt(m,10)-1].toLowerCase()}-${y}`;
+}
 function monthShort(key){
   const [y,m] = key.split('-');
   const d = new Date(parseInt(y), parseInt(m)-1, 1);
@@ -2859,13 +2872,15 @@ function updateCopyMonthBtn(){
 // ---- "Borrar mes": saca gastos fijos, variables, diarios e ingresos del mes
 // en pantalla. No toca lo que vive fuera del mes: compras en cuotas y créditos
 // (Deudas) — sus cuotas automáticas se volverían a generar igual, así que
-// tampoco se borran — ni los rubros de Gastos posibles. Antes de borrar deja
+// tampoco se borran — ni los rubros de Gastos posibles. Los gastos diarios
+// pagados con crédito tampoco: son la deuda en sí, y se pagan sí o sí el mes
+// siguiente — solo se sacan de a uno, con su ✕. Antes de borrar deja
 // una copia de seguridad, como las restauraciones.
 function monthClearCounts(key){
   const inMonth = x=>monthKey(x.date) === key;
   const fijos = expenses.filter(inMonth).length;
   const variables = varExpenses.filter(e=>inMonth(e) && !e.cardAuto).length;
-  const diarios = dailyExpenses.filter(inMonth).length;
+  const diarios = dailyExpenses.filter(d=>inMonth(d) && !isCardDaily(d)).length;
   const ingresos = pids().reduce((s,p)=>s + (income.entries[p]||[]).filter(inMonth).length, 0);
   return { fijos, variables, diarios, ingresos, total: fijos + variables + diarios + ingresos };
 }
@@ -2881,7 +2896,7 @@ function clearMonth(){
   if(c.ingresos) parts.push(plural(c.ingresos, 'ingreso', 'ingresos'));
   openConfirmModal(
     `¿Borrar todo ${monthLabel(key)}? Se borran ${parts.join(', ')}. ` +
-    `No se tocan las compras en cuotas ni los créditos (Deudas), ni los montos de Gastos posibles. ` +
+    `No se tocan las compras en cuotas ni los créditos (Deudas), ni los gastos diarios pagados con crédito, ni los montos de Gastos posibles. ` +
     `Antes de borrar se guarda una copia de seguridad, por si necesitás volver atrás desde Ajustes.`,
     async ()=>{
       try{ await createBackup(`Antes de borrar ${monthLabel(key)}`); }
@@ -2889,7 +2904,7 @@ function clearMonth(){
       const inMonth = x=>monthKey(x.date) === key;
       expenses = expenses.filter(x=>!inMonth(x));
       varExpenses = varExpenses.filter(e=>!inMonth(e) || e.cardAuto);
-      dailyExpenses = dailyExpenses.filter(x=>!inMonth(x));
+      dailyExpenses = dailyExpenses.filter(x=>!inMonth(x) || isCardDaily(x));
       pids().forEach(p=>{ income.entries[p] = (income.entries[p]||[]).filter(e=>!inMonth(e)); });
       // si era el único mes cargado, la columna queda vacía a propósito
       allowBulkClear = true;
@@ -2969,15 +2984,21 @@ let todayUsdRate = null;   // average of compra/venta, null until it loads
 
 // mismo motivo que monthLabelHtml: dos versiones del mismo texto, el CSS
 // decide cuál mostrar según el ancho de pantalla
+// la fecha de hoy vive en un ícono de la fila de botones: un calendario con el
+// número del día; su popover (y su texto en el menú de mobile) dice el día
+// completo, "Miércoles 21" — sin el mes, que ya está en el selector de mes
 function renderTodayDate(){
   const now = new Date();
-  const full = now.toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
-  const fullCap = full.charAt(0).toUpperCase() + full.slice(1);
-  // formato D/M/A pedido para mobile — ahora vive en el popover del ícono de
-  // calendario (dateBtn/dateDropdown), no en un chip de texto suelto
-  const short = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
-  $('todayDate').textContent = fullCap;
-  $('todayDatePopover').textContent = short;
+  const weekday = now.toLocaleDateString('es-AR', {weekday:'long'});
+  const label = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${now.getDate()}`;
+  const btn = $('dateBtn');
+  btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 9h18"/>
+    <text x="12" y="19" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" stroke="none" font-family="inherit">${now.getDate()}</text>
+  </svg>`;
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+  $('todayDatePopover').textContent = label;
 }
 
 // ---- personas del espacio ----
@@ -4458,35 +4479,10 @@ function renderBudgetTemplates(){
   }).join('') : `<div class="income-note" style="padding:12px 0;">Todavía no cargaste gastos posibles.</div>`;
 }
 
-// ---- sugerencia de montos para Salidas/Gustos/Compra dólares ----
-// Compra dólares es el ahorro, tiene prioridad y no lo toca este botón — el
-// usuario lo carga a mano (o queda en lo que ya tenía). "Sugerir montos" solo
-// reparte por mitades, entre Salidas y Gustos, lo que queda de afterVar una
-// vez apartado ese monto — misma cuenta que redistribuirWantsSegunDolares.
-function sugerirMontosBudget(person){
-  const list = budgetTemplatesForMonth(viewMonth)[person] || [];
-  const salidas = list.find(c=>c.label === 'Salidas');
-  const gustos = list.find(c=>c.label === 'Gustos');
-  if(!salidas || !gustos){
-    notyf.error('Necesitás los rubros Salidas y Gustos para sugerir montos.');
-    return;
-  }
-  const fin = financeFor(person);
-  if(fin.inc <= 0){
-    notyf.error('Cargá el ingreso de este mes para poder sugerir montos.');
-    return;
-  }
-  redistribuirWantsSegunDolares(person);
-
-  saveBudgetTemplates();
-  renderBudgetTemplates();
-  render();
-  notyf.success(salidas.amount > 0 ? 'Montos sugeridos aplicados' : 'Sin saldo disponible este mes: Salidas y Gustos quedaron en $0.');
-}
-
-// Compra dólares manda: si lo editás a mano, Salidas y Gustos se reacomodan
-// solos por mitades con lo que queda de afterVar, igual que "Sugerir
-// montos" — ninguno de los dos toca el monto de Compra dólares.
+// Compra dólares manda (el monto lo decide cada uno): si lo editás a mano,
+// los rubros guardados de Salidas y Gustos se reacomodan solos con lo que
+// queda de afterVar — 60% Salidas, 40% Gustos — para que Ajustes muestre lo
+// mismo que la cadena (que igual los calcula sola, ver financeFor().wants).
 function redistribuirWantsSegunDolares(person){
   const list = budgetTemplatesForMonth(viewMonth)[person] || [];
   const salidas = list.find(c=>c.label === 'Salidas');
@@ -4497,8 +4493,8 @@ function redistribuirWantsSegunDolares(person){
   const dolares = list.find(c=>c.label === 'Compra dólares');
   const afterVar = financeFor(person).afterVar;
   const wantsTotal = Math.max(0, afterVar - (dolares ? (dolares.amount || 0) : 0));
-  salidas.amount = Math.round(wantsTotal / 2);
-  gustos.amount = Math.round(wantsTotal / 2);
+  salidas.amount = Math.round(wantsTotal * 0.6);
+  gustos.amount = wantsTotal - salidas.amount;
 }
 
 $('bTplTable').addEventListener('change', (e)=>{
@@ -4988,8 +4984,11 @@ function resetDebtForm(){
   currentDebtCurrency = 'ARS';
   syncDebtSegs();
 }
-// el campo "¿en cuántos meses?" solo tiene sentido en un plan en cuotas
+// el campo "¿en cuántos meses?" solo tiene sentido en un plan en cuotas.
+// La persona se ve pero no se cambia: ya la da la sub-pestaña de Deudas
+// (una deuda es siempre de una sola persona)
 function syncDebtSegs(){
+  $('dWhoSeg').classList.add('seg-locked');
   document.querySelectorAll('#dWhoSeg button').forEach(b=>b.classList.toggle('active', b.dataset.who === currentDebtPerson));
   document.querySelectorAll('#dKindSeg button').forEach(b=>b.classList.toggle('active', b.dataset.kind === currentDebtKind));
   document.querySelectorAll('#dCurSeg button').forEach(b=>b.classList.toggle('active', b.dataset.cur === currentDebtCurrency));
@@ -5024,12 +5023,6 @@ function syncDebtChips(){
   });
 }
 $('debtModal').addEventListener('click', (e)=>{ if(e.target === $('debtModal')) closeDebtModal(); });
-$('dWhoSeg').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button');
-  if(!btn) return;
-  currentDebtPerson = btn.dataset.who;
-  syncDebtSegs();
-});
 $('dKindSeg').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
   if(!btn) return;
@@ -5118,6 +5111,10 @@ function monthDiff(from, to){
 function cpCuota(p){ return (p.amount || 0) / p.months; }
 function cpValid(p){ return isPerson(p.person) && p.months > 0 && !!p.startMonth && !!cardNorm(p.card); }
 function cardExpenseKey(person, card, month){ return `${person}|${cardNorm(card)}|${month}`; }
+// gasto diario pagado con crédito: de quién es la deuda y cuánto se devuelve
+const isCardDaily = d => !!cardNorm(d.card);
+const cardDailyPayer = d => isPerson(d.paidBy) ? d.paidBy : null;
+const cardDailyRepay = d => (d.amount || 0) + (d.interest || 0);
 
 // lo que debería haber en varExpenses según las compras: un total por
 // persona/tarjeta/mes
@@ -5132,20 +5129,20 @@ function desiredCardExpenses(){
       out.set(k, cur);
     }
   });
-  // gastos diarios pagados con tarjeta: no son una "compra" cargada en
-  // Deudas, pero se devuelven igual, 1 solo pago el mes siguiente — se suman
-  // al mismo total por persona/tarjeta/mes que una compra en cuotas, así una
-  // tarjeta que ya tiene cuotas ese mes no termina con dos filas "Cuotas X"
-  dailyExpenses.filter(d=>cardNorm(d.card)).forEach(d=>{
+  // gastos diarios pagados con crédito: se devuelven en 1 solo pago el mes
+  // siguiente, enteros y con los intereses, por quien lo pagó — si era
+  // compartido, la parte del otro ya se le debe en "Entre ustedes", así que
+  // no se le carga además a él. Se suman al mismo total por
+  // persona/origen/mes que una compra en cuotas, así un origen que ya tiene
+  // cuotas ese mes no termina con dos filas "Cuotas X"
+  dailyExpenses.filter(isCardDaily).forEach(d=>{
+    const person = cardDailyPayer(d);
+    if(!person) return;
     const month = addMonthsKey(monthKey(d.date), 1);
-    pids().forEach(person=>{
-      const share = entryShareOf(d, person);
-      if(!share) return;
-      const k = cardExpenseKey(person, d.card, month);
-      const cur = out.get(k) || { person, card: d.card.trim(), month, amount: 0 };
-      cur.amount += share;
-      out.set(k, cur);
-    });
+    const k = cardExpenseKey(person, d.card, month);
+    const cur = out.get(k) || { person, card: d.card.trim(), month, amount: 0 };
+    cur.amount += cardDailyRepay(d);
+    out.set(k, cur);
   });
   return out;
 }
@@ -5204,8 +5201,17 @@ function cpPaidArr(p){
   });
 }
 function cardPendingFor(person){
-  return cardPurchases.filter(p=>p.person === person && cpValid(p))
+  const cuotas = cardPurchases.filter(p=>p.person === person && cpValid(p))
     .reduce((s, p)=> s + cpPaidArr(p).filter(x=>!x).length * cpCuota(p), 0);
+  // los gastos diarios pagados con crédito, hasta que se tilda su "Cuotas
+  // <origen>" del mes siguiente en Gastos variables
+  const diarios = dailyExpenses.filter(d=>isCardDaily(d) && cardDailyPayer(d) === person)
+    .filter(d=>{
+      const ex = cardExpenseFor(person, d.card, addMonthsKey(monthKey(d.date), 1));
+      return !(ex && ex.paid);
+    })
+    .reduce((s, d)=>s + cardDailyRepay(d), 0);
+  return cuotas + diarios;
 }
 // las compras que tienen una cuota en ese mes, con el número de cuota
 function cardPurchasesInMonth(person, card, month){
@@ -5218,8 +5224,14 @@ function cardPurchasesInMonth(person, card, month){
     .filter(Boolean);
 }
 
+// los gastos diarios pagados con crédito que se devuelven en ese mes
+function cardDailiesRepaidIn(person, card, month){
+  return dailyExpenses.filter(d=>isCardDaily(d) && cardDailyPayer(d) === person
+    && cardNorm(d.card) === cardNorm(card) && addMonthsKey(monthKey(d.date), 1) === month);
+}
+
 // el gasto "Cuotas MP" en Gastos variables: se abre como Limpieza, con una
-// fila por compra. No se edita ni se borra a mano — sale de las compras —, así
+// fila por compra (y por gasto diario pagado con crédito). No se edita ni se borra a mano — sale de las compras —, así
 // que ✎ lleva a Deudas y ✕ queda oculto (solo para que el monto quede alineado)
 function toggleCardExpenseOpen(id){
   if(expandedCardExpenses.has(id)) expandedCardExpenses.delete(id);
@@ -5235,6 +5247,8 @@ function goToCardPurchases(person){
 function cardExpenseBillRow(ex){
   const open = expandedCardExpenses.has(ex.id);
   const items = cardPurchasesInMonth(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date));
+  const dailies = cardDailiesRepaidIn(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date));
+  const n = items.length + dailies.length;
   const parent = `<div class="bill bill-clickable" onclick="toggleCardExpenseOpen('${ex.id}')">
     <div class="bill-main">
       <div class="bill-name-row">
@@ -5244,7 +5258,7 @@ function cardExpenseBillRow(ex){
       </div>
       <div class="bill-meta">
         <span>${shortDate(ex.date)}</span>
-        <span class="bill-occ-badge">${items.length} ${items.length === 1 ? 'compra' : 'compras'}</span>
+        <span class="bill-occ-badge">${n} ${n === 1 ? 'compra' : 'compras'}</span>
         <label class="bill-paid" title="${ex.paid ? 'Pagado' : 'Marcar como pagado'}" onclick="event.stopPropagation()">
           <input type="checkbox" ${ex.paid ? 'checked' : ''} onchange="toggleVarExpensePaid('${ex.id}')">
         </label>
@@ -5262,8 +5276,49 @@ function cardExpenseBillRow(ex){
       <div class="bill-meta"><span>Cuota ${x.n} de ${x.p.months}</span></div>
     </div>
     <div class="bill-amt">${fmt(x.cuota)}</div>
+  </div>`).join('') + dailies.map(d=>`<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">${escapeHtml(d.desc)}</div>
+      <div class="bill-meta"><span>Gasto diario del ${shortDate(d.date)}</span>${
+        d.interest ? `<span>incluye ${fmt(d.interest)} de intereses</span>` : ''}</div>
+    </div>
+    <div class="bill-amt">${fmt(cardDailyRepay(d))}</div>
   </div>`).join('');
   return parent + `<div class="bill-occurrences">${rows}</div>`;
+}
+
+// ---- fila de Deudas: mismo layout que un gasto de Gastos ----
+// la misma tarjeta .bill que un gasto fijo (nombre + meta, monto, ✎ ✕), y si
+// tiene detalle, se despliega igual que Limpieza: flecha junto al nombre,
+// toda la tarjeta abre/cierra, y las filas hijas cuelgan en .bill-occurrences
+function deudaBillHtml(o){
+  const canOpen = !!o.children;
+  const open = canOpen && o.open;
+  const stop = canOpen ? 'event.stopPropagation(); ' : '';
+  const parent = `<div class="bill${canOpen ? ' bill-clickable' : ''}"${canOpen ? ` onclick="${o.onToggle}"` : ''}>
+    <div class="bill-main">
+      <div class="bill-name-row">
+        ${canOpen ? `<button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+          aria-label="${open ? 'Ocultar' : 'Ver'} el detalle">▸</button>` : ''}
+        <div class="bill-name">${escapeHtml(o.name)}</div>
+      </div>
+      ${o.meta ? `<div class="bill-meta">${o.meta}</div>` : ''}
+    </div>
+    <div class="bill-amt">${o.amount}</div>
+    ${o.edit ? `<button class="bill-edit" onclick="${stop}${o.edit}" aria-label="Editar">✎</button>
+    <button class="bill-del" onclick="${stop}${o.del}" aria-label="Eliminar">✕</button>` : ''}
+  </div>`;
+  return parent + (open ? `<div class="bill-occurrences">${o.children}</div>` : '');
+}
+// fila hija sin acciones (cuota, monto, intereses)
+function deudaChildHtml(name, amount, meta){
+  return `<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">${name}</div>
+      ${meta ? `<div class="bill-meta">${meta}</div>` : ''}
+    </div>
+    <div class="bill-amt">${amount}</div>
+  </div>`;
 }
 
 // ---- bloque "Compras en cuotas" de Deudas ----
@@ -5273,69 +5328,28 @@ function toggleCpOpen(id){
   renderDeudas();
 }
 function cpCardHtml(p){
-  const open = expandedCps.has(p.id);
   const paidArr = cpPaidArr(p);
   const paidCount = paidArr.filter(Boolean).length;
-  const pct = p.months > 0 ? paidCount / p.months * 100 : 0;
-  const falta = (p.months - paidCount) * cpCuota(p);
-  const items = paidArr.map((paid, i)=>`<div class="bill">
-    <div class="bill-main">
-      <div class="bill-name">Cuota ${i+1} de ${p.months}</div>
-      <div class="bill-meta">
-        <span>${monthLabel(addMonthsKey(p.startMonth, i))}</span>
-        <label class="bill-paid" title="Se marca al tildar el gasto de ese mes en Gastos variables">
-          <input type="checkbox" ${paid ? 'checked' : ''} disabled>
-        </label>
-      </div>
-    </div>
-    <div class="bill-amt">${fmt(cpCuota(p))}</div>
-  </div>`).join('');
-  return `<div class="goal">
-    <div class="goal-h bill-clickable" onclick="toggleCpOpen('${p.id}')">
-      <div class="bill-name-row">
-        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1" aria-label="${open ? 'Ocultar' : 'Ver'} las ${p.months} cuotas">▸</button>
-        <span class="goal-n">${escapeHtml(p.name)}</span>
-      </div>
-      <span class="goal-t">${fmt(p.amount)}</span>
-      <span class="goal-acts">
-        <button type="button" onclick="event.stopPropagation(); openCpModal('${p.id}')" aria-label="Editar compra">✎</button>
-        <button type="button" onclick="event.stopPropagation(); deleteCp('${p.id}')" aria-label="Eliminar compra">✕</button>
-      </span>
-    </div>
-    <div class="goal-track"><i class="${pct >= 100 ? '' : 'part'}" style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>
-    ${open ? `<div class="bill-occurrences">${items}</div>` : ''}
-    <div class="goal-d"><span class="goal-pct">${paidCount} de ${p.months} cuotas</span>${
-      falta > 0.5 ? ` — faltan ${fmt(falta)}.` : (p.credit ? ' — crédito devuelto.' : ' — compra pagada.')}${
-      p.credit ? `<br>Te dieron ${fmt(p.credit.received || 0)} en ${escapeHtml(monthShort(monthKey(p.credit.date)))}.` : ''}</div>
-  </div>`;
+  const children = paidArr.map((paid, i)=>deudaChildHtml(`Cuota ${i+1} de ${p.months}`, fmt(cpCuota(p)),
+    `<span>${monthTag(addMonthsKey(p.startMonth, i))}</span>
+     <label class="bill-paid" title="Se marca al tildar el gasto de ese mes en Gastos variables">
+       <input type="checkbox" ${paid ? 'checked' : ''} disabled>
+     </label>`)).join('');
+  return deudaBillHtml({
+    name: p.name, amount: fmt(p.amount),
+    meta: `<span class="bill-occ-badge">${paidCount} de ${p.months} pagadas</span><span class="tag tag-card">💳 ${escapeHtml(p.card.trim())}</span>`,
+    open: expandedCps.has(p.id), onToggle: `toggleCpOpen('${p.id}')`, children,
+    edit: `openCpModal('${p.id}')`, del: `deleteCp('${p.id}')`
+  });
 }
-// fila de un crédito (1 solo pago): sin barra de progreso ni "X de 1
-// cuotas" — eso es justamente lo que lo distingue de una compra en cuotas
-function cpSingleCardHtml(p){
-  const paid = cpPaidArr(p)[0];
-  return `<div class="goal">
-    <div class="goal-h">
-      <span class="goal-n">${escapeHtml(p.name)}</span>
-      <span class="goal-t">${fmt(p.amount)}</span>
-      <span class="goal-acts">
-        <button type="button" onclick="openCpModal('${p.id}')" aria-label="Editar crédito">✎</button>
-        <button type="button" onclick="deleteCp('${p.id}')" aria-label="Eliminar crédito">✕</button>
-      </span>
-    </div>
-    <div class="goal-d">${paid ? (p.credit ? 'Crédito devuelto.' : 'Pagado.') : `Pendiente — faltan ${fmt(p.amount)}.`}${
-      p.credit ? `<br>Te dieron ${fmt(p.credit.received || 0)} en ${escapeHtml(monthShort(monthKey(p.credit.date)))}.` : ''}</div>
-  </div>`;
-}
-// agrupa una lista de compras por tarjeta (en el orden en que se cargó la
-// primera de cada una) y la pinta en `box`, con el mismo header "tarjeta +
-// lo que cae este mes" que usan tanto las cuotas como los créditos —
-// `rowHtml` es la fila (cpCardHtml para cuotas, cpSingleCardHtml para
-// créditos de 1 pago)
-function renderCpGroup(boxId, person, list, emptyMsg, rowHtml){
+// pinta una lista de compras en `box`, las de una misma tarjeta juntas (en el
+// orden en que se cargó la primera de cada una) — `rowHtml` es la fila
+// (cpCardHtml), que ya lleva la tarjeta como badge
+function renderCpGroup(boxId, list, emptyMsg, rowHtml){
   const box = $(boxId);
   if(!box) return;
   if(!list.length){
-    box.innerHTML = `<div class="goal-empty">${emptyMsg}</div>`;
+    box.innerHTML = `<div class="empty">${emptyMsg}</div>`;
     return;
   }
   const groups = [];
@@ -5344,38 +5358,198 @@ function renderCpGroup(boxId, person, list, emptyMsg, rowHtml){
     if(!g){ g = { key: cardNorm(p.card), label: p.card.trim(), list: [] }; groups.push(g); }
     g.list.push(p);
   });
-  box.innerHTML = groups.map((g, i)=>{
-    const thisMonth = cardPurchasesInMonth(person, g.label, viewMonth).reduce((s, x)=>s + x.cuota, 0);
-    return `<div class="budget-subhead cp-subhead"${i ? ' style="margin-top:18px;"' : ''}>
-        <span>${escapeHtml(g.label)}</span>${thisMonth > 0 ? `<span>${escapeHtml(monthShort(viewMonth))} ${fmt(thisMonth)}</span>` : ''}
-      </div>` + g.list.map(rowHtml).join('');
-  }).join('');
+  box.innerHTML = groups.map(g=>g.list.map(rowHtml).join('')).join('');
 }
-// "Compras en cuotas" (más de 1 cuota) y "Créditos" (1 solo pago — tarjetas
-// como T.Crédito MP/Uala, o un crédito pedido para cubrir el mes) son la
-// misma entidad (cardPurchases) separada en dos bloques según p.months, para
-// no mezclar lo que se paga de a poco con lo que es un pago único
+// "Totales" de Compras en cuotas: la suma de todas las compras, que se
+// despliega (igual que Totales en Gastos) en el total de cada una
+function cuotasTotalRowHtml(list){
+  const key = 'cuotas';
+  const open = expandedTotalsMain.has(key);
+  const total = list.reduce((s, p)=>s + (p.amount || 0), 0);
+  return `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
+      <div class="bill-main">
+        <div class="bill-name-row">
+          <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+            aria-label="${open ? 'Ocultar' : 'Ver'} el total de cada compra">▸</button>
+          <div class="bill-name">Totales</div>
+        </div>
+      </div>
+      <div class="bill-amt">${fmt(total)}</div>
+    </div>` + (open ? `<div class="bill-occurrences">${list.map(p=>deudaChildHtml(escapeHtml(p.name), fmt(p.amount || 0))).join('')}</div>` : '');
+}
+// "Compras en cuotas" (más de 1 cuota) y "Créditos" del mes (1 solo pago,
+// ver renderCreditsDeudas) son bloques separados, para no mezclar lo que se
+// paga de a poco con lo que se devuelve entero el mes que viene
 function renderCardPurchases(person){
-  $('singlePaymentsTitle').textContent = `Créditos de ${monthShort(viewMonth)}`;
-  const mine = cardPurchases.filter(p=>p.person === person && cpValid(p));
-  const cuotas = mine.filter(p=>p.months > 1);
-  const singles = mine.filter(p=>p.months === 1);
-  renderCpGroup('cardPurchasesBox', person, cuotas,
+  const cuotas = cardPurchases.filter(p=>p.person === person && cpValid(p) && p.months > 1);
+  renderCpGroup('cardPurchasesBox', cuotas,
     'Cargá las compras que hiciste en cuotas con tarjeta. La cuota de cada mes se suma sola en Gastos variables como "Cuotas" + la tarjeta.', cpCardHtml);
-  renderCpGroup('singlePaymentsBox', person, singles,
-    'Acá van los créditos de 1 solo pago (sin cuotas): tarjetas como T.Crédito MP o un crédito que pediste para cubrir el mes. Se cargan igual que una compra, con 1 cuota, o desde Ingreso › Crédito.', cpSingleCardHtml);
-  // solo los créditos de verdad (p.credit) tienen interés — una compra de 1
-  // pago con tarjeta (ej. T.Crédito MP) no. Es la suma de todos los que estén
-  // cargados, no solo los del mes, para que el número sea consciente de
-  // cuánto vas pagando de interés en total por pedir créditos
-  const totalInteres = singles.filter(p=>p.credit)
-    .reduce((s,p)=>s + Math.max(0, p.amount - (p.credit.received || 0)), 0);
-  $('creditInterestTotal').innerHTML = totalInteres > 0
-    ? `<div class="bill bill-total" style="margin-top:14px;">
-        <div class="bill-main"><div class="bill-name">Total de intereses</div></div>
-        <div class="bill-amt">${fmt(totalInteres)}</div>
-      </div>`
-    : '';
+  if(cuotas.length) $('cardPurchasesBox').insertAdjacentHTML('beforeend', cuotasTotalRowHtml(cuotas));
+  renderCreditsDeudas(person);
+  renderCardSpendDeudas(person);
+}
+
+// ---- bloque "Créditos de [mes]" de Deudas ----
+// los créditos (préstamos) que esa persona sacó en el mes: plata que le dieron
+// (`credit.received`) y que devuelve con intereses en 1 solo pago el mes
+// siguiente, como "Cuotas <origen>" en Gastos variables. Cada uno con su
+// capital y sus intereses por separado, para el total de abajo.
+function creditsTakenIn(person, key){
+  key = key || viewMonth;
+  return cardPurchases
+    .filter(p=>p.person === person && cpValid(p) && p.credit && monthKey(p.credit.date) === key)
+    .map(p=>{
+      const received = p.credit.received || 0;
+      return { kind: 'cp', id: p.id, name: p.name, origin: p.card.trim(), date: p.credit.date,
+        capital: received, interest: Math.max(0, (p.amount || 0) - received), repayMonth: p.startMonth };
+    })
+    .sort((a,b)=>(b.date || '').localeCompare(a.date || ''));
+}
+// una tarjeta por origen (Crédito MP, Uala…) con el total; si hay más de un
+// crédito de ese origen se despliega, igual que Limpieza, en una sub-tarjeta
+// por crédito con su fecha, sus intereses y su total
+let expandedCredits = new Set();
+function toggleCreditOpen(encodedKey){
+  const key = decodeURIComponent(encodedKey);
+  if(expandedCredits.has(key)) expandedCredits.delete(key);
+  else expandedCredits.add(key);
+  renderCreditsDeudas(currentDeudasPerson);
+}
+function creditMetaHtml(c){
+  return `${c.date ? `<span>${shortDate(c.date)}</span><span>·</span>` : ''}<span>Intereses ${fmt(c.interest)}</span>`;
+}
+function creditActions(c){
+  return {
+    edit: c.kind === 'daily' ? `openDailyModal('${c.id}', { lockOwner: true })` : `openCpModal('${c.id}')`,
+    del: c.kind === 'daily' ? `deleteDailyExpense('${c.id}')` : `deleteCp('${c.id}')`
+  };
+}
+function creditGroupHtml(g){
+  const total = g.list.reduce((s, c)=>s + c.capital + c.interest, 0);
+  if(g.list.length === 1){
+    const c = g.list[0];
+    return deudaBillHtml({ name: g.label, amount: fmt(total), meta: creditMetaHtml(c), ...creditActions(c) });
+  }
+  const children = g.list.map(c=>deudaBillHtml({
+    name: g.label, amount: fmt(c.capital + c.interest), meta: creditMetaHtml(c), ...creditActions(c)
+  })).join('');
+  return deudaBillHtml({
+    name: g.label, amount: fmt(total),
+    open: expandedCredits.has(g.key), onToggle: `toggleCreditOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
+  });
+}
+// el total de abajo es lo que se debe por todos los créditos del mes;
+// tocándolo se abre y separa el crédito en sí de los intereses
+let creditsTotalOpen = false;
+function toggleCreditsTotal(){
+  creditsTotalOpen = !creditsTotalOpen;
+  renderCreditsDeudas(currentDeudasPerson);
+}
+function creditsTotalHtml(list){
+  if(!list.length) return '';
+  const capital = list.reduce((s, c)=>s + c.capital, 0);
+  const interest = list.reduce((s, c)=>s + c.interest, 0);
+  const open = creditsTotalOpen;
+  return `<div class="bill bill-total bill-clickable" onclick="toggleCreditsTotal()">
+      <div class="bill-main">
+        <div class="bill-name-row">
+          <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+            aria-label="${open ? 'Ocultar' : 'Ver'} monto e intereses">▸</button>
+          <div class="bill-name">Totales</div>
+        </div>
+      </div>
+      <div class="bill-amt">${fmt(capital + interest)}</div>
+    </div>` + (open ? `<div class="bill-occurrences">${deudaChildHtml('Monto', fmt(capital))}${deudaChildHtml('Intereses', fmt(interest))}</div>` : '');
+}
+function renderCreditsDeudas(person){
+  const mes = monthShort(viewMonth);
+  $('singlePaymentsTitle').textContent = `Créditos de ${mes}`;
+  $('creditsPayNote').textContent = `Todos los créditos de ${mes} se pagan en ${monthShort(addMonthsKey(viewMonth, 1))}.`;
+  const list = creditsTakenIn(person, viewMonth);
+  const box = $('singlePaymentsBox');
+  if(!list.length){
+    box.innerHTML = `<div class="empty">No sacaste créditos en ${escapeHtml(mes)}. Los que saques se devuelven en ${escapeHtml(monthShort(addMonthsKey(viewMonth, 1)))} como gasto variable.</div>`;
+    $('creditsTotal').innerHTML = '';
+    return;
+  }
+  // agrupados por origen (Crédito MP, Uala…), en el orden en que aparece cada uno
+  const groups = [];
+  list.forEach(c=>{
+    let g = groups.find(x=>x.key === cardNorm(c.origin));
+    if(!g){ g = { key: cardNorm(c.origin), label: c.origin, list: [] }; groups.push(g); }
+    g.list.push(c);
+  });
+  box.innerHTML = groups.map(creditGroupHtml).join('');
+  $('creditsTotal').innerHTML = creditsTotalHtml(list);
+}
+// "+ Sacar crédito" de Deudas: el form de crédito, con la persona de la
+// sub-pestaña fija (las deudas son de una sola persona)
+function openCreditExpense(){
+  openDailyModal(null, { kind: 'ingreso', person: currentDeudasPerson });
+}
+
+// ---- bloque "Tarjeta de crédito de [mes]" de Deudas ----
+// lo que esa persona pagó con tarjeta en el mes y paga entero el mes
+// siguiente como "Cuotas <tarjeta>": gastos diarios con `card` (los paga quien
+// los pagó, ver cardDailyPayer) y compras de 1 pago cargadas en Compras
+// (startMonth = mes en que se paga)
+function cardSpendIn(person, key){
+  key = key || viewMonth;
+  const next = addMonthsKey(key, 1);
+  const out = [];
+  dailyExpenses.filter(d=>isCardDaily(d) && cardDailyPayer(d) === person && monthKey(d.date) === key)
+    .forEach(d=>out.push({ kind: 'daily', id: d.id, name: d.desc, card: d.card.trim(), date: d.date, amount: cardDailyRepay(d) }));
+  cardPurchases.filter(p=>p.person === person && cpValid(p) && !p.credit && p.months === 1 && p.startMonth === next)
+    .forEach(p=>out.push({ kind: 'cp', id: p.id, name: p.name, card: p.card.trim(), date: null, amount: p.amount || 0 }));
+  return out.sort((a,b)=>(b.date || '').localeCompare(a.date || ''));
+}
+// una tarjeta por card (Visa, Uala…) con el total; si tiene más de un gasto se
+// despliega, igual que Créditos, en una sub-tarjeta por gasto
+let expandedCardSpend = new Set();
+function toggleCardSpendOpen(encodedKey){
+  const key = decodeURIComponent(encodedKey);
+  if(expandedCardSpend.has(key)) expandedCardSpend.delete(key);
+  else expandedCardSpend.add(key);
+  renderCardSpendDeudas(currentDeudasPerson);
+}
+function cardSpendActions(x){
+  return {
+    edit: x.kind === 'daily' ? `openDailyModal('${x.id}', { lockOwner: true })` : `openCpModal('${x.id}')`,
+    del: x.kind === 'daily' ? `deleteDailyExpense('${x.id}')` : `deleteCp('${x.id}')`
+  };
+}
+function cardSpendGroupHtml(g){
+  const total = g.list.reduce((s, x)=>s + x.amount, 0);
+  const meta = x => [x.date ? `<span>${shortDate(x.date)}</span>` : '', `<span>${escapeHtml(x.name)}</span>`]
+    .filter(Boolean).join('<span>·</span>');
+  if(g.list.length === 1){
+    const x = g.list[0];
+    return deudaBillHtml({ name: g.label, amount: fmt(total), meta: meta(x), ...cardSpendActions(x) });
+  }
+  const children = g.list.map(x=>deudaBillHtml({
+    name: x.name, amount: fmt(x.amount), meta: x.date ? `<span>${shortDate(x.date)}</span>` : '', ...cardSpendActions(x)
+  })).join('');
+  return deudaBillHtml({
+    name: g.label, amount: fmt(total),
+    open: expandedCardSpend.has(g.key), onToggle: `toggleCardSpendOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
+  });
+}
+function renderCardSpendDeudas(person){
+  const mes = monthShort(viewMonth);
+  $('cardSpendTitle').textContent = `Tarjeta de crédito de ${mes}`;
+  const list = cardSpendIn(person, viewMonth);
+  const box = $('cardSpendBox');
+  if(!list.length){
+    box.innerHTML = `<div class="empty">No pagaste gastos con tarjeta en ${escapeHtml(mes)}. Los gastos diarios que pagues con tarjeta aparecen acá, y se pagan en ${escapeHtml(monthShort(addMonthsKey(viewMonth, 1)))} como gasto variable.</div>`;
+    return;
+  }
+  const groups = [];
+  list.forEach(x=>{
+    let g = groups.find(y=>y.key === cardNorm(x.card));
+    if(!g){ g = { key: cardNorm(x.card), label: x.card, list: [] }; groups.push(g); }
+    g.list.push(x);
+  });
+  box.innerHTML = groups.map(cardSpendGroupHtml).join('') + billTotalRow(list);
 }
 
 // ---- modal: agregar/editar compra en cuotas ----
@@ -5411,7 +5585,9 @@ function resetCpForm(){
   currentCpPerson = currentDeudasPerson;
   syncCpSegs();
 }
+// misma idea que syncDebtSegs: la persona la da la sub-pestaña de Deudas
 function syncCpSegs(){
+  $('cpWhoSeg').classList.add('seg-locked');
   document.querySelectorAll('#cpWhoSeg button').forEach(b=>b.classList.toggle('active', b.dataset.who === currentCpPerson));
   renderCpCardChips();
 }
@@ -5435,12 +5611,6 @@ $('cpCardChips').addEventListener('click', (e)=>{
   syncCpCardChips();
 });
 $('cpCard').addEventListener('input', syncCpCardChips);
-$('cpWhoSeg').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button');
-  if(!btn) return;
-  currentCpPerson = btn.dataset.who;
-  syncCpSegs();
-});
 $('cpModal').addEventListener('click', (e)=>{ if(e.target === $('cpModal')) closeCpModal(); });
 $('cpForm').addEventListener('submit', (e)=>{
   e.preventDefault();
@@ -6111,37 +6281,47 @@ function incomeRowHtml(p, e){
   </div>`;
 }
 
-// un crédito se ve en Ingresos (es plata que entró) pero no suma al total de
-// arriba: ese total es el que reparte los gastos "según ingresos", y la plata
-// prestada recarga Salidas y Gustos en vez de contar como sueldo
-function creditIncomeRowHtml(c){
-  return `
-  <div class="income-entry-row">
-    <span class="ie-main"><span class="lbl">${escapeHtml(c.card)}</span></span>
-    <span class="amt-cur">${fmt(c.credit.received || 0)}</span>
-    <button class="edit" onclick="openCpModal('${c.id}')" aria-label="Editar crédito">✎</button>
-    <button class="del" onclick="deleteCp('${c.id}')" aria-label="Eliminar crédito">✕</button>
-  </div>`;
-}
-
+// pestaña de Ingresos: Todos o una persona — igual que Saldos
+// iniciales; ocultas si hay una sola persona
+let currentIncomeTab = SHARED_PAY;
 function renderIncomeLists(){
   const title = $('incomeSectionTitle');
   if(title) title.textContent = `Ingresos de ${monthShort(viewMonth)}`;
 
-  $('incomeGrid').innerHTML = pids().map(p=>{
+  const tabs = $('incomeTabs');
+  const solo = peopleCount() < 2;
+  tabs.style.display = solo ? 'none' : '';
+  if(!isSharedPay(currentIncomeTab) && !isPerson(currentIncomeTab)) currentIncomeTab = SHARED_PAY;
+  if(!solo){
+    const groups = [{ key:SHARED_PAY, label:'Todos' }, ...people.map(p=>({ key:p.id, label:p.name }))];
+    tabs.innerHTML = groups.map(g=>
+      `<button type="button" data-tab="${g.key}"${g.key === currentIncomeTab ? ' class="active"' : ''}>${escapeHtml(g.label)}</button>`
+    ).join('');
+  }
+  const ids = isPerson(currentIncomeTab) && !solo ? [currentIncomeTab] : pids();
+  $('incomeGrid').style.setProperty('--cols', ids.length === 1 ? 1 : '');
+
+  $('incomeGrid').innerHTML = ids.map(p=>{
     const list = (income.entries[p]||[]).filter(e=>monthKey(e.date) === viewMonth);
-    const credits = cardPurchases.filter(c=>c.credit && c.person === p && monthKey(c.credit.date) === viewMonth);
     return `<div class="income-person" data-person="${p}">
       <div class="who-label">${escapeHtml(nameOf(p))}</div>
       <div class="income-big">${fmt(incomeTotalArs(p))}</div>
-      <div class="income-entries">${list.length || credits.length
-        ? list.map(e=>incomeRowHtml(p, e)).join('') + credits.map(creditIncomeRowHtml).join('')
+      <div class="income-entries">${list.length
+        ? list.map(e=>incomeRowHtml(p, e)).join('')
         : '<div class="income-note">Todavía sin ingresos.</div>'}</div>
     </div>`;
   }).join('');
 
   renderIncomePreview();
+  // el reparto "según ingresos" compara a todos: solo en Todos
+  if(ids.length === 1) $('incomePreview').style.display = 'none';
 }
+$('incomeTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentIncomeTab = btn.dataset.tab;
+  renderIncomeLists();
+});
 
 function renderIncomePreview(){
   const shares = incomeShares();
@@ -6457,9 +6637,12 @@ function financeFor(person, key){
     .reduce((s,e)=>s+entryShareOf(e, person), 0);
   const afterFijos = inc - fijos;
   const afterVar = afterFijos - variables;
-  // lo que tiene presupuestado gastar: sus rubros de gastos posibles (ya no
-  // hay "Compartido" en gastos posibles, cada uno tiene los suyos)
-  const podes = ownBudgetTotal(person, key);
+  // Compra dólares es lo único que se resta en Gastos posibles (el ahorro, el
+  // monto lo decide cada uno); lo que queda es Salidas y gustos, para el día
+  // a día — no se carga a mano, se reparte 60/40 (salidasGustosSplit)
+  const dolares = dolaresOf(person, key);
+  const wants = Math.max(0, afterVar - dolares);
+  const podes = dolares + wants;
   // los gastos diarios salen de la bolsa de Salidas + Gustos, que ya está
   // descontada entera en `podes`: solo lo que la pasa baja el ahorro, y lo
   // que sobra no lo sube (sigue reservado hasta fin de mes)
@@ -6467,20 +6650,12 @@ function financeFor(person, key){
   // no mueve el reparto "según ingresos"); se devuelve desde el mes siguiente
   // como gasto variable, por syncCardExpenses()
   const credito = creditReceivedOf(person, key);
-  const bolsa = wantsBudgetOf(person, key) + credito;
+  const bolsa = wants + credito;
   // diarios es solo lo pagado por transferencia/efectivo — lo pagado con
   // tarjeta no salió de la cuenta todavía (ver dailyTotalOf)
   const diarios = dailyTotalOf(person, key);
   const excedente = Math.max(0, diarios - bolsa);
-  // saldo = la plata real que tenés (Mercado Pago/efectivo): lo que ya
-  // quedaba después de fijos/variables, menos lo presupuestado (igual que
-  // ahorro), más el crédito que pediste (entró a la cuenta) y menos lo que
-  // gastaste por transferencia en gastos diarios. A diferencia de ahorro, el
-  // crédito suma siempre entero acá (no solo para cubrir un excedente), y lo
-  // que sobre del presupuesto no se repone — sigue siendo el mismo criterio
-  // de "reservado hasta fin de mes" que ahorro.
-  const saldo = afterVar - podes + credito - diarios;
-  return { inc, fijos, variables, afterFijos, afterVar, podes, credito, bolsa, diarios, excedente, saldo,
+  return { inc, fijos, variables, afterFijos, afterVar, dolares, wants, podes, credito, bolsa, diarios, excedente,
            ahorro: afterVar - podes - excedente };
 }
 function creditReceivedOf(person, key){
@@ -6488,10 +6663,17 @@ function creditReceivedOf(person, key){
   return cardPurchases.filter(p=>p.credit && p.person === person && monthKey(p.credit.date) === key)
     .reduce((s,p)=>s+(p.credit.received||0), 0);
 }
-function bolsaOf(person, key){ return wantsBudgetOf(person, key) + creditReceivedOf(person, key); }
-function wantsBudgetOf(person, key){
-  return (budgetTemplatesForMonth(key || viewMonth)[person] || [])
-    .filter(c=>c.label !== 'Compra dólares').reduce((s,c)=>s+(c.amount||0), 0);
+function bolsaOf(person, key){ return financeFor(person, key).bolsa; }
+function wantsBudgetOf(person, key){ return financeFor(person, key).wants; }
+// lo cargado en el rubro Compra dólares de esa persona ese mes
+function dolaresOf(person, key){
+  const c = (budgetTemplatesForMonth(key || viewMonth)[person] || []).find(x=>x.label === 'Compra dólares');
+  return c ? (c.amount || 0) : 0;
+}
+// Salidas y gustos es un dato, no un rubro: 60% Salidas, 40% Gustos
+function salidasGustosSplit(total){
+  const salidas = Math.round(total * 0.6);
+  return { salidas, gustos: total - salidas };
 }
 // la parte de cada uno: un compartido le descuenta a cada persona solo su
 // slice. Solo transferencia/efectivo — lo pagado con tarjeta no cuenta acá
@@ -6671,7 +6853,6 @@ function render(){
 
   renderVarExpenseTabs();
   renderBudgetTabs();
-  renderCreditsBlock(fin);
   renderDailyBlock(fin);
   $('dailyFab').hidden = !coupleCode;
   $('bottomNav').hidden = !coupleCode;
@@ -6748,92 +6929,103 @@ function renderSaldos(elId, fin, pick, tone){
   el.innerHTML = pids().map(p=>saldoCell(names[p], pick(fin[p]), tone)).join('');
 }
 
-function renderBlockSaldos(fin){
-  renderSaldos('startSaldos', fin, f=>f.inc);
-  renderSaldos('fixedSaldos', fin, f=>f.afterFijos);
-  renderSaldos('varSaldos', fin, f=>f.afterVar);
-  renderDolaresSaldos(fin);
-  // el último de todos: la plata real que tenés — ver el campo `saldo` de
-  // financeFor(). Con tono, como Ahorro: es un veredicto, no un paso más.
-  renderSaldos('finalSaldos', fin, f=>f.saldo, true);
-}
-
-// lo que ya está cargado en el rubro "Compra dólares" de esa persona
-function dolaresAmountFor(person){
-  const c = (budgetTemplatesForMonth(viewMonth)[person] || []).find(x=>x.label === 'Compra dólares');
-  return c ? (c.amount || 0) : 0;
-}
-// Saldos que cierra "Compra dólares": el saldo anterior de la cadena
-// (afterVar, apenas se pagan fijos y variables) menos lo que ya se apartó
-// para dólares — cuánto queda disponible después de esa compra. Gastos
-// posibles no tiene nada compartido (a diferencia de fijos/variables) — es
-// siempre de una persona — así que acá se muestra solo la de la sub-pestaña
-// abierta (currentBudgetTab), no las de todos a la vez.
-function renderDolaresSaldos(fin){
-  const el = $('dolaresSaldos');
+// Saldos de un bloque con pestañas (fijos/variables): en "Compartidos" una
+// tarjeta por persona; en la pestaña de una persona, solo la suya ("Saldo").
+// El número es siempre el del mes completo de esa persona, no el de la lista.
+function renderTabSaldos(elId, fin, pick, tab, labels){
+  const el = $(elId);
   if(!el) return;
-  const p = currentBudgetTab;
-  el.innerHTML = saldoCell(names[p], fin[p].afterVar - dolaresAmountFor(p));
+  labels = labels || ['Saldo', 'Saldos'];
+  const ids = isPerson(tab) && peopleCount() > 1 ? [tab] : pids();
+  el.innerHTML = ids.map(p=>saldoCell(names[p], pick(fin[p]))).join('');
+  el.style.setProperty('--cols', ids.length === 1 ? 1 : '');
+  el.style.setProperty('--cols-sm', ids.length === 1 ? 1 : '');
+  const title = el.closest('.sld-block')?.querySelector('.sld-title');
+  if(title) title.textContent = ids.length === 1 ? labels[0] : labels[1];
+}
+// Saldos iniciales: sus propias pestañas (Todos + una por persona),
+// ocultas si hay una sola persona
+let currentStartTab = SHARED_PAY;
+function renderStartSaldos(fin){
+  const tabs = $('startTabs');
+  if(!tabs) return;
+  const solo = peopleCount() < 2;
+  tabs.style.display = solo ? 'none' : '';
+  if(!solo){
+    if(!isSharedPay(currentStartTab) && !isPerson(currentStartTab)) currentStartTab = SHARED_PAY;
+    const groups = [{ key:SHARED_PAY, label:'Todos' }, ...people.map(p=>({ key:p.id, label:p.name }))];
+    tabs.innerHTML = groups.map(g=>
+      `<button type="button" data-tab="${g.key}"${g.key === currentStartTab ? ' class="active"' : ''}>${escapeHtml(g.label)}</button>`
+    ).join('');
+  }
+  renderTabSaldos('startSaldos', fin, f=>f.inc, currentStartTab, ['Saldo inicial', 'Saldos iniciales']);
+}
+$('startTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentStartTab = btn.dataset.tab;
+  renderStartSaldos(monthFinance(viewMonth));
+});
+function renderBlockSaldos(fin){
+  renderStartSaldos(fin);
+  renderTabSaldos('fixedSaldos', fin, f=>f.afterFijos, currentFixedTab);
+  renderTabSaldos('varSaldos', fin, f=>f.afterVar, currentVarTab);
 }
 
 // ---- Gastos posibles ----
-// Los rubros de cada persona (Salidas, Gustos, Compra dólares, y los que
-// agregue a mano en Ajustes). El monto se edita acá mismo o en Ajustes —
-// son la misma lista, cualquiera de los dos lados la actualiza — y también
-// se puede pre-completar con el botón "Sugerir montos".
-const budgetTotalOf = (who, key) => (budgetTemplatesForMonth(key || viewMonth)[who] || []).reduce((s,c)=>s+(c.amount||0), 0);
-const ownBudgetTotal = (person, key) => budgetTotalOf(person, key);
+// Solo Compra dólares (se edita acá mismo o en Ajustes); Salidas y gustos se
+// muestra como dato: lo que queda después de dólares, repartido 60/40.
 
 let currentBudgetTab = 'A';
+
+// sub-pestañas por persona (sin "Compartidos"), ocultas si hay una sola
+function personTabsHtml(tabs, current){
+  const solo = peopleCount() < 2;
+  tabs.style.display = solo ? 'none' : '';
+  if(!solo) tabs.innerHTML = people.map(p=>
+    `<button type="button" data-tab="${p.id}"${p.id === current ? ' class="active"' : ''}>${escapeHtml(p.name)}</button>`
+  ).join('');
+}
 
 // Compra dólares se separa del resto — es el ahorro, con prioridad sobre
 // Salidas/Gustos (ver redistribuirWantsSegunDolares) — y se muestra primero,
 // arriba de los demás rubros.
 function renderBudgetTabs(){
-  const tabs = $('budgetTabs'), box = $('budgetList'), dolaresBox = $('dolaresList');
-  if(!tabs || !box || !dolaresBox) return;
-  const solo = peopleCount() < 2;
+  const tabs = $('budgetTabs'), dolaresBox = $('dolaresList');
+  if(!tabs || !dolaresBox) return;
   if(!isPerson(currentBudgetTab)) currentBudgetTab = firstPid();
+  personTabsHtml(tabs, currentBudgetTab);
 
-  tabs.style.display = solo ? 'none' : '';
-  if(!solo){
-    const groups = people.map(p=>({ key:p.id, label:p.name }));
-    if(!groups.some(g=>g.key === currentBudgetTab)) currentBudgetTab = firstPid();
-    tabs.innerHTML = groups.map(g=>
-      `<button type="button" data-tab="${g.key}"${g.key === currentBudgetTab ? ' class="active"' : ''}>${escapeHtml(g.label)}</button>`
-    ).join('');
-  }
-
-  const cats = budgetTemplatesForMonth(viewMonth)[currentBudgetTab] || [];
-  const dolaresCat = cats.find(c=>c.label === 'Compra dólares');
-  const restCats = cats.filter(c=>c.label !== 'Compra dólares');
-
-  dolaresBox.innerHTML = dolaresCat ? budgetRubroRow(dolaresCat)
+  const dolaresCat = (budgetTemplatesForMonth(viewMonth)[currentBudgetTab] || []).find(c=>c.label === 'Compra dólares');
+  // la card queda en dólares (con su ⇄); Totales siempre en pesos — amount ya
+  // se guarda en pesos — para que se lea la resta: variables − Totales = Saldo
+  dolaresBox.innerHTML = dolaresCat ? budgetRubroRow(dolaresCat, currentBudgetTab) + billTotalRow([dolaresCat])
     : `<div class="empty">Sin rubro de Compra dólares.<br>
        <button type="button" class="btn-link" onclick="switchTab('ajustes')">Cargalo en Ajustes</button></div>`;
 
-  box.innerHTML = restCats.length
-    ? restCats.map(budgetRubroRow).join('') + billTotalRow(restCats)
-    : `<div class="empty">${escapeHtml(nameOf(currentBudgetTab))} no tiene rubros cargados.<br>
-       <button type="button" class="btn-link" onclick="switchTab('ajustes')">Cargalos en Ajustes</button></div>`;
-
-  const ingreso = financeFor(currentBudgetTab).inc;
-  $('budgetIdealHint').textContent = ingreso > 0
-    ? `Ideal (teoría 50/30/20): Necesidades ${fmt(ingreso*0.50)} · Salidas + Gustos ${fmt(ingreso*0.30)} · Compra dólares ${fmt(ingreso*0.20)}`
-    : 'Cargá el ingreso de este mes para ver el ideal 50/30/20.';
+  // Saldos = saldo de variables − Compra dólares: lo que queda para el mes
+  // (Salidas y gustos). Su reparto 60/40 y la teoría 50/30/20 se ven en Ahorro.
+  const f = financeFor(currentBudgetTab);
+  $('budgetSaldos').innerHTML = saldoCell(names[currentBudgetTab], f.afterVar - f.dolares);
+  // abajo: los créditos sacados en el mes (punteado, no es plata propia) y
+  // el total, saldo + crédito = lo que hay para Gastos diarios (bolsa)
+  $('budgetCreditTotal').innerHTML = `<div class="sld-cell sld-dashed">
+      <div class="sld-who">Crédito</div>
+      <div class="sld-amt">+ ${fmt(f.credito)}</div>
+    </div>` + saldoCell('Total', f.bolsa);
 }
 
 // misma card que un gasto fijo (texto + ✎ + ✕), igual que los demás
 // bloques de Gastos. El lápiz habilita el monto para editarlo ahí mismo;
 // tocar Compra dólares reacomoda Salidas y Gustos solo, igual que en
-// Ajustes — ver el listener de #budgetAllLists.
+// Ajustes — ver el listener de .budget-edit.
 let editingBudgetAmtId = null;
 // Compra dólares se puede ver/editar en pesos o en dólares — el icono ⇄
 // alterna cuál de los dos, no hay dos campos a la vez (se veía raro apilado).
 // Arranca en USD (si hay cotización); sin cotización cargada, showUsd cae a
 // ARS solo, así nunca se ve vacío.
 let budgetDolaresCur = 'USD';
-function budgetRubroRow(c){
+function budgetRubroRow(c, person){
   const editing = editingBudgetAmtId === c.id;
   const isDolares = c.label === 'Compra dólares';
   // la compra tiene la cotización del día en que se cargó ese monto (c.fx),
@@ -6851,7 +7043,7 @@ function budgetRubroRow(c){
   let amt;
   if(editing){
     const val = showUsd ? Math.round((c.amount || 0) / rate) : (c.amount || 0);
-    amt = `<input type="text" class="f-amt ie-money" inputmode="numeric" data-id="${c.id}" data-cur="${showUsd ? 'USD' : 'ARS'}"
+    amt = `<input type="text" class="f-amt ie-money" inputmode="numeric" data-id="${c.id}" data-person="${person}" data-cur="${showUsd ? 'USD' : 'ARS'}"
              value="${val ? groupThousands(String(val)) : ''}" placeholder="0"
              aria-label="Monto de ${escapeHtml(c.label)}${showUsd ? ' en dólares' : ''}">`;
   }else{
@@ -6862,7 +7054,7 @@ function budgetRubroRow(c){
   // en Ahorro en dólares con su propia fecha y cotización, en vez de que ese
   // historial dependa de recalcular la plantilla con la cotización de hoy
   const registerBtn = isDolares
-    ? `<button class="bill-edit" onclick="registerDolaresPurchase('${c.id}')" aria-label="Registrar compra de dólares" title="Registrar compra de dólares">
+    ? `<button class="bill-edit" onclick="registerDolaresPurchase('${c.id}', '${person}')" aria-label="Registrar compra de dólares" title="Registrar compra de dólares">
          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
            <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/><path d="M12 14v6M9 17h6"/>
          </svg>
@@ -6876,13 +7068,13 @@ function budgetRubroRow(c){
     ${amt}
     ${registerBtn}
     <button class="bill-edit" onclick="toggleBudgetAmtEdit('${c.id}')" aria-label="Editar">✎</button>
-    <button class="bill-del" onclick="deleteBudgetRubro('${c.id}')" aria-label="Eliminar">✕</button>
+    <button class="bill-del" onclick="deleteBudgetRubro('${c.id}', '${person}')" aria-label="Eliminar">✕</button>
   </div>`;
 }
-function registerDolaresPurchase(id){
-  const c = (budgetTemplatesForMonth(viewMonth)[currentBudgetTab] || []).find(x=>x.id === id);
+function registerDolaresPurchase(id, person){
+  const c = (budgetTemplatesForMonth(viewMonth)[person] || []).find(x=>x.id === id);
   if(!c) return;
-  currentAhorroPerson = currentBudgetTab;
+  currentAhorroPerson = person;
   // si el mes que se está viendo ya tiene una entrada (a mano o autogenerada),
   // la abre para editarla en vez de duplicarla
   const existing = savingsSlot(currentAhorroPerson).items.find(e=>monthKey(e.date) === viewMonth);
@@ -6898,16 +7090,19 @@ function toggleBudgetAmtEdit(id){
   editingBudgetAmtId = editingBudgetAmtId === id ? null : id;
   renderBudgetTabs();
   if(editingBudgetAmtId !== id) return;
-  const input = document.querySelector(`#budgetAllLists input.f-amt[data-id="${id}"]`);
+  const input = document.querySelector(`#panel-gastos .budget-edit input.f-amt[data-id="${id}"]`);
   if(input){ input.focus(); input.select(); }
 }
-$('budgetAllLists').addEventListener('keydown', (e)=>{
+// edición del monto en el lugar, en las dos listas (Compra dólares y Salidas
+// y gustos): cada input lleva de quién es el rubro en data-person
+document.querySelectorAll('#panel-gastos .budget-edit').forEach(box=>box.addEventListener('keydown', (e)=>{
   if(e.key === 'Enter' && e.target.classList.contains('f-amt')) e.target.blur();
-});
-$('budgetAllLists').addEventListener('change', (e)=>{
+}));
+document.querySelectorAll('#panel-gastos .budget-edit').forEach(box=>box.addEventListener('change', (e)=>{
   const el = e.target;
   if(!el.classList.contains('f-amt')) return;
-  const item = (budgetTemplatesForMonth(viewMonth)[currentBudgetTab]||[]).find(f=>f.id === el.dataset.id);
+  const person = el.dataset.person;
+  const item = (budgetTemplatesForMonth(viewMonth)[person]||[]).find(f=>f.id === el.dataset.id);
   if(!item) return;
   const d = digitsOnly(el.value);
   const typed = d ? parseInt(d,10) : 0;
@@ -6923,17 +7118,16 @@ $('budgetAllLists').addEventListener('change', (e)=>{
     // se congela la cotización de este momento junto con el monto, así el
     // toggle a dólares no se recalcula con la de "hoy" en cada render
     item.fx = rate;
-    redistribuirWantsSegunDolares(currentBudgetTab);
+    redistribuirWantsSegunDolares(person);
   }
   editingBudgetAmtId = null;
   saveBudgetTemplates();
   renderBudgetTabs();
   renderBudgetTemplates();   // Ajustes muestra los mismos rubros, se mantiene al día
   render();
-});
+}));
 
-function deleteBudgetRubro(id){
-  const who = currentBudgetTab;
+function deleteBudgetRubro(id, who){
   const map = budgetTemplatesForMonth(viewMonth);
   const c = (map[who]||[]).find(x=>x.id === id);
   if(!c) return;
@@ -6951,8 +7145,8 @@ $('budgetTabs').addEventListener('click', (e)=>{
   if(!btn) return;
   currentBudgetTab = btn.dataset.tab;
   renderBudgetTabs();
-  renderDolaresSaldos(monthFinance(viewMonth));   // el saldo también es por persona
 });
+
 
 
 
@@ -6999,61 +7193,56 @@ $('varTabs').addEventListener('click', (e)=>{
   if(!btn) return;
   currentVarTab = btn.dataset.tab;
   renderVarExpenseTabs();
+  renderTabSaldos('varSaldos', monthFinance(viewMonth), f=>f.afterVar, currentVarTab);
 });
 
-// ---- Créditos (bloque de Gastos, entre Gastos posibles y Gastos diarios) ----
-// Los créditos (plata prestada, ej. un adelanto de Mercado Pago, para cubrir
-// gastos diarios por transferencia) se agregan desde Ingresos — acá solo se
-// ven y se editan/borran. Misma data que Deudas > Créditos (cardPurchases con
-// `credit`), sin pestaña "Compartidos" porque un crédito es siempre de una
-// persona.
-function renderCreditsBlock(fin){
-  const tabs = $('creditsTabs');
-  if(!tabs) return;
-  const mes = monthShort(viewMonth);
-  $('creditsBlockTitle').textContent = `Créditos de ${mes}`;
-  const list = cardPurchases.filter(c=>c.credit && monthKey(c.credit.date) === viewMonth);
-  if(peopleCount() < 2){
-    tabs.style.display = 'none';
-    currentCreditsTab = firstPid();
-    $('creditsList').innerHTML = creditsListHtml(list.filter(c=>c.person === firstPid()), mes);
-    renderSaldos('creditsSaldos', fin, f=>f.credito);
-    return;
-  }
-  tabs.style.display = '';
-  if(!pids().includes(currentCreditsTab)) currentCreditsTab = firstPid();
-  tabs.innerHTML = people.map(p=>
-    `<button type="button" data-tab="${p.id}"${p.id === currentCreditsTab ? ' class="active"' : ''}>${escapeHtml(p.name)}</button>`
-  ).join('');
-  const shown = list.filter(c=>c.person === currentCreditsTab);
-  $('creditsList').innerHTML = creditsListHtml(shown, mes, currentCreditsTab);
-  renderSaldos('creditsSaldos', fin, f=>f.credito);
+// ---- bloques que se abren y cierran ----
+// Cada card con título de Ingresos, Gastos, Deudas y Ahorro lleva una flecha
+// arriba a la derecha. Cerrada se ve título, botón, pestañas, totales y
+// saldos: el CSS de .card.collapsed oculta las filas de las listas, así no
+// hace falta tocar cada render. Qué bloques están cerrados es una
+// preferencia de este dispositivo (localStorage), no un dato del espacio.
+const COLLAPSE_PANELS = ['panel-ingresos', 'panel-gastos', 'panel-deudas', 'panel-ahorro'];
+const COLLAPSE_KEY = 'collapsed_cards';
+function readCollapsed(){
+  try{ return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')); }
+  catch(e){ return new Set(); }
 }
-function creditsListHtml(list, mes, person){
-  if(!list.length){
-    const quien = person ? nameOf(person) : 'Todavía no';
-    return `<div class="empty">${person ? `${quien} no pidió` : quien} créditos en ${mes}.<br>Se agregan desde la pestaña Ingresos.</div>`;
-  }
-  return list.map(creditRowHtml).join('') + billTotalRow(list.map(c=>({amount: c.credit.received || 0})));
+function saveCollapsed(set){
+  try{ localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set])); }catch(e){}
 }
-function creditRowHtml(c){
-  const dateStr = new Date(c.credit.date+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'});
-  return `<div class="bill">
-    <div class="bill-main">
-      <div class="bill-name">${escapeHtml(c.card)}</div>
-      <div class="bill-meta"><span>${dateStr}</span></div>
-    </div>
-    <div class="bill-amt">${fmt(c.credit.received || 0)}</div>
-    <button class="bill-edit" onclick="openCpModal('${c.id}')" aria-label="Editar crédito">✎</button>
-    <button class="bill-del" onclick="deleteCp('${c.id}')" aria-label="Eliminar crédito">✕</button>
-  </div>`;
+function setupCollapsibleCards(){
+  const collapsed = readCollapsed();
+  COLLAPSE_PANELS.forEach(panelId=>{
+    const panel = $(panelId);
+    if(!panel) return;
+    panel.querySelectorAll(':scope > .card').forEach((card, i)=>{
+      if(card.dataset.collapse === 'off' || !card.querySelector(':scope > .section-title')) return;
+      const key = `${panelId}:${i}`;
+      card.classList.add('collapsible');
+      card.classList.toggle('collapsed', collapsed.has(key));
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'collapse-btn';
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+      const sync = ()=>{
+        const closed = card.classList.contains('collapsed');
+        btn.setAttribute('aria-expanded', String(!closed));
+        btn.setAttribute('aria-label', closed ? 'Abrir bloque' : 'Cerrar bloque');
+      };
+      btn.addEventListener('click', ()=>{
+        card.classList.toggle('collapsed');
+        const set = readCollapsed();
+        if(card.classList.contains('collapsed')) set.add(key); else set.delete(key);
+        saveCollapsed(set);
+        sync();
+      });
+      sync();
+      card.appendChild(btn);
+    });
+  });
 }
-$('creditsTabs').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button');
-  if(!btn) return;
-  currentCreditsTab = btn.dataset.tab;
-  renderCreditsBlock(monthFinance(viewMonth));
-});
+setupCollapsibleCards();
 
 // ---- Gastos diarios ----
 // Gastos hormiga del día a día. Como los variables, pueden ser de una persona
@@ -7076,6 +7265,7 @@ function renderDailyBlock(fin){
   if(peopleCount() < 2){
     tabs.style.display = 'none';
     currentDailyTab = firstPid();
+    renderDailySaldoFinal(currentDailyTab);
     $('dailyList').innerHTML = dailyListHtml(list, `Todavía no cargaste gastos diarios en ${mes}.`);
     return;
   }
@@ -7084,16 +7274,23 @@ function renderDailyBlock(fin){
   tabs.innerHTML = people.map(p=>
     `<button type="button" data-tab="${p.id}"${p.id === currentDailyTab ? ' class="active"' : ''}>${escapeHtml(p.name)}</button>`
   ).join('');
+  renderDailySaldoFinal(currentDailyTab);
   const shown = list.filter(d=>personShareOf(d, currentDailyTab) > 0);
   $('dailyList').innerHTML = dailyListHtml(shown, `${nameOf(currentDailyTab)} no cargó gastos diarios en ${mes}.`);
+}
+// el saldo que cierra Gastos diarios: el total punteado de Gastos posibles
+// (saldo + crédito = bolsaOf) menos su parte de lo gastado por
+// transferencia. Lo pagado con tarjeta no resta: se paga el mes que viene.
+function renderDailySaldoFinal(person){
+  $('dailySaldoFinal').innerHTML = saldoCell(names[person], bolsaOf(person, viewMonth) - dailyTotalOf(person, viewMonth));
 }
 function dailyListHtml(list, vacio){
   return list.length
     ? list.map(dailyBillRow).join('') + billTotalRow(list)
     : `<div class="empty">${escapeHtml(vacio)}<br>Usá el botón + para anotarlos a medida que pasan.</div>`;
 }
-// gasto diario pagado con tarjeta: queda a la vista cuál, así se sabe en qué
-// se gastó, aunque no reste nada de Salidas y Gustos de este mes
+// gasto diario pagado con crédito: queda a la vista de dónde salió, así se
+// sabe que no restó del saldo de este mes (se devuelve el que viene)
 function dailyCardTagHtml(d){
   return cardNorm(d.card) ? `<span class="tag tag-card">💳 ${escapeHtml(d.card)}</span>` : '';
 }
@@ -7128,10 +7325,11 @@ function openDailyModal(id, opts){
   editingCreditId = cr ? cr.id : null;
   $('dlyDate').value = d ? d.date : defaultDate();
   resetCreditFields(cr, opts.person);
-  // editando, no se cambia de tipo: un gasto sigue siendo gasto
-  $('dlyKindSeg').style.display = (d || cr) ? 'none' : '';
-  setDailyKind(cr ? 'ingreso' : (opts.kind === 'ingreso' ? 'ingreso' : 'gasto'));
-  if(cr){
+  const credit = !!cr || opts.kind === 'ingreso';
+  setDailyKind(credit ? 'ingreso' : 'gasto');
+  // desde Deudas la persona ya está dada por la sub-pestaña: se ve, no se cambia
+  setDailyOwnerLock(!!opts.lockOwner || credit);
+  if(credit){
     $('dailyModal').classList.add('open');
     document.body.classList.add('modal-open');
     $('dlyCrReceived').focus();
@@ -7146,12 +7344,12 @@ function openDailyModal(id, opts){
       setDailyPayer(isPerson(d.paidBy) ? d.paidBy : firstPid());
     }
     setDailyOwner(owner);
-    setDailyPayment(cardNorm(d.card) ? 'card' : 'transfer');
-    if(cardNorm(d.card)) $('dlyCard').value = d.card;
+    if(isCardDaily(d)) $('dlyCard').value = d.card;
+    setDailyPayment(isCardDaily(d) ? 'card' : 'transfer');
   }else{
-    // arranca en la pestaña que estás mirando; desde el botón flotante, en
-    // la última que se usó en el bloque (Compartidos de entrada)
-    setDailyOwner(peopleCount() > 1 ? currentDailyTab : firstPid());
+    // arranca en la pestaña que estás mirando (o en la persona de Deudas);
+    // desde el botón flotante, en la última que se usó en el bloque
+    setDailyOwner(isPerson(opts.person) ? opts.person : (peopleCount() > 1 ? currentDailyTab : firstPid()));
     setDailyPayment('transfer');
   }
   $('dailyModal').classList.add('open');
@@ -7163,20 +7361,18 @@ function closeDailyModal(){
   document.body.classList.remove('modal-open');
   editingDailyId = null;
   editingCreditId = null;
+  setDailyOwnerLock(false);
 }
-// botón "+ Agregar crédito" de Ingresos: mismo modal, arranca directo en Ingreso
-function openCreditModal(person){
-  openDailyModal(null, { kind: 'ingreso', person });
+function setDailyOwnerLock(locked){
+  ['dlyOwnerSeg','dlyPayerSeg','dlyCrWhoSeg'].forEach(id=>$(id).classList.toggle('seg-locked', locked));
 }
 function setDailyKind(kind){
   currentDailyKind = kind;
-  document.querySelectorAll('#dlyKindSeg button').forEach(b=>b.classList.toggle('active', b.dataset.kind === kind));
   $('dlyExpenseFields').style.display = kind === 'gasto' ? '' : 'none';
   $('dlyIncomeFields').style.display = kind === 'ingreso' ? '' : 'none';
   syncDailySubmit();
 }
-// "Ingreso" acá es siempre un crédito (plata que hay que devolver) — un
-// ingreso de siempre se carga en la página de Ingresos, no en este modal
+// 'ingreso' acá es siempre un crédito (préstamo), nuevo o editado
 function syncDailySubmit(){
   const credit = currentDailyKind === 'ingreso';
   const editing = credit ? !!editingCreditId : !!editingDailyId;
@@ -7186,7 +7382,7 @@ function syncDailySubmit(){
   $('dlySubmitBtn').textContent = editing ? 'Guardar cambios' : (credit ? 'Agregar crédito' : 'Agregar gasto diario');
 }
 
-// ---- crédito (desde Ingresos > Agregar crédito, o el "+" > Ingreso) ----
+// ---- crédito (préstamo): Deudas › "+ Sacar crédito", o ✎ en un crédito ----
 function resetCreditFields(cr, preferredPerson){
   $('dlyCrDate').value = cr ? cr.credit.date : defaultDate();
   $('dlyCrCard').value = cr ? cr.card : (lastCreditCard() || 'Crédito MP');
@@ -7231,12 +7427,6 @@ function updateCreditHint(){
   const interesTxt = v.interes > 0 ? ` (${fmt(v.interes)} de intereses)` : '';
   $('dlyCrHint').textContent = `Suma ${fmt(v.received)} a Salidas y Gustos de ${monthShort(monthKey(v.date))}. En ${desde} pagás ${fmt(v.repay)}${interesTxt}, como gasto variable "Cuotas ${v.card}".`;
 }
-$('dlyKindSeg').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button');
-  if(!btn) return;
-  setDailyKind(btn.dataset.kind);
-  $(btn.dataset.kind === 'gasto' ? 'dlyAmount' : 'dlyCrReceived').focus();
-});
 $('dlyCrWhoSeg').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
   if(btn) setCrPerson(btn.dataset.who);
@@ -7284,38 +7474,49 @@ function setDailyOwner(who){
     setDailySplit(currentDailySplit);
   }
   renderDailyChips();
+  if(currentDailyPayment === 'card') renderDailyCardChips();
   updateDailyHint();
 }
 function setDailyPayer(who){
   currentDailyPayer = who;
   document.querySelectorAll('#dlyPayerSeg button').forEach(b=>b.classList.toggle('active', b.dataset.paid === who));
+  if(currentDailyPayment === 'card') renderDailyCardChips();
+  updateDailyHint();
 }
+// la tarjeta es (y la paga) de quien paga: el dueño, o en un
+// compartido, el que eligió en "¿Quién lo pagó?"
+const dailyFormPayer = () => dailyIsShared() ? currentDailyPayer : currentDailyOwner;
 function setDailySplit(split){
   currentDailySplit = split;
   document.querySelectorAll('#dlySplitToggle button').forEach(b=>b.classList.toggle('active', b.dataset.split === split));
   updateDailyHint();
 }
-// transferencia/efectivo resta de Salidas y Gustos de este mes; tarjeta no
-// resta nada acá, se devuelve como gasto variable el mes que viene (ver
-// desiredCardExpenses())
+// transferencia/efectivo resta del saldo de este mes; tarjeta no resta nada
+// acá: va a Deudas › Tarjeta de crédito y se paga como gasto variable el mes
+// que viene (ver desiredCardExpenses())
 function setDailyPayment(method){
   currentDailyPayment = method;
   document.querySelectorAll('#dlyPaymentSeg button').forEach(b=>b.classList.toggle('active', b.dataset.payment === method));
   $('dlyCardField').style.display = method === 'card' ? '' : 'none';
-  if(method === 'card') renderDailyCardChips();
+  if(method === 'card'){
+    renderDailyCardChips();
+    if(!$('dlyCard').value.trim()) $('dlyCard').value = dailyCardOrigins(dailyFormPayer())[0] || '';
+  }
   updateDailyHint();
 }
-// tarjetas que esa persona ya usó (en gastos diarios o en compras/créditos),
-// para no tipearlo cada vez
-function renderDailyCardChips(){
+// tarjetas que esa persona ya usó (gastos diarios y compras con tarjeta, no
+// créditos), la última primero, para no tipearla cada vez
+function dailyCardOrigins(who){
   const cards = [];
-  dailyExpenses.filter(d=>expenseOwner(d) === currentDailyOwner && cardNorm(d.card)).forEach(d=>{
-    if(!cards.some(c=>cardNorm(c) === cardNorm(d.card))) cards.push(d.card.trim());
-  });
-  cardPurchases.filter(p=>p.person === currentDailyOwner && !p.credit && cardNorm(p.card)).forEach(p=>{
-    if(!cards.some(c=>cardNorm(c) === cardNorm(p.card))) cards.push(p.card.trim());
-  });
-  $('dlyCardChips').innerHTML = cards.map(c=>`<button type="button" data-card="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+  const add = c => { if(!cards.some(x=>cardNorm(x) === cardNorm(c))) cards.push(c.trim()); };
+  dailyExpenses.filter(d=>isCardDaily(d) && cardDailyPayer(d) === who)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||'')).forEach(d=>add(d.card));
+  cardPurchases.filter(p=>p.person === who && !p.credit && cardNorm(p.card)).slice().reverse().forEach(p=>add(p.card));
+  return cards;
+}
+function renderDailyCardChips(){
+  $('dlyCardChips').innerHTML = dailyCardOrigins(dailyFormPayer())
+    .map(c=>`<button type="button" data-card="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
 }
 const dailyFormShares = () => dailyIsShared() ? sharesFor(currentDailySplit) : soloShares(currentDailyOwner);
 // las últimas descripciones distintas de ese mismo dueño, para cargar "Super" de un toque
@@ -7331,7 +7532,7 @@ function renderDailyChips(){
   $('dlyDescChips').innerHTML = recent.map(r=>`<button type="button" data-desc="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
 }
 // cuánto le queda a cada persona afectada si se guarda lo que hay en el form
-// — solo cuenta lo pagado por transferencia (lo pagado con tarjeta no resta
+// — solo cuenta lo pagado por transferencia (lo pagado con crédito no resta
 // de Salidas y Gustos, ver setDailyPayment)
 function dailyRemainingAfter(entry, excludeId){
   const key = monthKey(entry.date);
@@ -7354,7 +7555,8 @@ function updateDailyHint(){
   if(currentDailyPayment === 'card'){
     const card = $('dlyCard').value.trim() || 'la tarjeta';
     const next = monthShort(addMonthsKey(monthKey(date), 1));
-    $('dlyHint').textContent = `Se paga en ${next} como gasto variable "Cuotas ${card}". No resta de Salidas y Gustos de este mes.`;
+    const quien = peopleCount() > 1 ? ` de ${nameOf(dailyFormPayer())}` : '';
+    $('dlyHint').textContent = `No resta del saldo de ${monthShort(monthKey(date))}: queda en Deudas${quien} y se paga en ${next}, como gasto variable "Cuotas ${card}".`;
     return;
   }
   const entry = { amount: numVal('dlyAmount') || 0, date, shares: dailyFormShares() };
@@ -7402,7 +7604,11 @@ $('dailyForm').addEventListener('submit', (e)=>{
   const amount = numVal('dlyAmount');
   if(!desc || !amount) return;
   const card = currentDailyPayment === 'card' ? $('dlyCard').value.trim() : '';
-  if(currentDailyPayment === 'card' && !card) return;
+  if(currentDailyPayment === 'card' && !card){ $('dlyCard').focus(); return; }
+  const existingDaily = editingDailyId ? dailyExpenses.find(x=>x.id === editingDailyId) : null;
+  // intereses de un gasto viejo cargado con la opción "Crédito": se conservan
+  // mientras siga pagado con tarjeta (ya no se cargan desde el modal)
+  const interest = card && existingDaily ? (existingDaily.interest || 0) : 0;
   const shared = dailyIsShared();
   const fields = {
     desc, amount,
@@ -7411,13 +7617,14 @@ $('dailyForm').addEventListener('submit', (e)=>{
     // reparto congelado en el gasto, igual que en variables
     shares: dailyFormShares(),
     splitType: shared ? currentDailySplit : undefined,
-    card: card || undefined
+    card: card || undefined,
+    interest: interest || undefined
   };
   const existing = editingDailyId ? dailyExpenses.find(x=>x.id === editingDailyId) : null;
   if(existing) Object.assign(existing, fields);
   else dailyExpenses.push({ id: genId(), ...fields });
   saveDailyExpenses();
-  // un gasto con tarjeta puede cambiar lo que le toca a "Cuotas <tarjeta>" el
+  // un gasto con crédito puede cambiar lo que le toca a "Cuotas <origen>" el
   // mes que viene — ver desiredCardExpenses()
   persistCardExpenses();
   closeDailyModal();
@@ -7429,7 +7636,7 @@ $('dailyForm').addEventListener('submit', (e)=>{
   const key = monthKey(fields.date);
   if(fields.card){
     const next = monthShort(addMonthsKey(key, 1));
-    notyf.success(`Se paga en ${next} como "Cuotas ${fields.card}" en Gastos variables.`);
+    notyf.success(`Va a Deudas › Tarjeta de crédito y se paga en ${next} como "Cuotas ${fields.card}".`);
   }else{
     const rows = pids().filter(p=>(fields.shares[p] || 0) > 0)
       .map(p=>({ p, quedan: bolsaOf(p, key) - dailyTotalOf(p, key) }));
@@ -7699,39 +7906,23 @@ function toggleDebtInstallmentPaid(id, idx){
   saveDebts();
   renderDeudas();
 }
-// misma estructura que goalCardHtml, pero el acordeón abre una fila por
-// cuota con su propio checkbox en vez del detalle genérico de una meta
-function debtPlanCardHtml(d, targetLabel, pct, detail, extra, acts){
-  const open = expandedDebts.has(d.id);
-  const done = pct >= 100;
-  const pctText = (pct < 1 && pct > 0 ? '<1' : Math.round(pct)) + '%';
+// deuda en cuotas: se despliega en una fila por cuota con su propio checkbox,
+// igual que las ocurrencias de Limpieza
+function debtPlanCardHtml(d, fmtCur){
   const cuota = d.amount / d.months;
   const start = debtStartMonth(d);
-  const items = installmentsPaidArr(d).map((paid, i) => `<div class="bill">
-    <div class="bill-main">
-      <div class="bill-name">Cuota ${i+1} de ${d.months}</div>
-      <div class="bill-meta">
-        <span>${monthLabel(addMonthsKey(start, i))}</span>
-        <label class="bill-paid" title="${paid ? 'Pagada' : 'Marcar como pagada'}">
-          <input type="checkbox" ${paid ? 'checked' : ''} onchange="toggleDebtInstallmentPaid('${d.id}', ${i})">
-        </label>
-      </div>
-    </div>
-    <div class="bill-amt">${d.currency === 'USD' ? fmtUsd(cuota) : fmt(cuota)}</div>
-  </div>`).join('');
-  return `<div class="goal">
-    <div class="goal-h bill-clickable" onclick="toggleDebtOpen('${d.id}')">
-      <div class="bill-name-row">
-        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1" aria-label="${open ? 'Ocultar' : 'Ver'} las ${d.months} cuotas">▸</button>
-        <span class="goal-n">${escapeHtml(d.name)}</span>
-      </div>
-      <span class="goal-t">${targetLabel}</span>
-      ${acts || ''}
-    </div>
-    <div class="goal-track"><i class="${done?'':'part'}" style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>
-    ${open ? `<div class="bill-occurrences">${items}</div>` : ''}
-    <div class="goal-d"><span class="goal-pct">${pctText}</span>${open ? ` — ${detail}${extra ? '<br>' + extra : ''}` : ''}</div>
-  </div>`;
+  const paidArr = installmentsPaidArr(d);
+  const children = paidArr.map((paid, i)=>deudaChildHtml(`Cuota ${i+1} de ${d.months}`, fmtCur(cuota),
+    `<span>${monthTag(addMonthsKey(start, i))}</span>
+     <label class="bill-paid" title="${paid ? 'Pagada' : 'Marcar como pagada'}">
+       <input type="checkbox" ${paid ? 'checked' : ''} onchange="toggleDebtInstallmentPaid('${d.id}', ${i})">
+     </label>`)).join('');
+  return deudaBillHtml({
+    name: d.name, amount: fmtCur(Math.max(0, d.amount || 0)),
+    meta: `<span class="bill-occ-badge">${paidArr.filter(Boolean).length} de ${d.months} pagadas</span>`,
+    open: expandedDebts.has(d.id), onToggle: `toggleDebtOpen('${d.id}')`, children,
+    edit: `openDebtModal('${d.id}')`, del: `deleteDebt('${d.id}')`
+  });
 }
 
 // mismo patrón que subtotalRowHtml (Gastos fijos): un renglón "Pagado" o "A
@@ -7802,33 +7993,20 @@ function renderDeudas(){
 
   const box = $('debtsBox');
   if(!mine.length){
-    box.innerHTML = '<div class="goal-empty">Todavía no cargaste deudas propias. Agregá una: todo el monto junto, o en un plan de varios meses.</div>';
+    box.innerHTML = '<div class="empty">Todavía no cargaste deudas propias. Agregá una: todo el monto junto, o en un plan de varios meses.</div>';
     return;
   }
   box.innerHTML = mine.map(d=>{
-    const acts = `<span class="goal-acts">
-      <button type="button" onclick="openDebtModal('${d.id}')" aria-label="Editar deuda">✎</button>
-      <button type="button" onclick="deleteDebt('${d.id}')" aria-label="Eliminar deuda">✕</button>
-    </span>`;
     // todo en la moneda que se eligió para la deuda, sin la conversión a la
     // otra al lado — solo Totales (que suma deudas de monedas mezcladas) pasa a pesos
     const fmtCur = v => d.currency === 'USD' ? fmtUsd(v) : fmt(v);
-    const target = Math.max(0, d.amount || 0);
-    const targetLabel = fmtCur(target);
-    const saved = Math.max(0, d.saved || 0);
-    const pct = target > 0 ? Math.min(100, saved/target*100) : 0;
-    const falta = Math.max(0, target - saved);
-    const detail = debtIsDone(d)
-      ? `pagaste ${fmtCur(saved)}. Deuda saldada.`
-      : `pagaste ${fmtCur(saved)}, faltan ${fmtCur(falta)}.`;
-    const extra = (!debtIsDone(d) && d.kind === 'plan' && d.months > 0)
-      ? `En un plan de ${d.months} ${d.months === 1 ? 'mes' : 'meses'}: cuota de referencia ${fmtCur(target / d.months)} por mes.`
-      : '';
-    if(d.kind === 'plan' && d.months > 0){
-      return debtPlanCardHtml(d, targetLabel, pct, detail, extra, acts);
-    }
-    return goalCardHtml({
-      id: d.id, name: escapeHtml(d.name), ownAmount: targetLabel, pct, detail, extra, acts, dateLabel: ''
+    if(d.kind === 'plan' && d.months > 0) return debtPlanCardHtml(d, fmtCur);
+    const falta = Math.max(0, (d.amount || 0) - (d.saved || 0));
+    const badge = debtIsDone(d) ? 'Saldada' : (d.saved > 0 ? `Faltan ${fmtCur(falta)}` : '');
+    return deudaBillHtml({
+      name: d.name, amount: fmtCur(Math.max(0, d.amount || 0)),
+      meta: badge ? `<span class="bill-occ-badge">${badge}</span>` : '',
+      edit: `openDebtModal('${d.id}')`, del: `deleteDebt('${d.id}')`
     });
   }).join('') + debtsTotalRowHtml(mine);
 }
@@ -7844,11 +8022,9 @@ function renderRule5030(person){
   // wants = Salidas + Gustos nada más (Compra dólares no es un "deseo");
   // ahorro = el rubro Compra dólares, el mismo número de la tarjeta de arriba
   const f = financeFor(person);
-  const dolares = (budgetTemplatesForMonth(viewMonth)[person] || []).find(c => c.label === 'Compra dólares');
-  const dolaresAmt = dolares ? (dolares.amount || 0) : 0;
   const needs = f.fijos + f.variables;
-  const wants = f.podes - dolaresAmt;
-  const saved = dolaresAmt;
+  const wants = f.wants;
+  const saved = f.dolares;
 
   // for needs/wants, going over the target is the bad direction; for savings it's under
   const row = (name, actual, target, lowerIsBetter) => {
@@ -7869,9 +8045,13 @@ function renderRule5030(person){
     </div>`;
   };
 
+  // Deseos = Salidas y gustos (lo que queda después de dólares), con su
+  // reparto 60/40 como dato, el mismo que muestra Gastos posibles
+  const sg = salidasGustosSplit(wants);
   box.innerHTML =
     row('Necesidades', needs, 50, true) +
     row('Deseos', wants, 30, true) +
+    `<p class="income-note" style="margin:-4px 0 12px;">Salidas ${fmt(sg.salidas)} (60%) · Gustos ${fmt(sg.gustos)} (40%)</p>` +
     row('Ahorro', Math.max(0, saved), 20, false);
 }
 
