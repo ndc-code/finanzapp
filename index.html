@@ -73,6 +73,12 @@
   .session-dropdown button{width:100%;text-align:left;padding:9px 10px;border:none;background:none;
     border-radius:8px;font-size:13.5px;color:var(--ink);cursor:pointer;font-family:inherit;}
   .session-dropdown button:hover{background:var(--pearl);}
+  .session-dropdown button.active{font-weight:600;background:var(--pearl);}
+  .session-dropdown button.active::before{content:'✓ ';}
+  #viewBtn{position:relative;}
+  .view-dot{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;
+    border:1.5px solid var(--card);}
+  .view-dot[hidden]{display:none;}
   .usd-dropdown-body{padding:6px 10px;font-size:13px;color:var(--ink);}
   .usd-dropdown-body .usd-title{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;
     color:var(--body-muted);font-weight:600;margin-bottom:8px;}
@@ -895,6 +901,18 @@
       <!-- oculta todos los montos de la app con •••, para mostrar la pantalla
            sin exponer cifras — ver toggleAmountsHidden() -->
       <button type="button" class="icon-btn" id="hideAmountsBtn" onclick="toggleAmountsHidden()" aria-pressed="false"></button>
+      <!-- Vista: elige de una vez la pestaña de todos los bloques (Compartido /
+           Todos o una persona) — ver applyGlobalView(). Oculto con una sola persona -->
+      <div class="popover-menu" id="viewMenu">
+        <button type="button" class="icon-btn" id="viewBtn" onclick="toggleViewPopover()" aria-label="Vista" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span class="view-dot" id="viewDot" hidden></span>
+        </button>
+        <div class="session-dropdown" id="viewDropdown"></div>
+      </div>
+      <!-- vista simplificada (bloques cerrados) / detallada (bloques y filas
+           abiertos) — ver toggleDetailMode() -->
+      <button type="button" class="icon-btn" id="detailBtn" onclick="toggleDetailMode()" aria-pressed="false"></button>
       <div class="popover-menu">
         <button type="button" class="icon-btn" id="usdBtn" onclick="toggleUsdPopover()" aria-label="Cotización del dólar blue" aria-haspopup="true" aria-expanded="false">$</button>
         <div class="session-dropdown" id="usdDropdown">
@@ -1947,6 +1965,13 @@ let currentCpPerson = 'A';
 let editingCpId = null;
 let expandedCps = new Set();
 let expandedCardExpenses = new Set();
+// Vista detallada (botón detailBtn del header): con detailMode cada set
+// expanded* pasa a guardar las filas que se CERRARON a mano en vez de las
+// abiertas, así todo arranca abierto sin conocer las claves de cada render.
+// Toda lectura de esos sets va por isOpen(); los toggles no cambian.
+const DETAIL_MODE_KEY = 'detail_mode';
+let detailMode = (()=>{ try{ return localStorage.getItem(DETAIL_MODE_KEY) === '1'; }catch(e){ return false; } })();
+const isOpen = (set, key) => set.has(key) !== detailMode;
 let currentDebtKind = 'total';
 let currentDebtCurrency = 'ARS';
 let currentSplit = 'equal';
@@ -2665,6 +2690,86 @@ function toggleAmountsHidden(){
   renderFixed(); renderChips(); renderFixedIncome(); renderIncomeChips(); renderIncomeLists();
   renderVarEstimates(); renderBudgetTemplates(); renderDebtTemplates();
 }
+// Vista global: una sola elección (Compartido/Todos o una persona) que mueve
+// las sub-pestañas de todos los bloques a la vez. Es preferencia de este
+// dispositivo (localStorage), como amounts_hidden. Después cada bloque se
+// puede seguir cambiando a mano con sus propias pestañas.
+const GLOBAL_VIEW_KEY = 'global_view';
+let globalView = (()=>{ try{ return localStorage.getItem(GLOBAL_VIEW_KEY) || 'shared'; }catch(e){ return 'shared'; } })();
+function toggleViewPopover(force){
+  const dropdown = $('viewDropdown');
+  const btn = $('viewBtn');
+  const open = typeof force === 'boolean' ? force : !dropdown.classList.contains('open');
+  dropdown.classList.toggle('open', open);
+  btn.setAttribute('aria-expanded', open);
+}
+function renderViewMenu(){
+  const menu = $('viewMenu');
+  if(!menu) return;
+  menu.hidden = peopleCount() < 2;
+  if(!isSharedPay(globalView) && !isPerson(globalView)) globalView = SHARED_PAY;
+  const opts = [{ key:SHARED_PAY, label:'Compartido / Todos' }, ...pids().map(id=>({ key:id, label:nameOf(id) }))];
+  $('viewDropdown').innerHTML = `<div class="session-code">Ver todos los bloques como</div>` +
+    opts.map(o=>`<button type="button" data-view="${o.key}"${o.key === globalView ? ' class="active"' : ''}>${escapeHtml(o.label)}</button>`).join('');
+  const shared = isSharedPay(globalView);
+  const label = `Vista: ${shared ? 'Compartido / Todos' : nameOf(globalView)}`;
+  $('viewBtn').setAttribute('aria-label', label);
+  $('viewBtn').title = label;
+  const dot = $('viewDot');
+  dot.hidden = shared;
+  if(!shared) dot.style.background = personColorOf(globalView);
+}
+// pone cada sub-pestaña en la vista elegida. Las que admiten Compartido/Todos
+// (Ingresos, Saldos iniciales, fijos, variables, Resumen) la toman siempre;
+// las que son solo por persona (Gastos posibles, diarios, Deudas, Ahorro)
+// cambian solo cuando se elige a alguien y si no quedan como estaban
+function syncTabsToGlobalView(){
+  const v = globalView;
+  currentIncomeTab = currentStartTab = currentFixedTab = currentVarTab = currentResumenTab = v;
+  if(isPerson(v)) currentBudgetTab = currentDailyTab = currentDeudasPerson = currentAhorroPerson = v;
+  document.querySelectorAll('#ahorroPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentAhorroPerson));
+  document.querySelectorAll('#deudasPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentDeudasPerson));
+}
+function applyGlobalView(view){
+  globalView = view;
+  try{ localStorage.setItem(GLOBAL_VIEW_KEY, view); }catch(e){}
+  syncTabsToGlobalView();
+  renderViewMenu();
+  render();
+}
+$('viewDropdown').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-view]');
+  if(!btn) return;
+  toggleViewPopover(false);
+  toggleHeadMenu(false);
+  applyGlobalView(btn.dataset.view);
+});
+// Simplificada / detallada: en un toque cierra o abre todos los bloques y,
+// en detallada, también cada fila expandible (cuotas, Totales, ocurrencias de
+// un fijo…) vía isOpen(). Preferencia de este dispositivo, como amounts_hidden
+const EXPAND_ALL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/></svg>';
+const COLLAPSE_ALL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20l5-5 5 5"/><path d="M7 4l5 5 5-5"/></svg>';
+function renderDetailBtn(){
+  const btn = $('detailBtn');
+  if(!btn) return;
+  btn.innerHTML = detailMode ? COLLAPSE_ALL_SVG : EXPAND_ALL_SVG;
+  btn.setAttribute('aria-pressed', detailMode ? 'true' : 'false');
+  const label = detailMode ? 'Ver simplificado' : 'Ver detallado';
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+}
+function toggleDetailMode(){
+  detailMode = !detailMode;
+  try{ localStorage.setItem(DETAIL_MODE_KEY, detailMode ? '1' : '0'); }catch(e){}
+  // los sets vuelven a cero: con el modo nuevo, vacío = todo abierto (o todo cerrado)
+  [expandedCps, expandedCardExpenses, expandedCredits, expandedCardSpend, expandedExpenseIds,
+   expandedTotalsMain, expandedTotalRows, expandedGoals, expandedDebts, expandedCategoryCards]
+    .forEach(s=>s.clear());
+  balanceExpanded = detailMode;
+  setAllCardsCollapsed(!detailMode);
+  renderDetailBtn();
+  render();
+}
 // menú del header en mobile: abre/cierra .head-right como panel (ver CSS)
 function toggleHeadMenu(force){
   const head = document.querySelector('.app-head');
@@ -2687,6 +2792,7 @@ document.addEventListener('click', (e)=>{
   document.querySelectorAll('.popover-menu').forEach(menu=>{
     if(!menu.contains(e.target) && menu.querySelector('#usdDropdown')) toggleUsdPopover(false);
     if(!menu.contains(e.target) && menu.querySelector('#dateDropdown')) toggleDatePopover(false);
+    if(!menu.contains(e.target) && menu.querySelector('#viewDropdown')) toggleViewPopover(false);
   });
 });
 
@@ -5245,7 +5351,7 @@ function goToCardPurchases(person){
   switchTab('deudas');
 }
 function cardExpenseBillRow(ex){
-  const open = expandedCardExpenses.has(ex.id);
+  const open = isOpen(expandedCardExpenses, ex.id);
   const items = cardPurchasesInMonth(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date));
   const dailies = cardDailiesRepaidIn(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date));
   const n = items.length + dailies.length;
@@ -5338,7 +5444,7 @@ function cpCardHtml(p){
   return deudaBillHtml({
     name: p.name, amount: fmt(p.amount),
     meta: `<span class="bill-occ-badge">${paidCount} de ${p.months} pagadas</span><span class="tag tag-card">💳 ${escapeHtml(p.card.trim())}</span>`,
-    open: expandedCps.has(p.id), onToggle: `toggleCpOpen('${p.id}')`, children,
+    open: isOpen(expandedCps, p.id), onToggle: `toggleCpOpen('${p.id}')`, children,
     edit: `openCpModal('${p.id}')`, del: `deleteCp('${p.id}')`
   });
 }
@@ -5364,7 +5470,7 @@ function renderCpGroup(boxId, list, emptyMsg, rowHtml){
 // despliega (igual que Totales en Gastos) en el total de cada una
 function cuotasTotalRowHtml(list){
   const key = 'cuotas';
-  const open = expandedTotalsMain.has(key);
+  const open = isOpen(expandedTotalsMain, key);
   const total = list.reduce((s, p)=>s + (p.amount || 0), 0);
   return `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
       <div class="bill-main">
@@ -5435,7 +5541,7 @@ function creditGroupHtml(g){
   })).join('');
   return deudaBillHtml({
     name: g.label, amount: fmt(total),
-    open: expandedCredits.has(g.key), onToggle: `toggleCreditOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
+    open: isOpen(expandedCredits, g.key), onToggle: `toggleCreditOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
   });
 }
 // el total de abajo es lo que se debe por todos los créditos del mes;
@@ -5531,7 +5637,7 @@ function cardSpendGroupHtml(g){
   })).join('');
   return deudaBillHtml({
     name: g.label, amount: fmt(total),
-    open: expandedCardSpend.has(g.key), onToggle: `toggleCardSpendOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
+    open: isOpen(expandedCardSpend, g.key), onToggle: `toggleCardSpendOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
   });
 }
 function renderCardSpendDeudas(person){
@@ -5835,6 +5941,7 @@ function resetForm(){
 // estimados, las opciones de división de un gasto y los inputs de nombre en
 // Ajustes. Al cambiar la cantidad de personas alcanza con volver a llamarla.
 function refreshPeopleUI(){
+  renderViewMenu();
   // las grillas por persona leen estas variables en vez de tener un número fijo
   // de columnas. Con cuatro personas van de a 2×2 y no 3+1, que deja una sola
   // tarjeta colgando en la segunda fila; con tres, las tres entran en un renglón.
@@ -6553,7 +6660,7 @@ function billRow(ex){
 function billRowRepeating(ex, n, dateStr, splitLabel){
   const paidArr = occurrencesPaidArr(ex);
   const paidCount = paidArr.filter(Boolean).length;
-  const expanded = expandedExpenseIds.has(ex.id);
+  const expanded = isOpen(expandedExpenseIds, ex.id);
   const per = occurrenceAmount(ex);
   const parent = `<div class="bill bill-clickable" onclick="toggleExpenseExpanded('${ex.id}')">
     <div class="bill-main">
@@ -6764,7 +6871,7 @@ function toggleTotalRow(key){
   render();
 }
 function subtotalRowHtml(label, amount, items, key, isPaidRow, amountFn){
-  const open = expandedTotalRows.has(key);
+  const open = isOpen(expandedTotalRows, key);
   const clickable = items.length > 0;
   const header = `<div class="bill bill-subtotal${isPaidRow ? ' is-paid' : ''}${clickable ? ' bill-clickable' : ''}"
       ${clickable ? `onclick="toggleTotalRow('${key}')"` : ''}>
@@ -6800,7 +6907,7 @@ function billTotalRow(list, opts){
     </div>`;
   }
   const key = opts.key || 'list';
-  const open = expandedTotalsMain.has(key);
+  const open = isOpen(expandedTotalsMain, key);
   const header = `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
     <div class="bill-main">
       <div class="bill-name-row">
@@ -7219,28 +7326,41 @@ function setupCollapsibleCards(){
     panel.querySelectorAll(':scope > .card').forEach((card, i)=>{
       if(card.dataset.collapse === 'off' || !card.querySelector(':scope > .section-title')) return;
       const key = `${panelId}:${i}`;
+      card.dataset.collapseKey = key;
       card.classList.add('collapsible');
       card.classList.toggle('collapsed', collapsed.has(key));
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'collapse-btn';
       btn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
-      const sync = ()=>{
-        const closed = card.classList.contains('collapsed');
-        btn.setAttribute('aria-expanded', String(!closed));
-        btn.setAttribute('aria-label', closed ? 'Abrir bloque' : 'Cerrar bloque');
-      };
       btn.addEventListener('click', ()=>{
         card.classList.toggle('collapsed');
         const set = readCollapsed();
         if(card.classList.contains('collapsed')) set.add(key); else set.delete(key);
         saveCollapsed(set);
-        sync();
+        syncCollapseBtn(card);
       });
-      sync();
       card.appendChild(btn);
+      syncCollapseBtn(card);
     });
   });
+}
+function syncCollapseBtn(card){
+  const btn = card.querySelector(':scope > .collapse-btn');
+  if(!btn) return;
+  const closed = card.classList.contains('collapsed');
+  btn.setAttribute('aria-expanded', String(!closed));
+  btn.setAttribute('aria-label', closed ? 'Abrir bloque' : 'Cerrar bloque');
+}
+// abre o cierra todos los bloques de una (botón de vista detallada/simplificada)
+function setAllCardsCollapsed(closed){
+  const set = new Set();
+  document.querySelectorAll('.card.collapsible').forEach(card=>{
+    card.classList.toggle('collapsed', closed);
+    if(closed) set.add(card.dataset.collapseKey);
+    syncCollapseBtn(card);
+  });
+  saveCollapsed(set);
 }
 setupCollapsibleCards();
 
@@ -7753,7 +7873,7 @@ function toggleGoalOpen(id){
 function goalCardHtml(g){
   const { id, name, ownAmount, usdAmount, arsAmount, pct, detail, extra, acts, dateLabel } = g;
   const done = pct >= 100;
-  const open = expandedGoals.has(id);
+  const open = isOpen(expandedGoals, id);
   const pctText = (pct < 1 && pct > 0 ? '<1' : Math.round(pct)) + '%';
   // cada fila es independiente: una meta "por mes" no tiene fecha límite, y
   // una en pesos no tiene nada que convertir — no tiene sentido mostrar la
@@ -7920,7 +8040,7 @@ function debtPlanCardHtml(d, fmtCur){
   return deudaBillHtml({
     name: d.name, amount: fmtCur(Math.max(0, d.amount || 0)),
     meta: `<span class="bill-occ-badge">${paidArr.filter(Boolean).length} de ${d.months} pagadas</span>`,
-    open: expandedDebts.has(d.id), onToggle: `toggleDebtOpen('${d.id}')`, children,
+    open: isOpen(expandedDebts, d.id), onToggle: `toggleDebtOpen('${d.id}')`, children,
     edit: `openDebtModal('${d.id}')`, del: `deleteDebt('${d.id}')`
   });
 }
@@ -7928,7 +8048,7 @@ function debtPlanCardHtml(d, fmtCur){
 // mismo patrón que subtotalRowHtml (Gastos fijos): un renglón "Pagado" o "A
 // pagar" que se puede desplegar para ver qué deuda compone ese número
 function debtSubtotalRowHtml(label, amount, items, key){
-  const open = expandedTotalRows.has(key);
+  const open = isOpen(expandedTotalRows, key);
   const clickable = items.length > 0;
   const header = `<div class="bill bill-subtotal${clickable ? ' bill-clickable' : ''}"
       ${clickable ? `onclick="toggleTotalRow('${key}')"` : ''}>
@@ -7954,7 +8074,7 @@ function debtsTotalRowHtml(mine){
   if(!mine.length) return '';
   const total = mine.reduce((s,d)=>s+debtTargetArs(d), 0);
   const key = 'debts';
-  const open = expandedTotalsMain.has(key);
+  const open = isOpen(expandedTotalsMain, key);
   const header = `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('${key}')">
     <div class="bill-main">
       <div class="bill-name-row">
@@ -8252,7 +8372,7 @@ function renderCategoryRank(lists){
     const pct = Math.round(d.value/total*100);
     const icon = (d.label||'?').trim().charAt(0) || '?';
     const key = kind + ':' + d.label;
-    const open = peopleCount() >= 2 && expandedCategoryCards.has(key);
+    const open = peopleCount() >= 2 && isOpen(expandedCategoryCards, key);
     const detail = open ? (()=>{
       const share = shareBreakdown(items[d.label] || []);
       return `<div class="rank-detail">${pids().map(id=>
@@ -8479,7 +8599,7 @@ function balancePersonHtml(id, net, key){
 // who owes whom en el mes que se está viendo, como una tarjeta más (mismo
 // look que un gasto). Al tocarla se desglosa por persona; el ✓ marca ese mes
 // como saldado y pasa el monto de rojo a verde.
-let balanceExpanded = false;
+let balanceExpanded = detailMode;
 function toggleBalanceExpanded(){
   balanceExpanded = !balanceExpanded;
   renderBalance();
@@ -8532,6 +8652,11 @@ function toggleSettled(on){
 viewMonth = monthNow();
 renderTodayDate();
 renderHideAmountsBtn();
+// la vista guardada en este dispositivo arranca aplicada; las guardas de cada
+// render corrigen una persona que ya no esté en el espacio
+syncTabsToGlobalView();
+renderViewMenu();
+renderDetailBtn();
 resetForm();
 resetIncomeForm();
 initCouple().then(loadAll);
