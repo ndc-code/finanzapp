@@ -121,6 +121,7 @@
     font-family:'Inter',system-ui,sans-serif;font-size:14px;font-weight:500;color:var(--body-muted);
     cursor:pointer;transition:background-color .15s ease,color .15s ease;}
   .tabs button.active{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.07);}
+  .tabs button[hidden]{display:none;}
   .tabs button:focus-visible{outline:2px solid var(--primary-focus);outline-offset:1px;}
   @media(max-width:420px){.tabs{gap:2px;}.tabs button{font-size:12.5px;padding:9px 3px;}}
   .tab-panel{display:none;}
@@ -358,7 +359,9 @@
       -webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
       box-shadow:0 6px 24px rgba(0,0,0,0.08);}
     .bnav[hidden], body.modal-open .bnav{display:none;}
-    .bnav-list{height:56px;display:grid;grid-template-columns:repeat(5,1fr);gap:2px;}
+    /* columnas automáticas: 5 ítems, o 6 con Viajes activado */
+    .bnav-list{height:56px;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;}
+    .bnav button[hidden]{display:none;}
     .bnav button{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
       border:none;border-radius:12px;background:transparent;color:var(--body-muted);cursor:pointer;padding:0;
       font-family:'Inter',system-ui,sans-serif;font-size:11px;font-weight:500;
@@ -667,6 +670,8 @@
      Sin este min-width:0 el campo ignora el width:100% de arriba y se sale
      del modal en vez de achicarse */
   input[type=date],input[type=month]{min-width:0;}
+  textarea{width:100%;border:1px solid var(--line-strong);background:var(--card);border-radius:8px;
+    padding:10px 12px;font-size:16px;font-family:'Inter',system-ui,sans-serif;color:var(--ink);resize:vertical;}
   /* iOS Safari auto-zooms on focus when an input's font-size is below 16px */
   @media(max-width:540px){
     input[type=text],input[type=number],input[type=date],input[type=month],input[type=password],select{font-size:16px;}
@@ -739,6 +744,13 @@
   /* gasto diario pagado con tarjeta, no transferencia — ver dailyCardTagHtml() */
   .tag-card{background:var(--pearl);color:var(--body-muted);}
   .bill-amt{font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;white-space:nowrap;text-align:right;}
+  /* Viajes: el link de la reserva y los datos importantes (check-in, código…) */
+  .trip-link{display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:12.5px;font-weight:600;
+    color:var(--primary);text-decoration:none;max-width:100%;}
+  .trip-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .trip-link:hover span{text-decoration:underline;}
+  .trip-notes{margin-top:6px;font-size:12.5px;line-height:1.45;color:var(--ink);white-space:pre-wrap;
+    overflow-wrap:anywhere;background:var(--paper);border-radius:8px;padding:7px 9px;}
   .bill-name-row{display:flex;align-items:center;gap:6px;}
   .bill-cur-toggle{background:none;border:none;color:var(--body-muted);cursor:pointer;font-size:13px;
     padding:2px 5px;border-radius:6px;line-height:1;flex-shrink:0;transition:color .15s ease, transform .1s ease;}
@@ -959,6 +971,8 @@
     <button type="button" data-tab="gastos" role="tab">Gastos</button>
     <button type="button" data-tab="deudas" role="tab">Deudas</button>
     <button type="button" data-tab="ahorro" role="tab">Ahorro</button>
+    <!-- solo mientras el viaje esté activado en Ajustes — ver renderTrip() -->
+    <button type="button" data-tab="viajes" role="tab" id="tripTabBtn" hidden>Viajes</button>
   </div>
 
   <!-- ============ TAB: INGRESOS ============ -->
@@ -1054,6 +1068,65 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- ============ TAB: VIAJES ============ -->
+  <!-- Se activa en Ajustes. Mismo molde que Gastos, pero en cascada propia:
+       Ingreso del viaje − fijos − variables − diarios. No toca los meses. -->
+  <div class="tab-panel" id="panel-viajes" role="tabpanel">
+    <!-- BLOQUE 1: la plata que hay para el viaje -->
+    <div class="card">
+      <div class="section-title"><span id="tripIncomeTitle">Ingreso del viaje</span></div>
+      <button type="button" class="btn-add" onclick="openTripModal('income')">+ Agregar ingreso</button>
+      <div class="seg sub-seg" id="tripIncomeTabs" style="margin-top:16px;"></div>
+      <div id="tripIncomeList" style="margin-top:14px;"></div>
+      <div class="sld-block">
+        <div class="sld-title">Saldos</div>
+        <div class="sld-grid" id="tripIncomeSaldos"></div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 2: lo vital que se saca con tiempo — pasajes, hospedaje -->
+    <div class="card">
+      <div class="section-title">Gastos fijos</div>
+      <button type="button" class="btn-add" onclick="openTripModal('fixed')">+ Agregar gasto fijo</button>
+      <div class="seg sub-seg" id="tripFixedTabs" style="margin-top:16px;"></div>
+      <div id="tripFixedList" style="margin-top:14px;"></div>
+      <div class="sld-block">
+        <div class="sld-title">Saldos</div>
+        <div class="sld-grid" id="tripFixedSaldos"></div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 3: lo que se proyecta — comida, excursiones -->
+    <div class="card">
+      <div class="section-title">Gastos variables</div>
+      <button type="button" class="btn-add" onclick="openTripModal('variable')">+ Agregar gasto variable</button>
+      <div class="seg sub-seg" id="tripVarTabs" style="margin-top:16px;"></div>
+      <div id="tripVarList" style="margin-top:14px;"></div>
+      <div class="sld-block">
+        <div class="sld-title">Saldos</div>
+        <div class="sld-grid" id="tripVarSaldos"></div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 4: el día a día del viaje -->
+    <div class="card">
+      <div class="section-title">Gastos diarios</div>
+      <button type="button" class="btn-add" onclick="openTripModal('daily')">+ Agregar gasto diario</button>
+      <div class="seg sub-seg" id="tripDailyTabs" style="margin-top:16px;"></div>
+      <div id="tripDailyList" style="margin-top:14px;"></div>
+      <div class="sld-block">
+        <div class="sld-title">Saldos</div>
+        <div class="sld-grid" id="tripDailySaldos"></div>
+      </div>
+    </div>
+
+    <!-- quién le debe a quién dentro del viaje (lo pagado por uno solo) -->
+    <div class="card" data-collapse="off">
+      <div class="section-title">Entre ustedes en el viaje</div>
+      <div id="tripBalance"></div>
+    </div>
   </div>
 
   <!-- ============ TAB: DEUDAS ============ -->
@@ -1175,6 +1248,21 @@
       <label>Cantidad de personas</label>
       <div class="seg" id="peopleCountSeg" style="margin-bottom:16px;"></div>
       <div class="people-grid" id="namesGrid"></div>
+    </div>
+    <!-- Viajes no es de todos los días: la página aparece solo mientras esto
+         está prendido. Apagarlo no borra nada — ver toggleTripEnabled() -->
+    <div class="card">
+      <div class="section-title">Viajes</div>
+      <button type="button" class="switch-toggle" id="tripEnabledToggle" role="switch" aria-checked="false" onclick="toggleTripEnabled()">
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+        <span class="switch-label">Activar la página Viajes</span>
+      </button>
+      <p class="income-note" style="margin:10px 0 0;">Para cuando están proyectando un viaje: pasajes, hospedaje, comidas y el día a día. Es aparte de los meses, nada de lo que carguen ahí toca Gastos, Deudas ni Ahorro.</p>
+      <div id="tripSettingsBody" style="display:none;margin-top:16px;">
+        <label for="tripNameInput">Nombre del viaje</label>
+        <input type="text" id="tripNameInput" placeholder="Ej: Bariloche" maxlength="40">
+        <button type="button" class="btn-link" style="margin-top:14px;color:var(--a-clay-ink);" onclick="endTrip()">Terminar el viaje y empezar uno nuevo</button>
+      </div>
     </div>
     <div class="card">
       <div class="section-title">Ingresos fijos</div>
@@ -1584,8 +1672,63 @@
   </div>
 </div>
 
+<!-- ============ MODAL: entrada del viaje (ingreso, fijo, variable o diario) ============ -->
+<div class="modal-backdrop" id="tripModal" role="dialog" aria-modal="true" aria-labelledby="tripModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="tripModalTitle">Agregar gasto</div>
+      <button type="button" class="modal-close" onclick="closeTripModal()" aria-label="Cerrar">✕</button>
+    </div>
+    <form class="add-form" id="tripForm">
+      <div id="tpOwnerField">
+        <label>¿De quién es?</label>
+        <div class="seg" id="tpOwnerSeg"></div>
+      </div>
+      <div>
+        <label for="tpDesc">Descripción</label>
+        <input type="text" id="tpDesc" placeholder="Ej: Pasajes" required>
+        <div class="chips" id="tpDescChips"></div>
+      </div>
+      <div class="row2">
+        <div>
+          <label for="tpAmount">Monto (ARS)</label>
+          <input type="text" inputmode="numeric" class="ie-money" id="tpAmount" placeholder="0" required>
+        </div>
+        <div>
+          <label for="tpDate">Fecha</label>
+          <input type="date" id="tpDate">
+        </div>
+      </div>
+      <!-- de dónde sale el monto cuando se eligió "Ahorro" (dólares × cotización) -->
+      <p class="income-note" id="tpHint" style="margin:0;" hidden></p>
+      <!-- solo gastos: el link de la reserva y lo que hay que tener a mano -->
+      <div id="tpLinkField">
+        <label for="tpLink">Link (opcional)</label>
+        <input type="text" inputmode="url" id="tpLink" placeholder="Ej: el link de la reserva" autocomplete="off">
+      </div>
+      <div id="tpNotesField">
+        <label for="tpNotes">Datos importantes (opcional)</label>
+        <textarea id="tpNotes" rows="3" placeholder="Ej: Check-in 14 h · Check-out 10 h · Reserva #4821"></textarea>
+      </div>
+      <!-- solo para un gasto Compartido -->
+      <div id="tpPayerField" style="display:none;">
+        <label>¿Quién lo paga?</label>
+        <div class="seg" id="tpPayerSeg"></div>
+      </div>
+      <div id="tpSplitField" style="display:none;">
+        <label>¿Cómo se divide?</label>
+        <div class="seg" id="tpSplitToggle">
+          <button type="button" data-split="equal">Partes iguales</button>
+          <button type="button" data-split="contrib">Según lo que puso cada uno</button>
+        </div>
+      </div>
+      <button type="submit" class="btn-primary" id="tpSubmitBtn">Agregar</button>
+    </form>
+  </div>
+</div>
+
 <!-- carga rápida de un gasto diario desde cualquier pestaña -->
-<button type="button" class="fab" id="dailyFab" onclick="openDailyModal()" aria-label="Agregar gasto diario" title="Agregar gasto diario">
+<button type="button" class="fab" id="dailyFab" onclick="openQuickAdd()" aria-label="Agregar gasto diario" title="Agregar gasto diario">
   <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
 </button>
 
@@ -1600,7 +1743,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
       <span>Gastos</span>
     </button>
-    <button type="button" class="bnav-add" onclick="openDailyModal()" aria-label="Agregar gasto diario">
+    <button type="button" class="bnav-add" onclick="openQuickAdd()" aria-label="Agregar gasto diario">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
     </button>
     <button type="button" data-tab="deudas">
@@ -1610,6 +1753,10 @@
     <button type="button" data-tab="ahorro">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
       <span>Ahorro</span>
+    </button>
+    <button type="button" data-tab="viajes" id="tripNavBtn" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>
+      <span>Viajes</span>
     </button>
   </div>
 </nav>
@@ -1847,6 +1994,9 @@ const CARD_PURCHASES_KEY = 'cardpurchases_v1';
 // gastos hormiga del día a día — ver financeFor(): se descuentan de la bolsa
 // de Salidas + Gustos de cada persona
 const DAILY_EXPENSES_KEY = 'dailyexpenses_v1';
+// página Viajes (se activa en Ajustes): UN viaje a la vez, 100% aparte de los
+// meses — no entra en financeFor() ni en el "Entre ustedes" del mes. Ver tripFinance()
+const TRIP_KEY = 'trip_v1';
 
 let expenses = [];
 // ---- quiénes viven en este espacio ----
@@ -1941,6 +2091,11 @@ let editingDebtId = null;
 // [{id,label,amount}]}, mismo molde (plano, sin mes) que varEstimates. Es lo
 // que sale como ficha rápida en el modal de "Agregar deuda"; no toca `debts`.
 let debtTemplates = {};
+// el viaje: {enabled, name, income:[], fixed:[], variable:[], daily:[]}. Cada
+// entrada es {id, desc, amount, date, paidBy, shares, splitType, paid?}, el
+// mismo molde que un gasto variable: paidBy 'shared' = cada uno puso su parte
+// (no hay deuda), una persona = la pagó ella y el resto le debe su parte
+let trip = emptyTrip();
 // ahorro en dólares por persona: {A:{items:[...], autoMonths:[...]}, ...}.
 // `items` son las filas que se ven en Ahorro — cargadas a mano o generadas
 // solas por ensureAutoDolaresRows() a partir del rubro Compra dólares —
@@ -2058,7 +2213,8 @@ const COLUMN_FOR_KEY = {
   savings_v1: 'savings',
   settled_v1: 'settled_months',
   cardpurchases_v1: 'card_purchases',
-  dailyexpenses_v1: 'daily_expenses'
+  dailyexpenses_v1: 'daily_expenses',
+  trip_v1: 'trip'
 };
 const MIGRATION_FLAG_KEYS = new Set(['fixed_m1','fixed_m2','fixed_m3','fixedincome_m1','budget_cats_m1','budget_cats_m3']);
 
@@ -2214,6 +2370,7 @@ function applyCoupleRow(){
   if(coupleRow.settled_months && typeof coupleRow.settled_months === 'object') settledMonths = coupleRow.settled_months;
   if(Array.isArray(coupleRow.card_purchases)) cardPurchases = coupleRow.card_purchases;
   if(Array.isArray(coupleRow.daily_expenses)) dailyExpenses = coupleRow.daily_expenses;
+  if(coupleRow.trip && typeof coupleRow.trip === 'object') trip = normalizeTrip(coupleRow.trip);
   ensureSharedSlots();
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
@@ -2278,6 +2435,8 @@ function paintFromLocalCache(code){
     if(cp) cardPurchases = JSON.parse(cp);
     const dx = readLocalCache(code, DAILY_EXPENSES_KEY);
     if(dx) dailyExpenses = JSON.parse(dx);
+    const tr = readLocalCache(code, TRIP_KEY);
+    if(tr) trip = normalizeTrip(JSON.parse(tr));
     if(normalizeExpenses()){ /* fixed up in-memory; loadAll()'s real save will persist it */ }
     normalizeVarExpenses();
     render();
@@ -2719,6 +2878,7 @@ function renderViewMenu(){
 function syncTabsToGlobalView(){
   const v = globalView;
   currentIncomeTab = currentStartTab = currentFixedTab = currentVarTab = currentResumenTab = v;
+  TRIP_KINDS.forEach(k=>{ tripTab[k] = v; });
   if(isPerson(v)) currentBudgetTab = currentDailyTab = currentDeudasPerson = currentAhorroPerson = v;
   document.querySelectorAll('#ahorroPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentAhorroPerson));
   document.querySelectorAll('#deudasPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentDeudasPerson));
@@ -3634,6 +3794,12 @@ async function loadAll(){
   }catch(e){}
   if(!Array.isArray(dailyExpenses)) dailyExpenses = [];
 
+  // mismo cuidado: columna nueva, null no pisa la caché local
+  try{
+    const v = await store.get(TRIP_KEY);
+    if(v) trip = normalizeTrip(JSON.parse(v));
+  }catch(e){}
+
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
   // los "Cuotas <tarjeta>" de Gastos variables se rearman desde las compras
@@ -3736,6 +3902,10 @@ async function saveDailyExpenses(){
   if(await bailOnMassWipe(prevCol('daily_expenses'), dailyExpenses.length, ()=>{ render(); })) return false;
   return await store.set(DAILY_EXPENSES_KEY, JSON.stringify(dailyExpenses));
 }
+async function saveTrip(){
+  if(await bailOnMassWipe(prevCol('trip'), countItems(trip), ()=>{ render(); })) return false;
+  return await store.set(TRIP_KEY, JSON.stringify(trip));
+}
 // sin bailOnMassWipe: destildar el único mes saldado es un paso legítimo a vacío
 async function saveSettled(){
   return await store.set(SETTLED_KEY, JSON.stringify(settledMonths));
@@ -3756,6 +3926,9 @@ function currentSnapshot(){
     variable_estimates: varEstimates, variable_expenses: varExpenses,
     budget_overrides: budgetTemplates, goals, debts, debt_templates: debtTemplates, savings,
     settled_months: settledMonths, card_purchases: cardPurchases, daily_expenses: dailyExpenses,
+    // solo si la columna ya existe: restaurar una copia que la trae a un
+    // couples sin `trip` haría fallar el update entero
+    ...(tripColumnExists() ? { trip } : {}),
     migration_flags: (coupleRow && coupleRow.migration_flags) || {}
   };
 }
@@ -3823,6 +3996,7 @@ async function applySnapshot(s){
   if(s.settled_months && typeof s.settled_months === 'object') patch.settled_months = s.settled_months;
   if(Array.isArray(s.card_purchases)) patch.card_purchases = s.card_purchases;
   if(Array.isArray(s.daily_expenses)) patch.daily_expenses = s.daily_expenses;
+  if(s.trip && typeof s.trip === 'object' && tripColumnExists()) patch.trip = s.trip;
   if(s.migration_flags && typeof s.migration_flags === 'object') patch.migration_flags = s.migration_flags;
   if(!Object.keys(patch).length) throw new Error('La copia no tiene datos reconocibles.');
 
@@ -3832,7 +4006,7 @@ async function applySnapshot(s){
   [[STORE_KEY,'expenses'],[NAMES_KEY,'names'],[INCOME_KEY,'income'],[FIXED_KEY,'fixed'],
    [FIXED_INCOME_KEY,'fixed_income'],[VAR_ESTIMATES_KEY,'variable_estimates'],
    [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals'],
-   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings'],[SETTLED_KEY,'settled_months'],[CARD_PURCHASES_KEY,'card_purchases'],[DAILY_EXPENSES_KEY,'daily_expenses']]
+   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings'],[SETTLED_KEY,'settled_months'],[CARD_PURCHASES_KEY,'card_purchases'],[DAILY_EXPENSES_KEY,'daily_expenses'],[TRIP_KEY,'trip']]
     .forEach(([k,col])=>{ if(data[col] != null) writeLocalCache(coupleCode, k, JSON.stringify(data[col])); });
   // el snapshot puede traer una columna legítimamente vacía; que el guardaespaldas
   // no lo confunda con corrupción durante el refresco posterior
@@ -4728,6 +4902,7 @@ document.addEventListener('keydown', (e)=>{
   if($('varExpenseModal').classList.contains('open')) closeVarExpenseModal();
   if($('confirmModal').classList.contains('open')) closeConfirmModal();
   if($('cpModal').classList.contains('open')) closeCpModal();
+  if($('tripModal').classList.contains('open')) closeTripModal();
 });
 
 // ---- confirmar antes de borrar: un solo modal para cualquier borrado (gasto,
@@ -4924,6 +5099,442 @@ function deleteVarExpense(id){
   });
 }
 
+
+// ================= Viajes =================
+// Un viaje a la vez, en su propia cascada y aparte de los meses: Ingreso del
+// viaje − su parte de los fijos − variables − diarios = Saldos. Nada de esto
+// entra en financeFor(), netBalances() ni el Resumen.
+const TRIP_KINDS = ['income', 'fixed', 'variable', 'daily'];
+function emptyTrip(){ return { enabled:false, name:'', income:[], fixed:[], variable:[], daily:[] }; }
+function normalizeTrip(t){
+  const out = emptyTrip();
+  if(t && typeof t === 'object' && !Array.isArray(t)){
+    out.enabled = !!t.enabled;
+    out.name = typeof t.name === 'string' ? t.name : '';
+    TRIP_KINDS.forEach(k=>{ if(Array.isArray(t[k])) out[k] = t[k]; });
+  }
+  return out;
+}
+// la columna `trip` puede no existir todavía en Supabase (no hay migraciones):
+// ver currentSnapshot()/applySnapshot()
+const tripColumnExists = () => !!coupleRow && Object.prototype.hasOwnProperty.call(coupleRow, 'trip');
+
+const TRIP_KIND_INFO = {
+  // "Ahorro" no es una sugerencia más: trae el total ahorrado (ver pickTripSavings)
+  income:   { title:'ingreso',        chips:['Ahorro', 'Aporte', 'Regalo'] },
+  fixed:    { title:'gasto fijo',     chips:['Pasajes', 'Hospedaje', 'Transporte', 'Seguro de viaje', 'Alquiler de auto'] },
+  variable: { title:'gasto variable', chips:['Comida', 'Excursión', 'Entradas', 'Compras'] },
+  daily:    { title:'gasto diario',   chips:['Café', 'Almuerzo', 'Cena', 'Taxi', 'Súper'] }
+};
+// sub-pestaña de cada bloque: 'shared' (Todos / Compartidos) o una persona
+const tripTab = { income: SHARED_PAY, fixed: SHARED_PAY, variable: SHARED_PAY, daily: SHARED_PAY };
+const TRIP_DOM = {
+  income:   { tabs:'tripIncomeTabs', list:'tripIncomeList', saldos:'tripIncomeSaldos' },
+  fixed:    { tabs:'tripFixedTabs',  list:'tripFixedList',  saldos:'tripFixedSaldos' },
+  variable: { tabs:'tripVarTabs',    list:'tripVarList',    saldos:'tripVarSaldos' },
+  daily:    { tabs:'tripDailyTabs',  list:'tripDailyList',  saldos:'tripDailySaldos' }
+};
+
+// "Según lo que puso cada uno": proporcional al Ingreso del viaje de cada uno
+function tripContribShares(){
+  const ids = pids();
+  const totals = ids.map(id=>trip.income.reduce((s,e)=>s + personShareOf(e, id), 0));
+  const sum = totals.reduce((s,v)=>s+v, 0);
+  if(sum <= 0) return equalShares();
+  const out = {};
+  ids.forEach((id,i)=>{ out[id] = totals[i] / sum * 100; });
+  return out;
+}
+
+// "Ahorro" en el Ingreso del viaje: todo lo ahorrado en dólares (pestaña
+// Ahorro, hasta hoy) pasado a pesos con el dólar blue de hoy. Queda fijo en
+// la entrada (usd + fx, como el fx de Compra dólares) para que el viaje no
+// cambie solo cada vez que se mueve el dólar; tocando de nuevo el chip
+// Ahorro (al editarlo) se vuelve a traer con los números de ese momento.
+const TRIP_SAVINGS_LABEL = 'Ahorro';
+function savedUsdOf(person){
+  const today = todayStr();
+  return savingsSlot(person).items.filter(e=>(e.date||'') <= today).reduce((s,e)=>s + (e.amount||0), 0);
+}
+// para la persona elegida, o para todos si es Compartido — ahí el reparto
+// sale de cuánto ahorró cada uno, no en partes iguales
+function tripSavingsPick(owner){
+  const ids = isPerson(owner) ? [owner] : pids();
+  const usdBy = {};
+  ids.forEach(id=>{ usdBy[id] = Math.max(0, savedUsdOf(id)); });
+  const usd = ids.reduce((s,id)=>s + usdBy[id], 0);
+  const fx = usdRate();
+  const shares = {};
+  pids().forEach(id=>{ shares[id] = usd > 0 && usdBy[id] != null ? usdBy[id] / usd * 100 : 0; });
+  return { usd, fx, amount: Math.round(usd * fx), shares, who: ids };
+}
+let tpSavings = null;   // lo que trajo el chip Ahorro, mientras siga sin tocarse
+function applyTripSavingsPick(){
+  const p = tripSavingsPick(tpOwner);
+  const quien = p.who.length === 1 ? nameOf(p.who[0]) : 'Entre todos';
+  if(!(p.fx > 0)){
+    tpSavings = null;
+    setTripHint('No hay cotización del dólar todavía. Cargá el monto a mano o probá en un rato.');
+    return;
+  }
+  if(!(p.usd > 0)){
+    tpSavings = null;
+    setTripHint(`${quien}: no hay ahorro en dólares cargado en la pestaña Ahorro.`);
+    return;
+  }
+  tpSavings = p;
+  $('tpAmount').value = groupThousands(String(p.amount));
+  setTripHint(`${quien}: ${fmtUsd(p.usd)} ahorrados × ${fmt(p.fx)} (dólar blue de hoy) = ${fmt(p.amount)}`);
+}
+function setTripHint(text){
+  $('tpHint').textContent = text || '';
+  $('tpHint').hidden = !text;
+}
+
+// la cascada de cada persona, el mismo papel que financeFor() en Gastos
+function tripFinance(){
+  const part = (list, id) => list.reduce((s,e)=>s + personShareOf(e, id), 0);
+  const out = {};
+  pids().forEach(id=>{
+    const inc = part(trip.income, id);
+    const afterFijos = inc - part(trip.fixed, id);
+    const afterVar = afterFijos - part(trip.variable, id);
+    out[id] = { inc, afterFijos, afterVar, final: afterVar - part(trip.daily, id) };
+  });
+  return out;
+}
+
+// lo que se escribió en Link → una URL http(s) segura para un href, o '' si
+// no lo es (nada de javascript: ni data:, el espacio es compartido). Sin
+// esquema ("booking.com/…") se asume https
+function tripLinkHref(raw){
+  let s = (raw || '').trim();
+  if(!s) return '';
+  if(!/^[a-z][a-z0-9+.-]*:/i.test(s)) s = 'https://' + s;
+  try{
+    const u = new URL(s);
+    if((u.protocol !== 'https:' && u.protocol !== 'http:') || !u.hostname.includes('.')) return '';
+    return u.href;
+  }catch(e){ return ''; }
+}
+function tripExtrasHtml(e){
+  const href = tripLinkHref(e.link);
+  let host = '';
+  try{ host = href ? new URL(href).hostname.replace(/^www\./, '') : ''; }catch(err){}
+  const link = href
+    ? `<a class="trip-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(href)}">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <span>${escapeHtml(host)}</span></a>` : '';
+  const notes = e.notes ? `<div class="trip-notes">${escapeHtml(e.notes)}</div>` : '';
+  return link + notes;
+}
+function tripBillRow(e, kind){
+  const owner = expenseOwner(e);
+  const splitTxt = kind === 'income'
+    ? (e.source === 'savings' && e.usd ? `<span>·</span><span>${fmtUsd(e.usd)} a ${fmt(e.fx)}</span>` : '')
+    : owner !== 'shared' || peopleCount() < 2 ? ''
+    : `<span>·</span><span>${e.splitType === 'contrib' ? 'según lo que puso cada uno' : 'partes iguales'}</span>`;
+  // en Todos/Compartidos se ve de quién es lo que no es compartido
+  const ownerTag = owner !== 'shared' && peopleCount() > 1
+    ? `<span class="tag ${personTagClass(owner)}">${escapeHtml(nameOf(owner))}</span>` : '';
+  const paidBox = (kind === 'fixed' || kind === 'variable')
+    ? `<label class="bill-paid" title="${e.paid ? 'Pagado' : 'Marcar como pagado'}">
+          <input type="checkbox" ${e.paid ? 'checked' : ''} onchange="toggleTripPaid('${kind}','${e.id}')">
+        </label>` : '';
+  return `<div class="bill">
+    <div class="bill-main">
+      <div class="bill-name">${escapeHtml(e.desc)}</div>
+      <div class="bill-meta">
+        <span>${shortDate(e.date)}</span>${splitTxt}
+        ${ownerTag}${kind === 'income' ? '' : payerTagHtml(e)}
+        ${paidBox}
+      </div>
+      ${tripExtrasHtml(e)}
+    </div>
+    <div class="bill-amt">${fmt(e.amount)}</div>
+    <button class="bill-edit" onclick="openTripModal('${kind}','${e.id}')" aria-label="Editar">✎</button>
+    <button class="bill-del" onclick="deleteTripEntry('${kind}','${e.id}')" aria-label="Eliminar">✕</button>
+  </div>`;
+}
+
+function renderTripBlock(kind, fin, pick, labels){
+  const dom = TRIP_DOM[kind];
+  const tabs = $(dom.tabs);
+  const solo = peopleCount() < 2;
+  const list = trip[kind].slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  let shown = list;
+  if(solo){
+    tabs.style.display = 'none';
+  }else{
+    tabs.style.display = '';
+    if(!isSharedPay(tripTab[kind]) && !isPerson(tripTab[kind])) tripTab[kind] = SHARED_PAY;
+    const sharedLabel = kind === 'income' ? 'Todos' : 'Compartidos';
+    const groups = [{ key:SHARED_PAY, label:sharedLabel }, ...people.map(p=>({ key:p.id, label:p.name }))];
+    tabs.innerHTML = groups.map(g=>
+      `<button type="button" data-tab="${g.key}"${g.key === tripTab[kind] ? ' class="active"' : ''}>${escapeHtml(g.label)}</button>`
+    ).join('');
+    const t = tripTab[kind];
+    // Ingreso: Todos es todo, una persona ve lo que le toca. Gastos: igual que
+    // en Gastos, Compartidos o lo propio de cada uno
+    shown = kind === 'income'
+      ? (isPerson(t) ? list.filter(e=>personShareOf(e, t) > 0) : list)
+      : list.filter(e=>expenseOwner(e) === t);
+  }
+  const what = TRIP_KIND_INFO[kind].title;
+  const t = tripTab[kind];
+  const vacio = solo || (kind === 'income' && !isPerson(t)) ? `Todavía no hay ningún ${what}.`
+    : isSharedPay(t) ? `No hay ningún ${what} compartido.`
+    : `${nameOf(t)} no tiene ningún ${what} propio.`;
+  const withPaid = kind === 'fixed' || kind === 'variable';
+  $(dom.list).innerHTML = shown.length
+    ? shown.map(e=>tripBillRow(e, kind)).join('') + billTotalRow(shown, withPaid ? { showPaidSplit:true, key:'trip-'+kind } : undefined)
+    : `<div class="empty">${escapeHtml(vacio)}<br>Agregá el primero con el botón de arriba.</div>`;
+  renderTabSaldos(dom.saldos, fin, pick, t, labels);
+}
+
+function renderTripBalance(){
+  const el = $('tripBalance');
+  if(peopleCount() < 2){ el.closest('.card').style.display = 'none'; return; }
+  el.closest('.card').style.display = '';
+  const net = {};
+  pids().forEach(id=>{ net[id] = 0; });
+  accumulateNet(net, [...trip.fixed, ...trip.variable, ...trip.daily]);
+  const list = settleNet(net);
+  el.innerHTML = list.length
+    ? list.map(s=>`<div class="bill">
+        <div class="bill-main"><div class="bill-name">${escapeHtml(nameOf(s.from))} le debe a ${escapeHtml(nameOf(s.to))}</div></div>
+        <div class="bill-amt">${fmt(s.amount)}</div>
+      </div>`).join('')
+    : `<div class="empty">Están a mano: nadie le debe nada a nadie en este viaje.</div>`;
+}
+
+function renderTrip(){
+  const on = !!trip.enabled;
+  $('tripTabBtn').hidden = !on;
+  $('tripNavBtn').hidden = !on;
+  $('tripEnabledToggle').setAttribute('aria-checked', String(on));
+  $('tripSettingsBody').style.display = on ? '' : 'none';
+  if(document.activeElement !== $('tripNameInput')) $('tripNameInput').value = trip.name || '';
+  if(!on){
+    // apagado desde otro dispositivo mientras se miraba la página
+    if($('panel-viajes').classList.contains('active')) switchTab('ingresos');
+    return;
+  }
+  const name = (trip.name || '').trim();
+  $('tripIncomeTitle').textContent = name ? `Ingreso para ${name}` : 'Ingreso del viaje';
+  const fin = tripFinance();
+  renderTripBlock('income', fin, f=>f.inc, ['Saldo', 'Saldos']);
+  renderTripBlock('fixed', fin, f=>f.afterFijos);
+  renderTripBlock('variable', fin, f=>f.afterVar);
+  renderTripBlock('daily', fin, f=>f.final);
+  renderTripBalance();
+}
+TRIP_KINDS.forEach(kind=>{
+  $(TRIP_DOM[kind].tabs).addEventListener('click', (e)=>{
+    const btn = e.target.closest('button');
+    if(!btn) return;
+    tripTab[kind] = btn.dataset.tab;
+    renderTrip();
+  });
+});
+
+// ---- Ajustes ----
+function toggleTripEnabled(){
+  trip.enabled = !trip.enabled;
+  saveTrip();
+  renderTrip();
+  notyf.success(trip.enabled ? 'Página Viajes activada' : 'Página Viajes oculta (no se borró nada)');
+}
+$('tripNameInput').addEventListener('change', ()=>{
+  trip.name = $('tripNameInput').value.trim();
+  saveTrip();
+  renderTrip();
+});
+function endTrip(){
+  const word = (trip.name || '').trim() || 'viaje';
+  openConfirmModal(`Se borra todo lo cargado en el viaje (ingresos y gastos) para empezar uno nuevo. Antes se guarda una copia de seguridad.`, async ()=>{
+    try{ await createBackup('Antes de terminar el viaje'); }catch(e){}
+    allowBulkClear = true;
+    try{
+      trip = { ...emptyTrip(), enabled: trip.enabled };
+      await saveTrip();
+    }finally{ allowBulkClear = false; }
+    renderTrip();
+    notyf.success('Viaje terminado. Listo para el próximo');
+  }, { title:'Terminar el viaje', okLabel:'Terminar viaje', confirmWord: word });
+}
+
+// ---- modal ----
+let tripModalKind = 'fixed';
+let editingTripId = null;
+let tpOwner = SHARED_PAY, tpPayer = SHARED_PAY, tpSplit = 'equal';
+function openTripModal(kind, id){
+  tripModalKind = kind;
+  editingTripId = null;
+  $('tripForm').reset();
+  const e = id ? trip[kind].find(x=>x.id === id) : null;
+  const solo = peopleCount() < 2;
+  const t = tripTab[kind];
+  if(e){
+    editingTripId = e.id;
+    $('tpDesc').value = e.desc;
+    $('tpAmount').value = groupThousands(String(e.amount));
+    $('tpDate').value = e.date || todayStr();
+    const owner = expenseOwner(e);
+    tpOwner = owner;
+    tpPayer = isSharedPay(owner) ? (e.paidBy || SHARED_PAY) : SHARED_PAY;
+    tpSplit = e.splitType === 'contrib' ? 'contrib' : 'equal';
+  }else{
+    $('tpDate').value = todayStr();
+    // arranca en la pestaña que estás mirando; en un viaje lo normal es compartir
+    tpOwner = solo ? firstPid() : (isPerson(t) ? t : SHARED_PAY);
+    tpPayer = SHARED_PAY;
+    tpSplit = 'equal';
+  }
+  // link y datos importantes: para los gastos, no para la plata que entra
+  $('tpLinkField').style.display = kind === 'income' ? 'none' : '';
+  $('tpNotesField').style.display = kind === 'income' ? 'none' : '';
+  $('tpLink').value = (e && e.link) || '';
+  $('tpNotes').value = (e && e.notes) || '';
+  tpSavings = null;
+  setTripHint(e && e.source === 'savings' && e.usd
+    ? `Se trajo del ahorro: ${fmtUsd(e.usd)} × ${fmt(e.fx)}. Tocá Ahorro para actualizarlo con el dólar de hoy.` : '');
+  const what = TRIP_KIND_INFO[kind].title;
+  $('tripModalTitle').textContent = (e ? 'Editar ' : 'Agregar ') + what;
+  $('tpSubmitBtn').textContent = e ? 'Guardar cambios' : 'Agregar ' + what;
+  $('tpDesc').placeholder = 'Ej: ' + TRIP_KIND_INFO[kind].chips.slice(0, 2).join(', ');
+  renderTripModalSegs();
+  $('tripModal').classList.add('open');
+  document.body.classList.add('modal-open');
+  $('tpDesc').focus();
+}
+function closeTripModal(){
+  $('tripModal').classList.remove('open');
+  document.body.classList.remove('modal-open');
+}
+function renderTripModalSegs(){
+  const solo = peopleCount() < 2;
+  const btns = (attr, current, first) => (first ? [first] : []).concat(people.map(p=>({ key:p.id, label:p.name })))
+    .map(o=>`<button type="button" ${attr}="${o.key}"${o.key === current ? ' class="active"' : ''}>${escapeHtml(o.label)}</button>`).join('');
+  $('tpOwnerField').style.display = solo ? 'none' : '';
+  $('tpOwnerSeg').innerHTML = btns('data-owner', tpOwner, { key:SHARED_PAY, label:'Compartido' });
+  $('tpOwnerSeg').classList.toggle('seg-fit', peopleCount() <= 2);
+  // quién paga y cómo se divide: solo en un gasto compartido (un ingreso
+  // compartido es plata de los dos en partes iguales, no hay nadie que "pague")
+  const shared = !solo && isSharedPay(tpOwner) && tripModalKind !== 'income';
+  $('tpPayerField').style.display = shared ? '' : 'none';
+  $('tpSplitField').style.display = shared ? '' : 'none';
+  // "Cada uno": cada quien puso su parte, nadie le debe a nadie
+  $('tpPayerSeg').innerHTML = btns('data-paid', tpPayer, { key:SHARED_PAY, label:'Cada uno' });
+  $('tpPayerSeg').classList.toggle('seg-fit', peopleCount() <= 2);
+  document.querySelectorAll('#tpSplitToggle button').forEach(b=>b.classList.toggle('active', b.dataset.split === tpSplit));
+  const v = $('tpDesc').value.trim().toLowerCase();
+  $('tpDescChips').innerHTML = TRIP_KIND_INFO[tripModalKind].chips
+    .map(c=>`<button type="button" data-chip="${escapeHtml(c)}"${c.toLowerCase() === v ? ' class="active"' : ''}>${escapeHtml(c)}</button>`).join('');
+}
+$('tripModal').addEventListener('click', (e)=>{ if(e.target === $('tripModal')) closeTripModal(); });
+$('tpOwnerSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  tpOwner = btn.dataset.owner;
+  renderTripModalSegs();
+  // con Ahorro elegido, el monto es el de quien se eligió ahora
+  if(tpSavings) applyTripSavingsPick();
+});
+$('tpPayerSeg').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  tpPayer = btn.dataset.paid;
+  renderTripModalSegs();
+});
+$('tpSplitToggle').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  tpSplit = btn.dataset.split;
+  renderTripModalSegs();
+});
+$('tpDescChips').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  $('tpDesc').value = btn.dataset.chip;
+  renderTripModalSegs();
+  if(tripModalKind === 'income' && btn.dataset.chip === TRIP_SAVINGS_LABEL){ applyTripSavingsPick(); return; }
+  tpSavings = null;
+  setTripHint('');
+  $('tpAmount').focus();
+});
+// tocar el monto a mano deja de ser "el total ahorrado"
+$('tpAmount').addEventListener('input', ()=>{
+  if(tpSavings && numVal('tpAmount') !== tpSavings.amount){ tpSavings = null; setTripHint(''); }
+});
+$('tpDesc').addEventListener('input', ()=>{
+  const v = $('tpDesc').value.trim().toLowerCase();
+  document.querySelectorAll('#tpDescChips button').forEach(b=>b.classList.toggle('active', b.dataset.chip.toLowerCase() === v));
+});
+$('tripForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const desc = $('tpDesc').value.trim();
+  const amount = numVal('tpAmount');
+  if(!desc || !amount) return;
+  const kind = tripModalKind;
+  const shared = isSharedPay(tpOwner) && peopleCount() > 1;
+  const isIncome = kind === 'income';
+  const owner = isPerson(tpOwner) ? tpOwner : firstPid();
+  const fields = {
+    desc, amount,
+    date: $('tpDate').value || todayStr(),
+    // el reparto queda congelado en la entrada, como en Gastos
+    paidBy: shared ? (isIncome ? SHARED_PAY : tpPayer) : owner,
+    shares: shared ? (!isIncome && tpSplit === 'contrib' ? tripContribShares() : equalShares()) : soloShares(owner),
+    splitType: shared ? (isIncome ? 'equal' : tpSplit) : undefined,
+    source: undefined, usd: undefined, fx: undefined,
+    link: isIncome ? undefined : (tripLinkHref($('tpLink').value) || undefined),
+    notes: isIncome ? undefined : ($('tpNotes').value.trim() || undefined)
+  };
+  if(!isIncome && $('tpLink').value.trim() && !fields.link){
+    notyf.error('El link no parece una dirección web válida.');
+    $('tpLink').focus();
+    return;
+  }
+  // el total ahorrado: reparto según cuánto ahorró cada uno, y de dónde salió
+  if(isIncome && tpSavings && amount === tpSavings.amount){
+    Object.assign(fields, {
+      paidBy: shared ? SHARED_PAY : owner,
+      shares: tpSavings.shares,
+      splitType: shared ? 'savings' : undefined,
+      source: 'savings', usd: tpSavings.usd, fx: tpSavings.fx
+    });
+  }
+  const existing = editingTripId ? trip[kind].find(x=>x.id === editingTripId) : null;
+  if(existing) Object.assign(existing, fields);
+  else trip[kind].push({ id: genId(), ...fields });
+  saveTrip();
+  closeTripModal();
+  renderTrip();
+});
+function toggleTripPaid(kind, id){
+  const e = trip[kind].find(x=>x.id === id);
+  if(!e) return;
+  e.paid = !e.paid;
+  saveTrip();
+  renderTrip();
+}
+function deleteTripEntry(kind, id){
+  const e = trip[kind].find(x=>x.id === id);
+  if(!e) return;
+  openConfirmModal(`¿Eliminar "${e.desc}"? Esta acción no se puede deshacer.`, ()=>{
+    trip[kind] = trip[kind].filter(x=>x.id !== id);
+    saveTrip();
+    renderTrip();
+    notyf.success('Eliminado del viaje');
+  });
+}
+// el + de abajo (y el botón flotante) cargan un gasto diario del viaje cuando
+// se está en la página Viajes, y uno del mes en cualquier otra
+function openQuickAdd(){
+  if(trip.enabled && $('panel-viajes').classList.contains('active')) openTripModal('daily');
+  else openDailyModal();
+}
 
 // ---- metas de ahorro ----
 const GOAL_KIND_HINTS = {
@@ -6958,6 +7569,7 @@ function render(){
   renderBalance();
   renderAhorro();
   renderDeudas();
+  renderTrip();
   // gastos posibles ahora es por mes: si Ajustes está abierto (o se abre
   // después) tiene que reflejar el mes que se está viendo en Gastos, no
   // quedarse con el de la última vez que se tocó ese formulario
@@ -7299,7 +7911,7 @@ $('varTabs').addEventListener('click', (e)=>{
 // saldos: el CSS de .card.collapsed oculta las filas de las listas, así no
 // hace falta tocar cada render. Qué bloques están cerrados es una
 // preferencia de este dispositivo (localStorage), no un dato del espacio.
-const COLLAPSE_PANELS = ['panel-ingresos', 'panel-gastos', 'panel-deudas', 'panel-ahorro'];
+const COLLAPSE_PANELS = ['panel-ingresos', 'panel-gastos', 'panel-deudas', 'panel-ahorro', 'panel-viajes'];
 const COLLAPSE_KEY = 'collapsed_cards';
 function readCollapsed(){
   try{ return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')); }
@@ -8539,7 +9151,10 @@ function netBalances(key){
 // así que se saldan de a pares — el que más debe le paga al que más puso —
 // hasta que no queda nadie en rojo. Da el mínimo de transferencias posible.
 function settlements(key){
-  const net = netBalances(key);
+  return settleNet(netBalances(key));
+}
+// lo mismo a partir de cualquier balance {persona: neto} — también lo usa Viajes
+function settleNet(net){
   const debtors = [], creditors = [];
   pids().forEach(id=>{
     const v = net[id];
