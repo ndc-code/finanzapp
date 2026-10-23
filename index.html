@@ -107,6 +107,7 @@
   .card.collapsed .income-entries,
   .card.collapsed .goal,
   .card.collapsed .sv-row,
+  .card.collapsed .day-head,
   .card.collapsed .collapse-body{display:none !important;}
   /* los Totales se siguen pudiendo desplegar con el bloque cerrado: todo lo
      que cuelga de un Totales (Pagado/A pagar, monto/intereses…) se ve */
@@ -806,6 +807,11 @@
   .bill-subtotal-date{font-weight:400;}
   .bill-occurrences .bill-amt{font-size:12.5px;font-weight:600;color:var(--body-muted);}
   .bill-occurrences .bill{margin-bottom:6px;padding:8px 12px;}
+  /* Gastos diarios: un encabezado por día, con el total de ese día */
+  .day-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    margin:16px 4px 8px;font-size:12px;font-weight:600;color:var(--body-muted);letter-spacing:-0.12px;}
+  .day-head:first-child{margin-top:0;}
+  .day-head .day-total{font-family:'IBM Plex Mono',monospace;font-weight:600;}
 
   .settings-row{display:flex;gap:10px;}
   .settings-row > div{flex:1;}
@@ -5953,11 +5959,16 @@ function deleteDebt(id){
 // ---- compras en cuotas con tarjeta ----
 // Cada compra (`cardPurchases`) es de una persona y de una tarjeta, y se paga
 // en `months` cuotas iguales desde `startMonth`. No se cargan a mano en Gastos:
-// syncCardExpenses() arma un gasto variable personal "Cuotas <tarjeta>" por
-// persona/tarjeta/mes con la suma de las cuotas que caen ese mes (marcado con
-// `cardAuto`), así entra solo en la cadena de plata (financeFor), en Resumen y
-// en Ahorro sin tocar ninguno de esos cálculos. El "pagado" de ese gasto es lo
-// que marca como pagas las cuotas de ese mes en Deudas.
+// syncCardExpenses() arma un gasto variable personal por persona/tipo/tarjeta/
+// mes con la suma de lo que cae ese mes (marcado con `cardAuto`), así entra
+// solo en la cadena de plata (financeFor), en Resumen y en Ahorro sin tocar
+// ninguno de esos cálculos. El "pagado" de ese gasto es lo que marca como
+// pagas las cuotas de ese mes en Deudas. Hay tres tipos (`cardAuto.kind`), que
+// no se mezclan en un mismo gasto:
+// - 'cuotas': compras en más de una cuota → "Cuotas MP"
+// - 'credito': créditos sacados en Deudas → "Credito MP" (o el origen tal
+//   cual, "Dinero Plus MP", si no dice "crédito")
+// - 'tarjeta': gastos diarios con tarjeta y compras de 1 pago → "T.Credito MP"
 const cardNorm = c => String(c || '').trim().toLowerCase();
 function monthDiff(from, to){
   const [fy, fm] = from.split('-').map(Number);
@@ -5966,7 +5977,24 @@ function monthDiff(from, to){
 }
 function cpCuota(p){ return (p.amount || 0) / p.months; }
 function cpValid(p){ return isPerson(p.person) && p.months > 0 && !!p.startMonth && !!cardNorm(p.card); }
-function cardExpenseKey(person, card, month){ return `${person}|${cardNorm(card)}|${month}`; }
+const CARD_KINDS = ['cuotas', 'tarjeta', 'credito'];
+function cardExpenseKey(person, kind, card, month){ return `${person}|${kind}|${cardNorm(card)}|${month}`; }
+const cpKind = p => p.credit ? 'credito' : (p.months > 1 ? 'cuotas' : 'tarjeta');
+// "MP credito" → "MP", "T.Credito Uala" → "Uala"; si no dice crédito/tarjeta
+// queda igual ("Dinero Plus MP")
+function cardIssuer(card){
+  const raw = String(card || '').trim();
+  const out = raw.replace(/(^|\s)(t\.\s*)?(cr[eé]dito|tarjeta)(?=\s|$)/gi, ' ').replace(/\s+/g, ' ').trim();
+  return out || raw;
+}
+// el nombre del gasto variable automático según su tipo
+function cardExpenseDesc(kind, card){
+  const raw = String(card || '').trim();
+  const issuer = cardIssuer(raw);
+  if(kind === 'cuotas') return 'Cuotas ' + issuer;
+  if(kind === 'tarjeta') return 'T.Credito ' + issuer;
+  return issuer === raw ? raw : 'Credito ' + issuer;
+}
 // gasto diario pagado con crédito: de quién es la deuda y cuánto se devuelve
 const isCardDaily = d => !!cardNorm(d.card);
 const cardDailyPayer = d => isPerson(d.paidBy) ? d.paidBy : null;
@@ -5977,10 +6005,11 @@ const cardDailyRepay = d => (d.amount || 0) + (d.interest || 0);
 function desiredCardExpenses(){
   const out = new Map();
   cardPurchases.filter(cpValid).forEach(p=>{
+    const kind = cpKind(p);
     for(let i = 0; i < p.months; i++){
       const month = addMonthsKey(p.startMonth, i);
-      const k = cardExpenseKey(p.person, p.card, month);
-      const cur = out.get(k) || { person: p.person, card: p.card.trim(), month, amount: 0 };
+      const k = cardExpenseKey(p.person, kind, p.card, month);
+      const cur = out.get(k) || { person: p.person, kind, card: p.card.trim(), month, amount: 0 };
       cur.amount += cpCuota(p);
       out.set(k, cur);
     }
@@ -5988,15 +6017,14 @@ function desiredCardExpenses(){
   // gastos diarios pagados con crédito: se devuelven en 1 solo pago el mes
   // siguiente, enteros y con los intereses, por quien lo pagó — si era
   // compartido, la parte del otro ya se le debe en "Entre ustedes", así que
-  // no se le carga además a él. Se suman al mismo total por
-  // persona/origen/mes que una compra en cuotas, así un origen que ya tiene
-  // cuotas ese mes no termina con dos filas "Cuotas X"
+  // no se le carga además a él. Van al "T.Credito <tarjeta>" de ese mes,
+  // junto con las compras de 1 pago de esa tarjeta
   dailyExpenses.filter(isCardDaily).forEach(d=>{
     const person = cardDailyPayer(d);
     if(!person) return;
     const month = addMonthsKey(monthKey(d.date), 1);
-    const k = cardExpenseKey(person, d.card, month);
-    const cur = out.get(k) || { person, card: d.card.trim(), month, amount: 0 };
+    const k = cardExpenseKey(person, 'tarjeta', d.card, month);
+    const cur = out.get(k) || { person, kind: 'tarjeta', card: d.card.trim(), month, amount: 0 };
     cur.amount += cardDailyRepay(d);
     out.set(k, cur);
   });
@@ -6010,26 +6038,35 @@ function syncCardExpenses(){
   const seen = new Set();
   let changed = false;
   const next = [];
+  const keyOf = e => cardExpenseKey(e.cardAuto.person, e.cardAuto.kind, e.cardAuto.card, monthKey(e.date));
+  // los de antes de separar por tipo (sin `kind`) juntaban todo en un solo
+  // "Cuotas X": se quedan con el primer tipo que siga existiendo ese mes
+  // (cuotas primero), así no se pierde el pagado de los meses ya cerrados
+  const legacyKey = e => CARD_KINDS
+    .map(kind=>cardExpenseKey(e.cardAuto.person, kind, e.cardAuto.card, monthKey(e.date)))
+    .find(k=>want.has(k) && !seen.has(k));
+  varExpenses.forEach(e=>{ if(e.cardAuto && e.cardAuto.kind) seen.add(keyOf(e)); });
+  const claimed = new Set();
   varExpenses.forEach(e=>{
     if(!e.cardAuto){ next.push(e); return; }
-    const k = cardExpenseKey(e.cardAuto.person, e.cardAuto.card, monthKey(e.date));
-    const w = want.get(k);
-    if(!w || seen.has(k)){ changed = true; return; }   // sin cuotas ese mes, o repetido
-    seen.add(k);
+    const k = e.cardAuto.kind ? keyOf(e) : legacyKey(e);
+    const w = k && want.get(k);
+    if(!w || claimed.has(k)){ changed = true; return; }   // sin nada ese mes, o repetido
+    claimed.add(k); seen.add(k);
     const amount = Math.round(w.amount);
-    const desc = 'Cuotas ' + w.card;
-    if(e.amount !== amount || e.desc !== desc){
+    const desc = cardExpenseDesc(w.kind, w.card);
+    if(e.amount !== amount || e.desc !== desc || e.cardAuto.kind !== w.kind){
       e.amount = amount; e.desc = desc; e.category = desc;
-      e.cardAuto = { person: w.person, card: w.card };
+      e.cardAuto = { person: w.person, kind: w.kind, card: w.card };
       changed = true;
     }
     next.push(e);
   });
   want.forEach((w, k)=>{
-    if(seen.has(k)) return;
-    const desc = 'Cuotas ' + w.card;
+    if(claimed.has(k)) return;
+    const desc = cardExpenseDesc(w.kind, w.card);
     next.push({ id: genId(), desc, amount: Math.round(w.amount), date: w.month + '-01', category: desc,
-      paidBy: w.person, shares: soloShares(w.person), cardAuto: { person: w.person, card: w.card } });
+      paidBy: w.person, shares: soloShares(w.person), cardAuto: { person: w.person, kind: w.kind, card: w.card } });
     changed = true;
   });
   if(changed) varExpenses = next;
@@ -6044,26 +6081,26 @@ function persistCardExpenses(){
   try{ saveVarExpenses(); }finally{ allowBulkClear = false; }
 }
 
-function cardExpenseFor(person, card, month){
-  const k = cardExpenseKey(person, card, month);
-  return varExpenses.find(e=>e.cardAuto && cardExpenseKey(e.cardAuto.person, e.cardAuto.card, monthKey(e.date)) === k);
+function cardExpenseFor(person, kind, card, month){
+  const k = cardExpenseKey(person, kind, card, month);
+  return varExpenses.find(e=>e.cardAuto && cardExpenseKey(e.cardAuto.person, e.cardAuto.kind || kind, e.cardAuto.card, monthKey(e.date)) === k);
 }
 // una cuota cuenta como paga cuando el gasto "Cuotas <tarjeta>" de su mes
 // está tildado como pagado en Gastos variables
 function cpPaidArr(p){
   return Array.from({length: p.months}, (_, i)=>{
-    const ex = cardExpenseFor(p.person, p.card, addMonthsKey(p.startMonth, i));
+    const ex = cardExpenseFor(p.person, cpKind(p), p.card, addMonthsKey(p.startMonth, i));
     return !!(ex && ex.paid);
   });
 }
 function cardPendingFor(person){
   const cuotas = cardPurchases.filter(p=>p.person === person && cpValid(p))
     .reduce((s, p)=> s + cpPaidArr(p).filter(x=>!x).length * cpCuota(p), 0);
-  // los gastos diarios pagados con crédito, hasta que se tilda su "Cuotas
-  // <origen>" del mes siguiente en Gastos variables
+  // los gastos diarios pagados con crédito, hasta que se tilda su "T.Credito
+  // <tarjeta>" del mes siguiente en Gastos variables
   const diarios = dailyExpenses.filter(d=>isCardDaily(d) && cardDailyPayer(d) === person)
     .filter(d=>{
-      const ex = cardExpenseFor(person, d.card, addMonthsKey(monthKey(d.date), 1));
+      const ex = cardExpenseFor(person, 'tarjeta', d.card, addMonthsKey(monthKey(d.date), 1));
       return !(ex && ex.paid);
     })
     .reduce((s, d)=>s + cardDailyRepay(d), 0);
@@ -6102,9 +6139,13 @@ function goToCardPurchases(person){
 }
 function cardExpenseBillRow(ex){
   const open = expandedCardExpenses.has(ex.id);
-  const items = cardPurchasesInMonth(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date));
-  const dailies = cardDailiesRepaidIn(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date));
+  const kind = ex.cardAuto.kind;
+  const items = cardPurchasesInMonth(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date))
+    .filter(x=>!kind || cpKind(x.p) === kind);
+  const dailies = !kind || kind === 'tarjeta'
+    ? cardDailiesRepaidIn(ex.cardAuto.person, ex.cardAuto.card, monthKey(ex.date)) : [];
   const n = items.length + dailies.length;
+  const unit = kind === 'credito' ? (n === 1 ? 'crédito' : 'créditos') : (n === 1 ? 'compra' : 'compras');
   const parent = `<div class="bill bill-clickable" onclick="toggleCardExpenseOpen('${ex.id}')">
     <div class="bill-main">
       <div class="bill-name-row">
@@ -6114,7 +6155,7 @@ function cardExpenseBillRow(ex){
       </div>
       <div class="bill-meta">
         <span>${shortDate(ex.date)}</span>
-        <span class="bill-occ-badge">${n} ${n === 1 ? 'compra' : 'compras'}</span>
+        <span class="bill-occ-badge">${n} ${unit}</span>
         <label class="bill-paid" title="${ex.paid ? 'Pagado' : 'Marcar como pagado'}" onclick="event.stopPropagation()">
           <input type="checkbox" ${ex.paid ? 'checked' : ''} onchange="toggleVarExpensePaid('${ex.id}')">
         </label>
@@ -6129,7 +6170,9 @@ function cardExpenseBillRow(ex){
   const rows = items.map(x=>`<div class="bill">
     <div class="bill-main">
       <div class="bill-name">${escapeHtml(x.p.name)}</div>
-      <div class="bill-meta"><span>Cuota ${x.n} de ${x.p.months}</span></div>
+      <div class="bill-meta">${x.p.credit
+        ? `<span>Intereses ${fmt(Math.max(0, (x.p.amount || 0) - (x.p.credit.received || 0)))}</span>`
+        : x.p.months > 1 ? `<span>Cuota ${x.n} de ${x.p.months}</span>` : '<span>1 pago</span>'}</div>
     </div>
     <div class="bill-amt">${fmt(x.cuota)}</div>
   </div>`).join('') + dailies.map(d=>`<div class="bill">
@@ -6261,9 +6304,9 @@ function creditsTakenIn(person, key){
     })
     .sort((a,b)=>(b.date || '').localeCompare(a.date || ''));
 }
-// una tarjeta por origen (Crédito MP, Uala…) con el total; si hay más de un
-// crédito de ese origen se despliega, igual que Limpieza, en una sub-tarjeta
-// por crédito con su fecha, sus intereses y su total
+// una tarjeta por origen (Crédito MP, Uala…) con el total, que se despliega
+// siempre — aunque ese origen tenga un solo crédito —, igual que Limpieza, en
+// una sub-tarjeta por crédito con su fecha, sus intereses y su total
 let expandedCredits = new Set();
 function toggleCreditOpen(encodedKey){
   const key = decodeURIComponent(encodedKey);
@@ -6282,15 +6325,12 @@ function creditActions(c){
 }
 function creditGroupHtml(g){
   const total = g.list.reduce((s, c)=>s + c.capital + c.interest, 0);
-  if(g.list.length === 1){
-    const c = g.list[0];
-    return deudaBillHtml({ name: g.label, amount: fmt(total), meta: creditMetaHtml(c), ...creditActions(c) });
-  }
   const children = g.list.map(c=>deudaBillHtml({
     name: g.label, amount: fmt(c.capital + c.interest), meta: creditMetaHtml(c), ...creditActions(c)
   })).join('');
   return deudaBillHtml({
     name: g.label, amount: fmt(total),
+    meta: `<span class="bill-occ-badge">${g.list.length} ${g.list.length === 1 ? 'crédito' : 'créditos'}</span>`,
     open: expandedCredits.has(g.key), onToggle: `toggleCreditOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
   });
 }
@@ -8157,10 +8197,63 @@ function renderVarExpenseTabs(){
   $('varExpenseList').innerHTML = varListHtml(shown, vacio);
 }
 
+// los automáticos de tarjeta primero, en orden Cuotas → Créditos → T.Credito;
+// los cargados a mano después, en el orden en que se cargaron
+const CARD_KIND_ORDER = { cuotas: 0, credito: 1, tarjeta: 2 };
+function varListOrder(list){
+  const rank = e => e.cardAuto ? (CARD_KIND_ORDER[e.cardAuto.kind] ?? 0) : 3;
+  return list.map((e, i)=>({ e, i })).sort((a,b)=>rank(a.e) - rank(b.e) || a.i - b.i).map(x=>x.e);
+}
 function varListHtml(list, vacio){
   return list.length
-    ? list.map(varExpenseBillRow).join('') + billTotalRow(list, {showPaidSplit:true, key:'variable'})
+    ? varGroupsOf(varListOrder(list)).map(g=>g.list.length > 1 ? varGroupBillRow(g) : varExpenseBillRow(g.list[0])).join('')
+      + billTotalRow(list, {showPaidSplit:true, key:'variable'})
     : `<div class="empty">${escapeHtml(vacio)}<br>Agregá el primero con el botón de arriba.</div>`;
+}
+// los gastos variables del mes con el mismo nombre (y del mismo dueño) van en
+// una sola tarjeta con el total, que se despliega en cada gasto — cuatro
+// "T.Credito MP" sueltos son una tarjeta, no cuatro. Los "Cuotas <tarjeta>"
+// automáticos ya son uno por tarjeta, así que no se agrupan.
+let expandedVarGroups = new Set();
+function varGroupsOf(list){
+  const groups = [];
+  list.forEach(ex=>{
+    const key = ex.cardAuto ? 'auto|' + ex.id : `${monthKey(ex.date)}|${expenseOwner(ex)}|${cardNorm(ex.desc)}`;
+    let g = groups.find(x=>x.key === key);
+    if(!g){ g = { key, list: [] }; groups.push(g); }
+    g.list.push(ex);
+  });
+  return groups;
+}
+function toggleVarGroupOpen(encodedKey){
+  const key = decodeURIComponent(encodedKey);
+  if(expandedVarGroups.has(key)) expandedVarGroups.delete(key);
+  else expandedVarGroups.add(key);
+  render();
+}
+function varGroupBillRow(g){
+  const open = expandedVarGroups.has(g.key);
+  const first = g.list[0];
+  const total = g.list.reduce((s, ex)=>s + (ex.amount || 0), 0);
+  const n = g.list.length;
+  const paidCount = g.list.filter(ex=>ex.paid).length;
+  const parent = `<div class="bill bill-clickable" onclick="toggleVarGroupOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')">
+    <div class="bill-main">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+          aria-label="${open ? 'Ocultar' : 'Ver'} los ${n} gastos">▸</button>
+        <div class="bill-name">${escapeHtml(first.desc)}</div>
+      </div>
+      <div class="bill-meta">
+        <span>${shortDate(first.date)}</span>${splitInfoHtml(splitLabelOf(first))}
+        <span class="bill-occ-badge">${paidCount} de ${n} pagados</span>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(total)}</div>
+    <button class="bill-edit" style="visibility:hidden" tabindex="-1" aria-hidden="true">✎</button>
+    <button class="bill-del" style="visibility:hidden" tabindex="-1" aria-hidden="true">✕</button>
+  </div>`;
+  return parent + (open ? `<div class="bill-occurrences">${g.list.map(varExpenseBillRow).join('')}</div>` : '');
 }
 
 $('varTabs').addEventListener('click', (e)=>{
@@ -8248,8 +8341,11 @@ function renderDailyBlock(fin){
   const mes = monthShort(viewMonth);
   $('dailyBlockTitle').textContent = `Gastos diarios de ${mes}`;
 
-  const list = dailyExpenses.filter(d=>inViewMonth(d.date))
-    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  // los más nuevos arriba: por fecha, y dentro del mismo día el último que
+  // se cargó primero
+  const list = dailyExpenses.map((d, i)=>({ d, i })).filter(x=>inViewMonth(x.d.date))
+    .sort((a,b)=>(b.d.date||'').localeCompare(a.d.date||'') || b.i - a.i)
+    .map(x=>x.d);
   if(peopleCount() < 2){
     tabs.style.display = 'none';
     currentDailyTab = firstPid();
@@ -8272,23 +8368,36 @@ function renderDailyBlock(fin){
 function renderDailySaldoFinal(person){
   $('dailySaldoFinal').innerHTML = saldoCell(names[person], bolsaOf(person, viewMonth) - dailyTotalOf(person, viewMonth));
 }
+// la lista (ya ordenada, más nuevos arriba) separada por día: un encabezado
+// con la fecha y el total de ese día, y debajo sus gastos
 function dailyListHtml(list, vacio){
-  return list.length
-    ? list.map(dailyBillRow).join('') + billTotalRow(list)
-    : `<div class="empty">${escapeHtml(vacio)}<br>Usá el botón + para anotarlos a medida que pasan.</div>`;
+  if(!list.length) return `<div class="empty">${escapeHtml(vacio)}<br>Usá el botón + para anotarlos a medida que pasan.</div>`;
+  const days = [];
+  list.forEach(d=>{
+    let g = days[days.length - 1];
+    if(!g || g.date !== d.date){ g = { date: d.date, list: [] }; days.push(g); }
+    g.list.push(d);
+  });
+  return days.map(g=>{
+    const raw = new Date(g.date+'T00:00:00').toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
+    const label = raw.charAt(0).toUpperCase() + raw.slice(1);
+    const total = g.list.reduce((s, d)=>s + (d.amount || 0), 0);
+    return `<div class="day-head"><span>${escapeHtml(label)}</span><span class="day-total">${fmt(total)}</span></div>`
+      + g.list.map(dailyBillRow).join('');
+  }).join('') + billTotalRow(list);
 }
 // gasto diario pagado con crédito: queda a la vista de dónde salió, así se
 // sabe que no restó del saldo de este mes (se devuelve el que viene)
 function dailyCardTagHtml(d){
   return cardNorm(d.card) ? `<span class="tag tag-card">💳 ${escapeHtml(d.card)}</span>` : '';
 }
+// sin fecha propia: ya la dice el encabezado del día (dailyListHtml)
 function dailyBillRow(d){
-  const dateStr = new Date(d.date+'T00:00:00').toLocaleDateString('es-AR', {day:'2-digit', month:'short'});
   return `<div class="bill">
     <div class="bill-main">
       <div class="bill-name">${escapeHtml(d.desc)}</div>
       <div class="bill-meta">
-        <span>${dateStr}</span>${splitInfoHtml(splitLabelOf(d))}
+        ${splitInfoHtml(splitLabelOf(d)).replace(/^<span>·<\/span>/, '')}
         ${payerTagHtml(d)}${dailyCardTagHtml(d)}
       </div>
     </div>
@@ -8413,7 +8522,7 @@ function updateCreditHint(){
   }
   const desde = monthShort(v.startMonth);
   const interesTxt = v.interes > 0 ? ` (${fmt(v.interes)} de intereses)` : '';
-  $('dlyCrHint').textContent = `Suma ${fmt(v.received)} a Salidas y Gustos de ${monthShort(monthKey(v.date))}. En ${desde} pagás ${fmt(v.repay)}${interesTxt}, como gasto variable "Cuotas ${v.card}".`;
+  $('dlyCrHint').textContent = `Suma ${fmt(v.received)} a Salidas y Gustos de ${monthShort(monthKey(v.date))}. En ${desde} pagás ${fmt(v.repay)}${interesTxt}, como gasto variable "${cardExpenseDesc('credito', v.card)}".`;
 }
 $('dlyCrWhoSeg').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
@@ -8544,7 +8653,7 @@ function updateDailyHint(){
     const card = $('dlyCard').value.trim() || 'la tarjeta';
     const next = monthShort(addMonthsKey(monthKey(date), 1));
     const quien = peopleCount() > 1 ? ` de ${nameOf(dailyFormPayer())}` : '';
-    $('dlyHint').textContent = `No resta del saldo de ${monthShort(monthKey(date))}: queda en Deudas${quien} y se paga en ${next}, como gasto variable "Cuotas ${card}".`;
+    $('dlyHint').textContent = `No resta del saldo de ${monthShort(monthKey(date))}: queda en Deudas${quien} y se paga en ${next}, como gasto variable "${cardExpenseDesc('tarjeta', card)}".`;
     return;
   }
   const entry = { amount: numVal('dlyAmount') || 0, date, shares: dailyFormShares() };
@@ -8624,7 +8733,7 @@ $('dailyForm').addEventListener('submit', (e)=>{
   const key = monthKey(fields.date);
   if(fields.card){
     const next = monthShort(addMonthsKey(key, 1));
-    notyf.success(`Va a Deudas › Tarjeta de crédito y se paga en ${next} como "Cuotas ${fields.card}".`);
+    notyf.success(`Va a Deudas › Tarjeta de crédito y se paga en ${next} como "${cardExpenseDesc('tarjeta', fields.card)}".`);
   }else{
     const rows = pids().filter(p=>(fields.shares[p] || 0) > 0)
       .map(p=>({ p, quedan: bolsaOf(p, key) - dailyTotalOf(p, key) }));
