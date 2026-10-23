@@ -6261,9 +6261,9 @@ function creditsTakenIn(person, key){
     })
     .sort((a,b)=>(b.date || '').localeCompare(a.date || ''));
 }
-// una tarjeta por origen (Crédito MP, Uala…) con el total; si hay más de un
-// crédito de ese origen se despliega, igual que Limpieza, en una sub-tarjeta
-// por crédito con su fecha, sus intereses y su total
+// una tarjeta por origen (Crédito MP, Uala…) con el total, que se despliega
+// siempre — aunque ese origen tenga un solo crédito —, igual que Limpieza, en
+// una sub-tarjeta por crédito con su fecha, sus intereses y su total
 let expandedCredits = new Set();
 function toggleCreditOpen(encodedKey){
   const key = decodeURIComponent(encodedKey);
@@ -6282,15 +6282,12 @@ function creditActions(c){
 }
 function creditGroupHtml(g){
   const total = g.list.reduce((s, c)=>s + c.capital + c.interest, 0);
-  if(g.list.length === 1){
-    const c = g.list[0];
-    return deudaBillHtml({ name: g.label, amount: fmt(total), meta: creditMetaHtml(c), ...creditActions(c) });
-  }
   const children = g.list.map(c=>deudaBillHtml({
     name: g.label, amount: fmt(c.capital + c.interest), meta: creditMetaHtml(c), ...creditActions(c)
   })).join('');
   return deudaBillHtml({
     name: g.label, amount: fmt(total),
+    meta: `<span class="bill-occ-badge">${g.list.length} ${g.list.length === 1 ? 'crédito' : 'créditos'}</span>`,
     open: expandedCredits.has(g.key), onToggle: `toggleCreditOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')`, children
   });
 }
@@ -8159,8 +8156,54 @@ function renderVarExpenseTabs(){
 
 function varListHtml(list, vacio){
   return list.length
-    ? list.map(varExpenseBillRow).join('') + billTotalRow(list, {showPaidSplit:true, key:'variable'})
+    ? varGroupsOf(list).map(g=>g.list.length > 1 ? varGroupBillRow(g) : varExpenseBillRow(g.list[0])).join('')
+      + billTotalRow(list, {showPaidSplit:true, key:'variable'})
     : `<div class="empty">${escapeHtml(vacio)}<br>Agregá el primero con el botón de arriba.</div>`;
+}
+// los gastos variables del mes con el mismo nombre (y del mismo dueño) van en
+// una sola tarjeta con el total, que se despliega en cada gasto — cuatro
+// "T.Credito MP" sueltos son una tarjeta, no cuatro. Los "Cuotas <tarjeta>"
+// automáticos ya son uno por tarjeta, así que no se agrupan.
+let expandedVarGroups = new Set();
+function varGroupsOf(list){
+  const groups = [];
+  list.forEach(ex=>{
+    const key = ex.cardAuto ? 'auto|' + ex.id : `${monthKey(ex.date)}|${expenseOwner(ex)}|${cardNorm(ex.desc)}`;
+    let g = groups.find(x=>x.key === key);
+    if(!g){ g = { key, list: [] }; groups.push(g); }
+    g.list.push(ex);
+  });
+  return groups;
+}
+function toggleVarGroupOpen(encodedKey){
+  const key = decodeURIComponent(encodedKey);
+  if(expandedVarGroups.has(key)) expandedVarGroups.delete(key);
+  else expandedVarGroups.add(key);
+  render();
+}
+function varGroupBillRow(g){
+  const open = expandedVarGroups.has(g.key);
+  const first = g.list[0];
+  const total = g.list.reduce((s, ex)=>s + (ex.amount || 0), 0);
+  const n = g.list.length;
+  const paidCount = g.list.filter(ex=>ex.paid).length;
+  const parent = `<div class="bill bill-clickable" onclick="toggleVarGroupOpen('${encodeURIComponent(g.key).replace(/'/g, '%27')}')">
+    <div class="bill-main">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+          aria-label="${open ? 'Ocultar' : 'Ver'} los ${n} gastos">▸</button>
+        <div class="bill-name">${escapeHtml(first.desc)}</div>
+      </div>
+      <div class="bill-meta">
+        <span>${shortDate(first.date)}</span>${splitInfoHtml(splitLabelOf(first))}
+        <span class="bill-occ-badge">${paidCount} de ${n} pagados</span>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(total)}</div>
+    <button class="bill-edit" style="visibility:hidden" tabindex="-1" aria-hidden="true">✎</button>
+    <button class="bill-del" style="visibility:hidden" tabindex="-1" aria-hidden="true">✕</button>
+  </div>`;
+  return parent + (open ? `<div class="bill-occurrences">${g.list.map(varExpenseBillRow).join('')}</div>` : '');
 }
 
 $('varTabs').addEventListener('click', (e)=>{
