@@ -229,12 +229,13 @@
 
   /* ---- ahorro en dólares: lista editable ---- */
   .sv-row{display:flex;align-items:center;gap:10px;padding:7px 0;}
-  .sv-m{flex:0 0 96px;font-size:12.5px;color:var(--body-muted);}
+  .sv-tag{font-size:11px;color:var(--body-muted);font-weight:500;margin-left:4px;}
+  .sv-m{flex:0 0 auto;min-width:96px;font-size:12.5px;color:var(--body-muted);}
   .sv-v{margin-left:auto;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;}
   .sv-total{display:flex;justify-content:space-between;align-items:baseline;
     border-top:1px solid var(--line-strong);margin-top:8px;padding-top:10px;font-size:15px;font-weight:600;}
   .sv-total .v{font-variant-numeric:tabular-nums;}
-  @media(max-width:480px){.sv-m{flex:0 0 68px;font-size:11.5px;}.sv-v{font-size:12px;}}
+  @media(max-width:480px){.sv-m{flex:0 0 auto;min-width:68px;font-size:11.5px;}.sv-v{font-size:12px;}}
 
   /* ---- 50/30/20 rule ---- */
   .rule-row{padding:12px 0;border-bottom:1px solid var(--line);}
@@ -1499,6 +1500,8 @@
         <input type="text" class="ie-letters" id="iDesc" placeholder="Ej: Sueldo, freelance" required>
         <!-- the usual ones: picking a chip fills description, amount and currency -->
         <div class="chips" id="incomeChips"></div>
+        <!-- chip Ahorro: cuánto hay ahorrado en dólares para pasar a ingreso -->
+        <div class="income-note" id="iSavingsHint" hidden></div>
       </div>
       <div class="row2">
         <div>
@@ -6596,6 +6599,8 @@ $('svCurSeg').addEventListener('click', (e)=>{
 function openSavingsModal(entryId, prefill){
   const list = savingsSlot(currentAhorroPerson).items;
   const entry = entryId ? list.find(e=>e.id === entryId) : null;
+  // dólares pasados a ingreso: se editan desde su ingreso, que es el que manda
+  if(entry && entry.fromIncome){ openIncomeModal(currentAhorroPerson, entry.fromIncome); return; }
   editingSavingsId = entry ? entry.id : null;
   $('savingsForm').reset();
   svModalCur = entry ? (entry.currency || 'ARS') : ((prefill && prefill.currency) || 'ARS');
@@ -6655,7 +6660,15 @@ $('savingsForm').addEventListener('submit', (e)=>{
 
 function deleteSavingsEntry(id){
   const slot = savingsSlot(currentAhorroPerson);
-  if(!slot.items.some(x=>x.id === id)) return;
+  const row = slot.items.find(x=>x.id === id);
+  if(!row) return;
+  if(row.fromIncome){
+    openConfirmModal('Esto borra también el ingreso desde Ahorro y los dólares vuelven a tu ahorro. ¿Seguro?', ()=>{
+      removeIncome(currentAhorroPerson, row.fromIncome);
+      renderAhorro();
+    }, { title:'Eliminar ingreso desde Ahorro' });
+    return;
+  }
   openConfirmModal('¿Eliminar este ahorro en dólares? Esta acción no se puede deshacer.', ()=>{
     slot.items = slot.items.filter(x=>x.id !== id);
     saveSavings();
@@ -7047,7 +7060,10 @@ $('iCurSeg').addEventListener('click', (e)=>{
   document.querySelectorAll('#iCurSeg button').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   currentIncomeCur = btn.dataset.cur;
+  // el ahorro está en dólares: pasarlo a pesos deja de ser "desde Ahorro"
+  if(currentIncomeCur !== 'USD') incomeFromSavings = false;
   syncIncomeFx();
+  syncIncomeChips();
 });
 $('iWhoSeg').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
@@ -7061,6 +7077,7 @@ $('iWhoSeg').addEventListener('click', (e)=>{
 function resetIncomeForm(){
   $('incomeForm').reset();
   editingIncomeId = null;
+  incomeFromSavings = false;
   currentIncomeCur = 'ARS';
   currentIncomeWho = firstPid();
   document.querySelectorAll('#iCurSeg button').forEach(b=>b.classList.toggle('active', b.dataset.cur === 'ARS'));
@@ -7085,6 +7102,7 @@ function openIncomeModal(person, entryId){
     document.querySelectorAll('#iCurSeg button').forEach(b=>b.classList.toggle('active', b.dataset.cur === currentIncomeCur));
     if(entry.currency === 'USD') $('iFx').value = groupThousands(String(entryRate(entry)));
     $('iDate').value = entry.date || defaultDate();
+    incomeFromSavings = entry.source === 'savings';
     syncIncomeFx();
   }
   renderIncomeChips();
@@ -7100,29 +7118,90 @@ function closeIncomeModal(){
 }
 $('incomeModal').addEventListener('click', (e)=>{ if(e.target === $('incomeModal')) closeIncomeModal(); });
 
+// ---- ingreso desde Ahorro ----
+// Pasar dólares ahorrados a pesos: el ingreso se guarda en USD (source:
+// 'savings', con su cotización) y deja en Ahorro en dólares una fila negativa
+// atada a él (fromIncome), así el total ahorrado baja lo mismo. Compra
+// dólares del mes no se toca: esos dólares sí se compraron.
+const INCOME_SAVINGS_LABEL = 'Ahorro';
+let incomeFromSavings = false;
+function linkedSavingsRow(incomeId){
+  for(const id of pids()){
+    const row = savingsSlot(id).items.find(e=>e.fromIncome === incomeId);
+    if(row) return { person: id, row };
+  }
+  return null;
+}
+// lo que esta persona puede pasar a ingreso: lo ahorrado hasta hoy, más lo
+// que ya tomó este mismo ingreso si se está editando
+function savingsAvailableFor(person, incomeId){
+  const own = incomeId ? linkedSavingsRow(incomeId) : null;
+  return Math.max(0, savedUsdOf(person) + (own && own.person === person ? -(own.row.amount || 0) : 0));
+}
+// deja la fila de Ahorro en dólares de este ingreso como corresponde (o la
+// saca si ya no viene de Ahorro)
+function syncSavingsLink(incomeId, person, entry){
+  pids().forEach(id=>{
+    const slot = savingsSlot(id);
+    slot.items = slot.items.filter(e=>e.fromIncome !== incomeId);
+  });
+  if(entry && entry.source === 'savings'){
+    const fx = entryRate(entry);
+    savingsSlot(person).items.push({ id: genId(), currency:'USD', amount: -entry.amount,
+      pesos: -Math.round(entry.amount * fx), fx, date: entry.date, fromIncome: incomeId });
+  }
+  saveSavings();
+}
+function setIncomeSavingsHint(text){
+  $('iSavingsHint').textContent = text || '';
+  $('iSavingsHint').hidden = !text;
+}
+function applyIncomeSavingsPick(){
+  const usd = savingsAvailableFor(currentIncomeWho, editingIncomeId);
+  incomeFromSavings = true;
+  $('iDesc').value = INCOME_SAVINGS_LABEL;
+  $('iAmount').value = usd > 0 ? groupThousands(String(usd)) : '';
+  currentIncomeCur = 'USD';
+  document.querySelectorAll('#iCurSeg button').forEach(b=>b.classList.toggle('active', b.dataset.cur === 'USD'));
+  if(!numVal('iFx') && usdRate()) $('iFx').value = groupThousands(String(usdRate()));
+  syncIncomeFx();
+  syncIncomeChips();
+  $('iAmount').focus();
+  $('iAmount').select();
+}
+
 // chips for whoever is selected in the modal
 function renderIncomeChips(){
   const list = fixedIncome.filter(f=>f.person === currentIncomeWho);
-  $('incomeChips').innerHTML = list.length ? list.map(f=>{
+  const usd = savingsAvailableFor(currentIncomeWho, editingIncomeId);
+  const ahorro = usd > 0 || incomeFromSavings
+    ? `<button type="button" data-savings="1">${INCOME_SAVINGS_LABEL}<span class="chip-amt">${fmtUsd(usd)}</span></button>` : '';
+  $('incomeChips').innerHTML = list.length || ahorro ? list.map(f=>{
     const tag = f.amount
       ? `<span class="chip-amt">${f.currency === 'USD' ? 'US$ ' : ''}${fmtNum(f.amount)}</span>` : '';
     return `<button type="button" data-id="${f.id}">${escapeHtml(f.label)}${tag}</button>`;
-  }).join('') : '<div class="income-note">Cargá los ingresos fijos en Ajustes para tenerlos a un toque.</div>';
+  }).join('') + ahorro : '<div class="income-note">Cargá los ingresos fijos en Ajustes para tenerlos a un toque.</div>';
   syncIncomeChips();
 }
 function syncIncomeChips(){
   const v = $('iDesc').value.trim().toLowerCase();
   document.querySelectorAll('#incomeChips button').forEach(b=>{
+    if(b.dataset.savings){ b.classList.toggle('active', incomeFromSavings); return; }
     const f = fixedIncome.find(x=>x.id === b.dataset.id);
-    b.classList.toggle('active', !!f && f.label.toLowerCase() === v);
+    b.classList.toggle('active', !incomeFromSavings && !!f && f.label.toLowerCase() === v);
   });
+  setIncomeSavingsHint(incomeFromSavings
+    ? `${nameOf(currentIncomeWho)} tiene ${fmtUsd(savingsAvailableFor(currentIncomeWho, editingIncomeId))} ahorrados. Poné cuántos dólares pasás a pesos: se restan de Ahorro en dólares.`
+    : '');
 }
 $('iDesc').addEventListener('input', syncIncomeChips);
 $('incomeChips').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
   if(!btn) return;
+  if(btn.dataset.savings){ applyIncomeSavingsPick(); return; }
   const f = fixedIncome.find(x=>x.id === btn.dataset.id);
   if(!f) return;
+  incomeFromSavings = false;
   $('iDesc').value = f.label;
   $('iAmount').value = f.amount ? groupThousands(String(f.amount)) : '';
   currentIncomeCur = f.currency === 'USD' ? 'USD' : 'ARS';
@@ -7144,6 +7223,16 @@ $('incomeForm').addEventListener('submit', (e)=>{
     fields.fx = rate;
     income.fx = rate;   // remember it as the prefill for the next USD income
   }
+  const fromSavings = incomeFromSavings && currentIncomeCur === 'USD';
+  if(fromSavings){
+    const usd = savingsAvailableFor(currentIncomeWho, editingIncomeId);
+    if(amount > usd){
+      setIncomeSavingsHint(`${nameOf(currentIncomeWho)} tiene ${fmtUsd(usd)} ahorrados: no alcanza para ${fmtUsd(amount)}.`);
+      $('iAmount').focus();
+      return;
+    }
+    fields.source = 'savings';
+  }
 
   if(editingIncomeId){
     // the owner can change, so the entry may need to move between people
@@ -7155,6 +7244,7 @@ $('incomeForm').addEventListener('submit', (e)=>{
     if(found){
       Object.assign(found, fields);
       if(currentIncomeCur !== 'USD') delete found.fx;
+      if(!fromSavings) delete found.source;
       if(from !== currentIncomeWho){
         income.entries[from] = income.entries[from].filter(x=>x.id !== editingIncomeId);
         income.entries[currentIncomeWho].push(found);
@@ -7163,6 +7253,9 @@ $('incomeForm').addEventListener('submit', (e)=>{
   }else{
     income.entries[currentIncomeWho].push({ id: genId(), ...fields });
   }
+  const savedId = editingIncomeId || income.entries[currentIncomeWho][income.entries[currentIncomeWho].length - 1].id;
+  const saved = (income.entries[currentIncomeWho] || []).find(x=>x.id === savedId);
+  if(fromSavings || linkedSavingsRow(savedId)) syncSavingsLink(savedId, currentIncomeWho, saved);
 
   saveIncome();
   closeIncomeModal();
@@ -7173,6 +7266,7 @@ $('incomeForm').addEventListener('submit', (e)=>{
 
 function removeIncome(person, id){
   income.entries[person] = income.entries[person].filter(e=>e.id!==id);
+  if(linkedSavingsRow(id)) syncSavingsLink(id, person, null);   // los dólares vuelven a Ahorro
   saveIncome();
   renderIncomeLists();
   render();
@@ -8111,7 +8205,7 @@ function registerDolaresPurchase(id, person){
   currentAhorroPerson = person;
   // si el mes que se está viendo ya tiene una entrada (a mano o autogenerada),
   // la abre para editarla en vez de duplicarla
-  const existing = savingsSlot(currentAhorroPerson).items.find(e=>monthKey(e.date) === viewMonth);
+  const existing = savingsSlot(currentAhorroPerson).items.find(e=>!e.fromIncome && monthKey(e.date) === viewMonth);
   if(existing) openSavingsModal(existing.id);
   else openSavingsModal(null, { amount: c.amount || 0, fx: c.fx || usdRate(), currency: 'ARS' });
 }
@@ -9308,20 +9402,31 @@ function ensureAutoDolaresRows(person){
     ...expenses.map(e=>monthKey(e.date)),
     ...(income.entries[person]||[]).map(e=>monthKey(e.date))
   ].filter(m=>m && m <= viewMonth))];
-  const pending = months.filter(m=>!slot.autoMonths.includes(m));
-  if(!pending.length) return;
   // Compra dólares es propio de cada mes, así que la fila que se genera para
   // cada uno usa el monto y la cotización de ESE mes (c.fx, congelada cuando
   // se cargó), no un único valor global aplicado a todos a la vez
-  let changed = false;
-  pending.forEach(m=>{
+  const compraOf = (m)=>{
     const dolares = (budgetTemplatesForMonth(m)[person] || []).find(c => c.label === 'Compra dólares');
-    const pesos = dolares ? (dolares.amount || 0) : 0;
-    const rate = (dolares && dolares.fx) || usdRate();
+    return { pesos: dolares ? (dolares.amount || 0) : 0, rate: (dolares && dolares.fx) || usdRate() };
+  };
+  let changed = false;
+  // la fila autogenerada sigue a Compra dólares mientras no se la edite a mano
+  // (editarla le saca `auto`): si cambia el monto del mes, cambia acá
+  slot.items.filter(e=>e.auto && monthKey(e.date) <= viewMonth).forEach(e=>{
+    const { pesos, rate } = compraOf(monthKey(e.date));
+    if(!(pesos > 0) || !(rate > 0)) return;
+    const usd = Math.round(pesos / rate);
+    if(e.pesos === pesos && e.fx === rate && e.amount === usd) return;
+    Object.assign(e, { pesos, fx: rate, amount: usd });
+    changed = true;
+  });
+  months.filter(m=>!slot.autoMonths.includes(m)).forEach(m=>{
+    const { pesos, rate } = compraOf(m);
     if(!(pesos > 0) || !(rate > 0)) return;   // sin monto o sin cotización para ese mes: se reintenta en el próximo render
     slot.autoMonths.push(m);
     changed = true;
-    if(!slot.items.some(e=>monthKey(e.date) === m)){
+    // las filas de dólares pasados a ingreso (fromIncome) no cuentan como la del mes
+    if(!slot.items.some(e=>!e.fromIncome && monthKey(e.date) === m)){
       slot.items.push({ id: genId(), currency:'ARS', pesos, fx: rate, amount: Math.round(pesos/rate), date: m+'-01', auto: true });
     }
   });
@@ -9369,7 +9474,7 @@ function renderAhorro(){
     .map(e=>({
       label: svMonthLabel(monthKey(e.date)), sortKey: e.date,
       pesos: e.pesos != null ? e.pesos : (rate ? e.amount * rate : null),
-      usd: e.amount, id: e.id
+      usd: e.amount, id: e.id, toIncome: !!e.fromIncome
     })).sort((a,b)=> (a.sortKey||'').localeCompare(b.sortKey||''));
   const totalPesos = svRows.reduce((s,r)=>s + (r.pesos||0), 0);
   const totalUsd = svRows.reduce((s,r)=>s + (r.usd||0), 0);
@@ -9380,10 +9485,11 @@ function renderAhorro(){
     svCurBtn.setAttribute('aria-label', `Ver en ${showUsd ? 'pesos' : 'dólares'}`);
     svCurBtn.setAttribute('title', `Ver en ${showUsd ? 'pesos' : 'dólares'}`);
   }
-  const svVal = (r) => showUsd ? (r.usd != null ? fmtUsd(r.usd) : '—') : (r.pesos != null ? fmt(r.pesos) : '—');
+  const usdSigned = (n) => n < 0 ? '-' + fmtUsd(-n) : fmtUsd(n);
+  const svVal = (r) => showUsd ? (r.usd != null ? usdSigned(r.usd) : '—') : (r.pesos != null ? fmt(r.pesos) : '—');
 
   $('savingsHistory').innerHTML = svRows.length ? svRows.map(r=>`<div class="sv-row">
-      <span class="sv-m">${r.label}</span>
+      <span class="sv-m">${r.label}${r.toIncome ? ' <span class="sv-tag">a ingreso</span>' : ''}</span>
       <span class="sv-v">${svVal(r)}</span>
       <span class="goal-acts">
         <button type="button" onclick="openSavingsModal('${r.id}')" aria-label="Editar">✎</button>
