@@ -7776,7 +7776,7 @@ function toggleTotalRow(key){
   else expandedTotalRows.add(key);
   render();
 }
-function subtotalRowHtml(label, amount, items, key, isPaidRow, amountFn){
+function subtotalRowHtml(label, amount, items, key, isPaidRow, amountFn, showDate = isPaidRow){
   const open = expandedTotalRows.has(key);
   const clickable = items.length > 0;
   const header = `<div class="bill bill-subtotal${isPaidRow ? ' is-paid' : ''}${clickable ? ' bill-clickable' : ''}"
@@ -7792,9 +7792,10 @@ function subtotalRowHtml(label, amount, items, key, isPaidRow, amountFn){
   </div>`;
   if(!open || !clickable) return header;
   // en Pagado interesa saber de qué día es cada uno; en A pagar no hay fecha
-  // de pago que mostrar todavía, así que no se agrega nada.
+  // de pago que mostrar todavía, así que no se agrega nada (salvo en diarios,
+  // donde la fecha es la del gasto).
   const rows = items.map(x=>{
-    const dateLabel = isPaidRow ? `<span class="bill-subtotal-date"> · ${shortDate(x.date)}</span>` : '';
+    const dateLabel = showDate ? `<span class="bill-subtotal-date"> · ${shortDate(x.date)}</span>` : '';
     return `<div class="bill bill-subtotal-item">
     <div class="bill-main"><div class="bill-name">${escapeHtml(x.desc)}${dateLabel}</div></div>
     <div class="bill-amt">${fmt(amountFn(x))}</div>
@@ -7826,11 +7827,15 @@ function billTotalRow(list, opts){
   </div>`;
   if(!open) return header;
 
-  const paidItems = list.filter(x=>expensePaidAmount(x) > 0);
-  const unpaidItems = list.filter(x=>expenseUnpaidAmount(x) > 0);
-  const paidTotal = paidItems.reduce((s,x)=>s+expensePaidAmount(x), 0);
-  const extra = subtotalRowHtml('Pagado', paidTotal, paidItems, key+':paid', true, expensePaidAmount)
-              + subtotalRowHtml('A pagar', total - paidTotal, unpaidItems, key+':unpaid', false, expenseUnpaidAmount);
+  // diarios: lo pagado por transferencia ya salió; lo de tarjeta se paga el
+  // mes que viene (opts.paidFn/unpaidFn/unpaidLabel)
+  const paidFn = opts.paidFn || expensePaidAmount;
+  const unpaidFn = opts.unpaidFn || expenseUnpaidAmount;
+  const paidItems = list.filter(x=>paidFn(x) > 0);
+  const unpaidItems = list.filter(x=>unpaidFn(x) > 0);
+  const paidTotal = paidItems.reduce((s,x)=>s+paidFn(x), 0);
+  const extra = subtotalRowHtml('Pagado', paidTotal, paidItems, key+':paid', true, paidFn)
+              + subtotalRowHtml(opts.unpaidLabel || 'A pagar', total - paidTotal, unpaidItems, key+':unpaid', false, unpaidFn, !!opts.unpaidDates);
   return header + `<div class="bill-occurrences">${extra}</div>`;
 }
 
@@ -8384,7 +8389,12 @@ function dailyListHtml(list, vacio){
     const total = g.list.reduce((s, d)=>s + (d.amount || 0), 0);
     return `<div class="day-head"><span>${escapeHtml(label)}</span><span class="day-total">${fmt(total)}</span></div>`
       + g.list.map(dailyBillRow).join('');
-  }).join('') + billTotalRow(list);
+  }).join('') + billTotalRow(list, {
+    showPaidSplit: true, key: 'daily',
+    paidFn: d=>isCardDaily(d) ? 0 : (d.amount || 0),
+    unpaidFn: d=>isCardDaily(d) ? (d.amount || 0) : 0,
+    unpaidLabel: 'A pagar (T.Credito)', unpaidDates: true,
+  });
 }
 // gasto diario pagado con crédito: queda a la vista de dónde salió, así se
 // sabe que no restó del saldo de este mes (se devuelve el que viene)
