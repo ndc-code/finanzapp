@@ -51,11 +51,21 @@
   h1{font-weight:600;font-size:34px;margin:0;letter-spacing:-0.374px;line-height:1.15;}
   /* desktop: título + íconos arriba, el selector de mes a todo el ancho
      abajo (en mobile, ver los @media de abajo, los íconos van en un menú) */
-  .app-head{display:grid;grid-template-columns:1fr auto;grid-template-areas:"title right" "month month";
+  .app-head{display:grid;grid-template-columns:1fr auto auto;grid-template-areas:"title saldo right" "month month month";
     align-items:center;gap:14px 16px;margin-bottom:20px;}
   .app-head h1{grid-area:title;justify-self:start;}
   .app-head .month-nav{grid-area:month;justify-self:stretch;justify-content:space-between;}
   .head-right{grid-area:right;display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
+  /* el saldo con el que cierra Gastos diarios, a mano en el header: de la
+     persona de la Vista, o la suma de todos en Compartido (renderHeadSaldo) */
+  .head-saldo{grid-area:saldo;justify-self:end;display:flex;flex-direction:column;align-items:flex-end;
+    gap:1px;padding:5px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);
+    font:inherit;color:var(--ink);cursor:pointer;line-height:1.15;}
+  .head-saldo:hover{background:var(--pearl);}
+  .head-saldo[hidden]{display:none;}
+  .head-saldo-who{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--body-muted);font-weight:600;}
+  .head-saldo-amt{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .head-saldo-amt.neg{color:var(--a-clay);}
 
   .session-menu,.popover-menu{position:relative;flex:0 0 auto;}
   .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-strong);
@@ -148,7 +158,7 @@
      selector de mes entre al lado de "FinanzApp" en el mismo renglón */
   .lbl-short{display:none;}
   @media(max-width:600px){
-    .app-head{grid-template-columns:auto 1fr;grid-template-areas:"title month" "right right";row-gap:10px;}
+    .app-head{grid-template-columns:auto 1fr auto;grid-template-areas:"title saldo month" "right right right";row-gap:10px;}
     .app-head h1{grid-area:title;justify-self:start;}
     .app-head .month-nav{grid-area:month;justify-self:end;}
     h1{font-size:23px;}
@@ -168,7 +178,7 @@
   @media(max-width:479px){
     /* mismo orden que desktop: título + menú arriba y el selector de mes a
        todo el ancho (con el nombre del mes completo, entra) */
-    .app-head{position:relative;grid-template-columns:1fr auto;grid-template-areas:"title menu" "month month";gap:12px 8px;}
+    .app-head{position:relative;grid-template-columns:1fr auto auto;grid-template-areas:"title saldo menu" "month month month";gap:12px 8px;}
     .app-head .month-nav{grid-area:month;justify-self:stretch;}
     .app-head .month-nav .lbl-full{display:inline;}
     .app-head .month-nav .lbl-short{display:none;}
@@ -914,6 +924,8 @@
       <span class="m" id="monthLabel"></span>
       <button type="button" onclick="shiftMonth(1)" aria-label="Mes siguiente">›</button>
     </div>
+    <!-- saldo final de Gastos diarios según la Vista (renderHeadSaldo) -->
+    <button type="button" class="head-saldo" id="headSaldo" onclick="goToDailySaldo()" hidden></button>
     <!-- en mobile (<= 479px) todos los íconos de .head-right van detrás de este botón -->
     <button type="button" class="icon-btn" id="headMenuBtn" onclick="toggleHeadMenu()" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -7873,6 +7885,7 @@ function render(){
   renderVarExpenseTabs();
   renderBudgetTabs();
   renderDailyBlock(fin);
+  renderHeadSaldo();
   $('dailyFab').hidden = !coupleCode;
   $('bottomNav').hidden = !coupleCode;
   renderBlockSaldos(fin);
@@ -8370,8 +8383,31 @@ function renderDailyBlock(fin){
 // el saldo que cierra Gastos diarios: el total punteado de Gastos posibles
 // (saldo + crédito = bolsaOf) menos su parte de lo gastado por
 // transferencia. Lo pagado con tarjeta no resta: se paga el mes que viene.
+function dailySaldoFinalOf(person){
+  return bolsaOf(person, viewMonth) - dailyTotalOf(person, viewMonth);
+}
 function renderDailySaldoFinal(person){
-  $('dailySaldoFinal').innerHTML = saldoCell(names[person], bolsaOf(person, viewMonth) - dailyTotalOf(person, viewMonth));
+  $('dailySaldoFinal').innerHTML = saldoCell(names[person], dailySaldoFinalOf(person));
+}
+// el mismo saldo, en el header: el de la persona elegida en la Vista, o la
+// suma de todos con Compartido / Todos (con una sola persona, el suyo)
+function renderHeadSaldo(){
+  const box = $('headSaldo');
+  if(!box) return;
+  box.hidden = !coupleCode;
+  if(!coupleCode) return;
+  const person = isPerson(globalView) ? globalView : (peopleCount() < 2 ? firstPid() : null);
+  const amt = person ? dailySaldoFinalOf(person) : pids().reduce((s, id)=>s + dailySaldoFinalOf(id), 0);
+  const who = person ? nameOf(person) : 'Todos';
+  box.innerHTML = `<span class="head-saldo-who">Saldo · ${escapeHtml(who)}</span>`
+    + `<span class="head-saldo-amt${amt < 0 ? ' neg' : ''}">${fmt(amt)}</span>`;
+  box.setAttribute('aria-label', `Saldo de ${who}: ${fmt(amt)}. Ver en Gastos diarios`);
+}
+// tocar el saldo del header lleva a la card de donde sale
+function goToDailySaldo(){
+  switchTab('gastos');
+  const el = $('dailySaldoFinal');
+  if(el) el.scrollIntoView({ behavior:'smooth', block:'center' });
 }
 // la lista (ya ordenada, más nuevos arriba) separada por día: un encabezado
 // con la fecha y el total de ese día, y debajo sus gastos
