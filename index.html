@@ -58,13 +58,13 @@
   .head-right{grid-area:right;display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
   /* el saldo con el que cierra Gastos diarios, a mano en el header: solo el
      de la persona elegida en la Vista (renderHeadSaldo) */
-  .head-saldo{grid-area:saldo;justify-self:end;display:flex;flex-direction:column;align-items:flex-end;
-    gap:1px;padding:5px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);
+  .head-saldo{grid-area:saldo;justify-self:end;display:flex;align-items:baseline;
+    gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);
     font:inherit;color:var(--ink);cursor:pointer;line-height:1.15;}
   .head-saldo:hover{background:var(--pearl);}
   .head-saldo[hidden]{display:none;}
-  .head-saldo-who{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--body-muted);font-weight:600;}
-  .head-saldo-amt{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .head-saldo-who{font-size:12px;color:var(--body-muted);font-weight:600;white-space:nowrap;}
+  .head-saldo-amt{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;}
   .head-saldo-amt.neg{color:var(--a-clay);}
 
   .session-menu,.popover-menu{position:relative;flex:0 0 auto;}
@@ -8398,7 +8398,8 @@ function renderHeadSaldo(){
   box.hidden = !coupleCode || !person;
   if(box.hidden) return;
   const amt = dailySaldoFinalOf(person);
-  box.innerHTML = `<span class="head-saldo-who">Saldo · ${escapeHtml(nameOf(person))}</span>`
+  // "Saldo N": la inicial alcanza, el nombre completo va en el aria-label
+  box.innerHTML = `<span class="head-saldo-who">Saldo ${escapeHtml(nameOf(person).trim().charAt(0).toUpperCase())}</span>`
     + `<span class="head-saldo-amt${amt < 0 ? ' neg' : ''}">${fmt(amt)}</span>`;
   box.setAttribute('aria-label', `Saldo de ${nameOf(person)}: ${fmt(amt)}. Ver en Gastos diarios`);
 }
