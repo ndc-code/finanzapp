@@ -56,8 +56,8 @@
   .app-head h1{grid-area:title;justify-self:start;}
   .app-head .month-nav{grid-area:month;justify-self:stretch;justify-content:space-between;}
   .head-right{grid-area:right;display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
-  /* el saldo con el que cierra Gastos diarios, a mano en el header: de la
-     persona de la Vista, o la suma de todos en Compartido (renderHeadSaldo) */
+  /* el saldo con el que cierra Gastos diarios, a mano en el header: solo el
+     de la persona elegida en la Vista (renderHeadSaldo) */
   .head-saldo{grid-area:saldo;justify-self:end;display:flex;flex-direction:column;align-items:flex-end;
     gap:1px;padding:5px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);
     font:inherit;color:var(--ink);cursor:pointer;line-height:1.15;}
@@ -66,11 +66,6 @@
   .head-saldo-who{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--body-muted);font-weight:600;}
   .head-saldo-amt{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;}
   .head-saldo-amt.neg{color:var(--a-clay);}
-  .head-saldo-row{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
-  /* Compartido / Todos: una fila por persona, nombre a la izquierda */
-  .head-saldo.multi{gap:2px;padding:5px 10px;}
-  .head-saldo.multi .head-saldo-row{flex-direction:row;align-items:baseline;justify-content:space-between;gap:10px;width:100%;}
-  .head-saldo.multi .head-saldo-amt{font-size:13px;}
 
   .session-menu,.popover-menu{position:relative;flex:0 0 auto;}
   .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-strong);
@@ -8394,23 +8389,18 @@ function dailySaldoFinalOf(person){
 function renderDailySaldoFinal(person){
   $('dailySaldoFinal').innerHTML = saldoCell(names[person], dailySaldoFinalOf(person));
 }
-// el mismo saldo, en el header: el de la persona elegida en la Vista, o con
-// Compartido / Todos uno por persona (no se suman: cada uno tiene el suyo)
+// el mismo saldo, en el header: solo el de la persona elegida en la Vista
+// (con Compartido / Todos no se muestra; con una sola persona, el suyo)
 function renderHeadSaldo(){
   const box = $('headSaldo');
   if(!box) return;
-  box.hidden = !coupleCode;
-  if(!coupleCode) return;
-  const ids = isPerson(globalView) ? [globalView] : pids();
-  const solo = ids.length === 1;
-  box.classList.toggle('multi', !solo);
-  box.innerHTML = ids.map(id=>{
-    const amt = dailySaldoFinalOf(id);
-    return `<span class="head-saldo-row">`
-      + `<span class="head-saldo-who">${solo ? 'Saldo · ' : ''}${escapeHtml(nameOf(id))}</span>`
-      + `<span class="head-saldo-amt${amt < 0 ? ' neg' : ''}">${fmt(amt)}</span></span>`;
-  }).join('');
-  box.setAttribute('aria-label', 'Saldo: ' + ids.map(id=>`${nameOf(id)} ${fmt(dailySaldoFinalOf(id))}`).join(', ') + '. Ver en Gastos diarios');
+  const person = isPerson(globalView) ? globalView : (peopleCount() < 2 ? firstPid() : null);
+  box.hidden = !coupleCode || !person;
+  if(box.hidden) return;
+  const amt = dailySaldoFinalOf(person);
+  box.innerHTML = `<span class="head-saldo-who">Saldo · ${escapeHtml(nameOf(person))}</span>`
+    + `<span class="head-saldo-amt${amt < 0 ? ' neg' : ''}">${fmt(amt)}</span>`;
+  box.setAttribute('aria-label', `Saldo de ${nameOf(person)}: ${fmt(amt)}. Ver en Gastos diarios`);
 }
 // tocar el saldo del header lleva a la card de donde sale
 function goToDailySaldo(){
