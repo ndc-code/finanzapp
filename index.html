@@ -823,6 +823,10 @@
   .day-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
     margin:16px 4px 8px;font-size:12px;font-weight:600;color:var(--body-muted);letter-spacing:-0.12px;}
   .day-head:first-child{margin-top:0;}
+  /* Actividad: el día de hoy resaltado, y lo que entra en verde */
+  .day-head.day-today{color:var(--primary);}
+  .bill-amt.amt-in{color:var(--good);}
+  .bill.bill-pending{border-style:dashed;}
   .day-head .day-total{font-family:'IBM Plex Mono',monospace;font-weight:600;}
 
   .settings-row{display:flex;gap:10px;}
@@ -944,6 +948,10 @@
         </button>
         <div class="session-dropdown" id="viewDropdown"></div>
       </div>
+      <!-- Actividad: lo que se hizo, día por día — ver renderActivity() -->
+      <button type="button" class="icon-btn" id="activityBtn" onclick="switchTab('actividad')" aria-label="Actividad">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+      </button>
       <!-- Próximos vencimientos: su propia página, con la cantidad pendiente en
            un globito — ver renderDueSoon() -->
       <button type="button" class="icon-btn" id="dueBtn" onclick="switchTab('vencimientos')" aria-label="Próximos vencimientos">
@@ -1231,6 +1239,31 @@
       <!-- una pestaña por persona: lo que le toca pagar a cada uno -->
       <div class="seg sub-seg" id="dueSoonTabs" style="margin-bottom:14px;"></div>
       <div id="dueSoonList"></div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: ACTIVIDAD ============ -->
+  <!-- registro de lo que se hizo, día por día y en cascada como Gastos
+       diarios: ingresos, gastos diarios, lo que se tildó como pagado, pagos de
+       deudas, créditos y ahorro. Solo para mirar: no suma ni resta en ningún
+       bloque. Lo pendiente se ve con el toggle (o en "Que viene") — ver
+       renderActivity() -->
+  <div class="tab-panel" id="panel-actividad" role="tabpanel">
+    <div class="card">
+      <div class="section-title" id="activityTitle">Actividad</div>
+      <div class="seg sub-seg" id="activityWeekTabs" style="margin-bottom:10px;">
+        <button type="button" data-week="-1">Semana pasada</button>
+        <button type="button" data-week="0" class="active">Esta semana</button>
+        <button type="button" data-week="1">Que viene</button>
+      </div>
+      <!-- Todos + una por persona, ocultas si hay una sola -->
+      <div class="seg sub-seg" id="activityTabs" style="margin-bottom:10px;"></div>
+      <button type="button" class="switch-toggle" id="activityPendingToggle" role="switch" aria-checked="false"
+        onclick="toggleActivityPending()" style="margin:0 0 14px;">
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+        <span class="switch-label">Mostrar pendientes</span>
+      </button>
+      <div id="activityList"></div>
     </div>
   </div>
 
@@ -2923,12 +2956,12 @@ function renderViewMenu(){
   if(!shared) dot.style.background = personColorOf(globalView);
 }
 // pone cada sub-pestaña en la vista elegida. Las que admiten Compartido/Todos
-// (Ingresos, Saldos iniciales, fijos, variables, Resumen) la toman siempre;
+// (Ingresos, Saldos iniciales, fijos, variables, Resumen, Actividad) la toman siempre;
 // las que son solo por persona (Gastos posibles, diarios, Deudas, Ahorro)
 // cambian solo cuando se elige a alguien y si no quedan como estaban
 function syncTabsToGlobalView(){
   const v = globalView;
-  currentIncomeTab = currentStartTab = currentFixedTab = currentVarTab = currentResumenTab = v;
+  currentIncomeTab = currentStartTab = currentFixedTab = currentVarTab = currentResumenTab = currentActivityTab = v;
   TRIP_KINDS.forEach(k=>{ tripTab[k] = v; });
   if(isPerson(v)) currentBudgetTab = currentDailyTab = currentDeudasPerson = currentAhorroPerson = currentDueTab = v;
   document.querySelectorAll('#ahorroPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentAhorroPerson));
@@ -3226,6 +3259,8 @@ function copyEntriesToMonth(list, fromKey, toKey, sameAs){
       copy.id = genId();
       copy.date = addOneMonth(x.date);
       delete copy.paid;
+      delete copy.paidOn;
+      delete copy.occurrencesPaidOn;
       if(Array.isArray(copy.occurrencesPaid)) copy.occurrencesPaid = copy.occurrencesPaid.map(()=>null);
       return copy;
     });
@@ -5099,6 +5134,7 @@ function toggleVarExpensePaid(id){
   const e = varExpenses.find(x=>x.id === id);
   if(!e) return;
   e.paid = !e.paid;
+  stampPaid(e, e.paid);
   saveVarExpenses();
   render();
 }
@@ -7408,7 +7444,10 @@ $('addForm').addEventListener('submit', (e)=>{
   if(existing){
     // si cambia la cantidad de veces, el desglose de pagado que ya había no
     // tiene cómo mapearse prolijo a la nueva cantidad — arranca de nuevo
-    if(existing.occurrences !== occurrences) existing.occurrencesPaid = occurrences ? new Array(occurrences).fill(null) : undefined;
+    if(existing.occurrences !== occurrences){
+      existing.occurrencesPaid = occurrences ? new Array(occurrences).fill(null) : undefined;
+      delete existing.occurrencesPaidOn;
+    }
     Object.assign(existing, fields);
   }else{
     expenses.push({ id: genId(), ...fields, occurrencesPaid: occurrences ? new Array(occurrences).fill(null) : undefined });
@@ -7424,6 +7463,7 @@ function toggleExpensePaid(id){
   const ex = expenses.find(x=>x.id === id);
   if(!ex) return;
   ex.paid = !ex.paid;
+  stampPaid(ex, ex.paid);
   saveExpenses();
   render();
 }
@@ -7501,6 +7541,16 @@ function occurrencesPaidArr(ex){
   const n = occurrenceCount(ex);
   const arr = Array.isArray(ex.occurrencesPaid) ? ex.occurrencesPaid : [];
   return Array.from({length:n}, (_, i)=> !!arr[i]);
+}
+// el día en que se tildó, para la página Actividad: `paidOn` en un gasto
+// simple, `occurrencesPaidOn[i]` en uno que se repite. Lo tildado antes de
+// que existiera Actividad no lo tiene (y ahí no aparece).
+function stampPaid(ex, paid){
+  if(paid) ex.paidOn = todayStr(); else delete ex.paidOn;
+}
+function occurrencesPaidOnArr(ex){
+  const arr = Array.isArray(ex.occurrencesPaidOn) ? ex.occurrencesPaidOn : [];
+  return Array.from({length: occurrenceCount(ex)}, (_, i)=> arr[i] || null);
 }
 function expensePaidAmount(ex){
   const n = occurrenceCount(ex);
@@ -7613,6 +7663,218 @@ function payDueSoon(id){
   render();
   notyf.success(`"${ex.desc}" marcado como pagado`);
 }
+// ---- Actividad (su propia página, desde el ícono de lista del header) ----
+// Un registro de lo que se fue haciendo, día por día y en cascada como Gastos
+// diarios: ingresos, gastos diarios, gastos fijos/variables tildados como
+// pagados (el día en que se tildaron, `paidOn`), pagos de deudas, créditos
+// sacados y ahorro en dólares cargado a mano. Solo para mirar: cada cosa ya
+// cuenta en su bloque, acá no se suma ni se resta nada. No guarda nada propio,
+// se arma de los datos que ya están. Con "Mostrar pendientes" (siempre en "Que
+// viene") se suman los fijos/variables sin tildar que vencen en esa semana, y
+// en esta semana también los vencidos del mes que siguen sin pagar.
+let activityWeek = 0;          // -1 semana pasada, 0 esta, 1 la que viene
+let currentActivityTab = SHARED_PAY;
+const ACTIVITY_PENDING_KEY = 'activity_pending';
+let activityShowPending = false;
+try{ activityShowPending = localStorage.getItem(ACTIVITY_PENDING_KEY) === '1'; }catch(e){}
+function toggleActivityPending(){
+  activityShowPending = !activityShowPending;
+  try{ localStorage.setItem(ACTIVITY_PENDING_KEY, activityShowPending ? '1' : '0'); }catch(e){}
+  renderActivity();
+}
+// semanas de lunes a domingo
+function dateStrOf(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function activityWeekRange(offset){
+  const d = new Date(todayStr() + 'T00:00:00');
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + offset * 7);
+  const from = dateStrOf(d);
+  d.setDate(d.getDate() + 6);
+  return { from, to: dateStrOf(d) };
+}
+// quién aparece en una tarjeta de la pestaña Todos
+function activityOwnerTag(person){
+  if(peopleCount() < 2 || isPerson(currentActivityTab)) return '';
+  return isPerson(person)
+    ? `<span class="tag ${personTagClass(person)}">${escapeHtml(nameOf(person))}</span>`
+    : `<span>Compartido</span>`;
+}
+function expenseBearer(ex){
+  const bearers = pids().filter(p=>entryShareOf(ex, p) > 0);
+  return bearers.length === 1 ? bearers[0] : SHARED_PAY;
+}
+// cada movimiento: { date, name, meta, amount (todo), share(p) (la parte de
+// esa persona), dir: 'out' | 'in' | 'none', owner, pending?, pay? }
+function activityItems(from, to){
+  const inRange = d => !!d && d >= from && d <= to;
+  const items = [];
+  const exItem = (ex, amount, extra) => ({
+    amount, owner: expenseBearer(ex), dir: 'out',
+    share: p => entryShareOf(ex, p) * (amount / (ex.amount || 1)), ...extra
+  });
+  pids().forEach(p=>{
+    (income.entries[p]||[]).filter(e=>inRange(e.date)).forEach(e=>{
+      const usd = e.currency === 'USD' ? `${fmtUsd(e.amount)} a ${fmtNum(entryRate(e))}` : '';
+      items.push({ date: e.date, name: e.label || 'Ingreso', tag: 'Ingreso', meta: usd,
+        amount: entryArs(e), share: q => q === p ? entryArs(e) : 0, dir: 'in', owner: p });
+    });
+    savingsSlot(p).items.filter(it=>!it.auto && !it.fromIncome && inRange(it.date)).forEach(it=>{
+      items.push({ date: it.date, name: 'Ahorro en dólares', tag: 'Ahorro', meta: '',
+        amountText: fmtUsd(it.amount), amount: 0, share: ()=>0, dir: 'none', owner: p });
+    });
+  });
+  cardPurchases.filter(cp=>cp.credit && cpValid(cp) && inRange(cp.credit.date)).forEach(cp=>{
+    const recibido = cp.credit.received || 0;
+    items.push({ date: cp.credit.date, name: `Crédito ${cp.card.trim()}`, tag: 'Crédito',
+      meta: `se devuelve ${fmt(cp.amount)} en ${monthShort(cp.startMonth)}`,
+      amount: recibido, share: q => q === cp.person ? recibido : 0, dir: 'in', owner: cp.person });
+  });
+  dailyExpenses.filter(d=>inRange(d.date)).forEach(d=>{
+    items.push(exItem(d, d.amount || 0, { date: d.date, name: d.desc, tag: 'Diario',
+      meta: isCardDaily(d) ? `con ${escapeHtml(d.card)}` : '' }));
+  });
+  // lo tildado como pagado, el día en que se tildó. Uno pagado después desde
+  // Deudas (settledLater) ya aparece por el gasto variable que se cargó.
+  const paidRows = (list, tag) => list.filter(ex=>!ex.settledLater).forEach(ex=>{
+    const vencia = `vencía el ${shortDate(ex.date)}`;
+    const n = occurrenceCount(ex);
+    if(n > 1){
+      const paid = occurrencesPaidArr(ex), on = occurrencesPaidOnArr(ex);
+      on.forEach((d, i)=>{
+        if(paid[i] && inRange(d)) items.push(exItem(ex, occurrenceAmount(ex),
+          { date: d, name: `${ex.desc} (${i+1} de ${n})`, tag, meta: vencia }));
+      });
+      return;
+    }
+    // un pago de deuda de antes de existir `paidOn` se cargó el día que se pagó
+    const day = ex.paidOn || (ex.fromDebt ? ex.date : null);
+    if(!ex.paid || !inRange(day)) return;
+    const deuda = ex.fromDebt || ex.cardAuto;
+    items.push(exItem(ex, ex.amount || 0, { date: day, name: ex.desc, tag: deuda ? 'Deuda' : tag,
+      meta: ex.fromDebt ? '' : vencia }));
+  });
+  paidRows(expenses, 'Fijo');
+  paidRows(varExpenses, 'Variable');
+  // pendientes: sin tildar y del mes en curso o uno que viene (los de meses
+  // cerrados ya están en Deudas). En esta semana también los vencidos de antes
+  if(activityShowPending || activityWeek > 0){
+    const mes = monthNow(), hoy = todayStr();
+    const desde = activityWeek === 0 ? mes + '-01' : from;
+    const pend = (list, kind, tag) => list.forEach(ex=>{
+      const falta = expenseUnpaidAmount(ex);
+      if(!(falta > 0) || monthKey(ex.date) < mes || ex.date < desde || ex.date > to) return;
+      const vencido = ex.date < hoy;
+      items.push(exItem(ex, falta, { date: ex.date < from ? from : ex.date, sortDate: ex.date,
+        name: ex.desc, tag: ex.cardAuto ? 'Deuda' : tag, pending: true, overdue: vencido && ex.date < from,
+        meta: vencido ? `venció el ${shortDate(ex.date)}` : '', pay: `payFromActivity('${kind}','${ex.id}')` }));
+    });
+    pend(expenses, 'fixed', 'Fijo');
+    pend(varExpenses, 'variable', 'Variable');
+  }
+  return items;
+}
+function payFromActivity(kind, id){
+  const ex = (kind === 'fixed' ? expenses : varExpenses).find(x=>x.id === id);
+  if(!ex) return;
+  setExpenseFullyPaid(ex, true);
+  if(kind === 'fixed') saveExpenses(); else saveVarExpenses();
+  render();
+  notyf.success(`"${ex.desc}" marcado como pagado`);
+}
+function activityRowHtml(it, who){
+  const amt = isPerson(who) ? it.share(who) : it.amount;
+  const amtText = it.amountText || (it.dir === 'in' ? '+ ' : '') + fmt(amt);
+  const parte = isPerson(who) && it.dir === 'out' && Math.abs(amt - it.amount) > 0.5
+    ? `<span>su parte de ${fmt(it.amount)}</span>` : '';
+  const late = it.pending && (it.sortDate || it.date) < todayStr();
+  return `<div class="bill${it.pending ? ' bill-pending' : ''}">
+    <div class="bill-main">
+      <div class="bill-name">${escapeHtml(it.name)}</div>
+      <div class="bill-meta">
+        <span class="tag ${late ? 'tag-p1' : 'tag-card'}">${it.pending ? (late ? 'Vencido' : 'A pagar') + ' · ' : ''}${it.tag}</span>
+        ${it.meta ? `<span>${it.meta}</span>` : ''}${parte}${activityOwnerTag(it.owner)}
+      </div>
+    </div>
+    <div class="bill-amt${it.dir === 'in' ? ' amt-in' : ''}">${amtText}</div>
+    ${it.pay ? `<label class="bill-paid" title="Marcar como pagado">
+      <input type="checkbox" onchange="${it.pay}" aria-label="Marcar ${escapeHtml(it.name)} como pagado">
+    </label>` : ''}
+  </div>`;
+}
+function renderActivity(){
+  const { from, to } = activityWeekRange(activityWeek);
+  document.querySelectorAll('#activityWeekTabs button').forEach(b=>
+    b.classList.toggle('active', Number(b.dataset.week) === activityWeek));
+  $('activityTitle').textContent = `Actividad · ${shortDate(from)} al ${shortDate(to)}`;
+  const tabs = $('activityTabs');
+  const solo = peopleCount() < 2;
+  tabs.style.display = solo ? 'none' : '';
+  if(!isSharedPay(currentActivityTab) && !isPerson(currentActivityTab)) currentActivityTab = SHARED_PAY;
+  if(!solo){
+    const groups = [{ key:SHARED_PAY, label:'Todos' }, ...people.map(p=>({ key:p.id, label:p.name }))];
+    tabs.innerHTML = groups.map(g=>
+      `<button type="button" data-tab="${g.key}"${g.key === currentActivityTab ? ' class="active"' : ''}>${escapeHtml(g.label)}</button>`
+    ).join('');
+  }
+  // en "Que viene" lo pendiente es justamente lo que se quiere ver
+  const tgl = $('activityPendingToggle');
+  tgl.style.display = activityWeek > 0 ? 'none' : '';
+  tgl.setAttribute('aria-checked', activityShowPending ? 'true' : 'false');
+
+  const who = solo ? SHARED_PAY : currentActivityTab;
+  const items = activityItems(from, to)
+    .filter(it=>!isPerson(who) || it.share(who) > 0.5 || (it.dir === 'none' && it.owner === who));
+  if(!items.length){
+    const que = activityWeek < 0 ? 'la semana pasada' : activityWeek > 0 ? 'la semana que viene' : 'esta semana';
+    $('activityList').innerHTML = `<div class="empty">No hay movimientos ${que}.</div>`;
+    return;
+  }
+  const amtOf = it => isPerson(who) ? it.share(who) : it.amount;
+  // vencidos de antes de la semana, arriba de todo; después de lo más nuevo a
+  // lo más viejo, un encabezado por día con lo que sale ese día
+  const overdue = items.filter(it=>it.overdue);
+  const byDay = new Map();
+  items.filter(it=>!it.overdue).forEach(it=>{
+    if(!byDay.has(it.date)) byDay.set(it.date, []);
+    byDay.get(it.date).push(it);
+  });
+  const sumOut = list => list.filter(it=>it.dir === 'out').reduce((s, it)=>s + amtOf(it), 0);
+  const head = (label, total, today) =>
+    `<div class="day-head${today ? ' day-today' : ''}"><span>${escapeHtml(label)}</span><span class="day-total">${fmt(total)}</span></div>`;
+  const hoy = todayStr();
+  let html = overdue.length ? head('Vencido sin pagar', sumOut(overdue)) + overdue.map(it=>activityRowHtml(it, who)).join('') : '';
+  [...byDay.keys()].sort((a, b)=>b.localeCompare(a)).forEach(date=>{
+    const list = byDay.get(date);
+    // dentro del día: lo pendiente primero, después lo que entró y lo que salió
+    list.sort((a, b)=>(b.pending ? 1 : 0) - (a.pending ? 1 : 0) || (a.dir === 'in' ? -1 : 0) - (b.dir === 'in' ? -1 : 0));
+    const raw = new Date(date + 'T00:00:00').toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
+    const label = date === hoy ? `Hoy · ${raw}` : raw.charAt(0).toUpperCase() + raw.slice(1);
+    html += head(label, sumOut(list), date === hoy)
+      + list.map(it=>activityRowHtml(it, who)).join('');
+  });
+  const done = items.filter(it=>!it.pending);
+  const pagado = sumOut(done);
+  const entro = done.filter(it=>it.dir === 'in').reduce((s, it)=>s + amtOf(it), 0);
+  const falta = sumOut(items.filter(it=>it.pending));
+  const totalRow = (name, v) => `<div class="bill bill-total"><div class="bill-main"><div class="bill-name">${name}</div></div><div class="bill-amt">${fmt(v)}</div></div>`;
+  html += (done.some(it=>it.dir === 'out') ? totalRow('Gastado y pagado', pagado) : '')
+    + (entro > 0.5 ? totalRow('Ingresó', entro) : '')
+    + (items.some(it=>it.pending) ? totalRow('Falta pagar', falta) : '');
+  $('activityList').innerHTML = html;
+}
+$('activityWeekTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  activityWeek = Number(btn.dataset.week);
+  renderActivity();
+});
+$('activityTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentActivityTab = btn.dataset.tab;
+  renderActivity();
+});
 
 // en la tarjeta del gasto en Gastos: por qué ese mes no lo descuenta
 function debtTagHtml(ex){
@@ -7637,6 +7899,9 @@ function toggleExpenseOccurrencePaid(id, idx){
   const arr = occurrencesPaidArr(ex);
   arr[idx] = !arr[idx];
   ex.occurrencesPaid = arr;
+  const on = occurrencesPaidOnArr(ex);
+  on[idx] = arr[idx] ? todayStr() : null;
+  ex.occurrencesPaidOn = on;
   ex.paid = arr.every(Boolean);   // por si algo todavía lee ex.paid directamente
   saveExpenses();
   render();
@@ -7975,6 +8240,7 @@ function render(){
   $('budgetBlockTitle').textContent = `Gastos posibles de ${mes}`;
 
   renderDueSoon();
+  renderActivity();
   renderFixedTabs(list, mes);
 
   renderVarExpenseTabs();
@@ -9288,7 +9554,13 @@ const unpaidSource = (kind, id) => (kind === 'fixed' ? expenses : varExpenses).f
 // sólo que no se había marcado — vuelve a descontarse ahí
 function setExpenseFullyPaid(ex, paid){
   ex.paid = paid;
-  if(occurrenceCount(ex) > 1) ex.occurrencesPaid = Array.from({length: occurrenceCount(ex)}, ()=>paid);
+  stampPaid(ex, paid);
+  if(occurrenceCount(ex) > 1){
+    // las veces que ya estaban tildadas conservan su día; las demás, hoy
+    const prev = occurrencesPaidArr(ex), on = occurrencesPaidOnArr(ex);
+    ex.occurrencesPaidOn = on.map((d, i)=> paid ? (prev[i] && d ? d : todayStr()) : null);
+    ex.occurrencesPaid = Array.from({length: occurrenceCount(ex)}, ()=>paid);
+  }
 }
 function markUnpaidAsPaid(kind, id){
   const ex = unpaidSource(kind, id);
@@ -9316,7 +9588,7 @@ function settleUnpaidExpense(kind, id){
       category: ex.category || categoryOfVariable(ex.desc),
       paidBy: ex.paidBy,
       shares: ex.shares ? { ...ex.shares } : soloShares(isPerson(ex.paidBy) ? ex.paidBy : firstPid()),
-      splitType: ex.splitType, paid: true,
+      splitType: ex.splitType, paid: true, paidOn: todayStr(),
       fromDebt: { kind, id: ex.id }
     };
     ex.settledLater = { month: monthNow(), amount: pend, varId: pago.id,
@@ -9335,8 +9607,11 @@ function undoDebtSettlement(pago){
   const ex = unpaidSource(pago.fromDebt.kind, pago.fromDebt.id);
   if(!ex || !ex.settledLater || ex.settledLater.varId !== pago.id) return;
   ex.paid = ex.settledLater.prevPaid;
-  if(ex.settledLater.prevOccurrencesPaid) ex.occurrencesPaid = ex.settledLater.prevOccurrencesPaid;
-  else delete ex.occurrencesPaid;
+  if(!ex.paid) delete ex.paidOn;
+  if(ex.settledLater.prevOccurrencesPaid){
+    ex.occurrencesPaid = ex.settledLater.prevOccurrencesPaid;
+    ex.occurrencesPaidOn = occurrencesPaidOnArr(ex).map((d, i)=> ex.occurrencesPaid[i] ? d : null);
+  }else{ delete ex.occurrencesPaid; delete ex.occurrencesPaidOn; }
   delete ex.settledLater;
   if(pago.fromDebt.kind === 'fixed') saveExpenses();
 }
