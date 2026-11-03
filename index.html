@@ -51,14 +51,16 @@
   h1{font-weight:600;font-size:34px;margin:0;letter-spacing:-0.374px;line-height:1.15;}
   /* desktop: título + íconos arriba, el selector de mes a todo el ancho
      abajo (en mobile, ver los @media de abajo, los íconos van en un menú) */
-  .app-head{display:grid;grid-template-columns:1fr auto auto auto;grid-template-areas:"title view saldo right" "month month month month";
+  .app-head{display:grid;grid-template-columns:1fr auto auto;grid-template-areas:"title pills right" "month month month";
     align-items:center;gap:14px 16px;margin-bottom:20px;}
   .app-head h1{grid-area:title;justify-self:start;}
   .app-head .month-nav{grid-area:month;justify-self:stretch;justify-content:space-between;}
   .head-right{grid-area:right;display:flex;align-items:center;justify-self:end;gap:10px;flex:0 0 auto;}
+  /* el botón de la Vista y el saldo van juntos, pegados, en una sola celda */
+  .head-pills{grid-area:pills;justify-self:end;display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;max-width:100%;}
   /* el saldo con el que cierra Gastos diarios, a mano en el header: solo el
      de la persona elegida en la Vista (renderHeadSaldo) */
-  .head-saldo{grid-area:saldo;justify-self:end;display:flex;align-items:baseline;
+  .head-saldo{flex:0 0 auto;display:flex;align-items:baseline;
     gap:6px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);
     font:inherit;color:var(--ink);cursor:pointer;line-height:1.15;}
   .head-saldo:hover{background:var(--pearl);}
@@ -66,7 +68,7 @@
   /* la persona de la Vista, a mano: un botón con su nombre (como el saldo de
      al lado) que pasa a la siguiente con cada toque — Todos → cada persona →
      Todos (cycleGlobalView) */
-  .head-view{grid-area:view;justify-self:end;display:flex;align-items:center;min-width:0;max-width:100%;
+  .head-view{flex:0 1 auto;display:flex;align-items:center;min-width:0;
     padding:8px 11px;border:1px solid var(--line);border-radius:12px;background:var(--card);
     font:inherit;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;line-height:1.15;
     transition:transform .1s ease;}
@@ -170,7 +172,7 @@
      selector de mes entre al lado de "FinanzApp" en el mismo renglón */
   .lbl-short{display:none;}
   @media(max-width:600px){
-    .app-head{grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"title view saldo month" "right right right right";row-gap:10px;}
+    .app-head{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"title pills month" "right right right";row-gap:10px;}
     .app-head h1{grid-area:title;justify-self:start;}
     .app-head .month-nav{grid-area:month;justify-self:end;}
     h1{font-size:23px;}
@@ -192,7 +194,7 @@
        todo el ancho (con el nombre del mes completo, entra) */
     /* el botón de la Vista ya dice de quién es el saldo de al lado: el saldo
        queda solo con el monto, así entran los dos al lado del ☰ */
-    .app-head{position:relative;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"title view saldo menu" "month month month month";gap:12px 8px;}
+    .app-head{position:relative;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"title pills menu" "month month month";gap:12px 8px;}
     .head-view{padding:8px 10px;}
     .head-saldo .head-saldo-who{display:none;}
     .app-head .month-nav{grid-area:month;justify-self:stretch;}
@@ -944,9 +946,11 @@
     <!-- de quién se ven los bloques (la persona de la Vista), siempre a mano
          al lado del ☰: cada toque pasa a la siguiente — ver renderViewMenu()
          y cycleGlobalView(); oculto con una sola persona -->
-    <button type="button" class="head-view" id="headView" onclick="cycleGlobalView()" hidden></button>
-    <!-- saldo final de Gastos diarios según la Vista (renderHeadSaldo) -->
-    <button type="button" class="head-saldo" id="headSaldo" onclick="goToDailySaldo()" hidden></button>
+    <div class="head-pills">
+      <button type="button" class="head-view" id="headView" onclick="cycleGlobalView()" hidden></button>
+      <!-- saldo final de Gastos diarios según la Vista (renderHeadSaldo) -->
+      <button type="button" class="head-saldo" id="headSaldo" onclick="goToDailySaldo()" hidden></button>
+    </div>
     <!-- en mobile (<= 479px) todos los íconos de .head-right van detrás de este botón -->
     <button type="button" class="icon-btn" id="headMenuBtn" onclick="toggleHeadMenu()" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -8955,8 +8959,9 @@ function renderHeadSaldo(){
   box.hidden = !coupleCode || !person;
   if(box.hidden) return;
   const amt = dailySaldoFinalOf(person);
-  // "Saldo N": la inicial alcanza, el nombre completo va en el aria-label
-  box.innerHTML = `<span class="head-saldo-who">Saldo ${escapeHtml(nameOf(person).trim().charAt(0).toUpperCase())}</span>`
+  // solo "Saldo": de quién es ya lo dice el botón de la Vista de al lado; el
+  // nombre completo va en el aria-label
+  box.innerHTML = `<span class="head-saldo-who">Saldo</span>`
     + `<span class="head-saldo-amt${amt < 0 ? ' neg' : ''}">${fmt(amt)}</span>`;
   box.setAttribute('aria-label', `Saldo de ${nameOf(person)}: ${fmt(amt)}. Ver en Gastos diarios`);
 }
