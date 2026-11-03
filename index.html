@@ -7877,6 +7877,13 @@ function activityItems(from, to){
       meta: splitInfoHtml(splitLabelOf(d)) + payerTagHtml(d) + dailyCardTagHtml(d),
       edit: `openDailyModal('${d.id}')`, del: `deleteDailyExpense('${d.id}')` }));
   });
+  // variables con tarjeta: no se tildan (se pagan el mes siguiente en el
+  // T.Credito), así que van el día de la compra, como los diarios con tarjeta
+  varExpenses.filter(ex=>isCardVar(ex) && inRange(ex.date)).forEach(ex=>{
+    items.push(exItem(ex, ex.amount || 0, { date: ex.date, name: ex.desc, kind: 'Gasto variable',
+      meta: splitInfoHtml(splitLabelOf(ex)) + payerTagHtml(ex) + dailyCardTagHtml(ex),
+      edit: `openVarExpenseModal('${ex.id}')`, del: `deleteVarExpense('${ex.id}')` }));
+  });
   // lo tildado como pagado, el día en que se tildó, con su tilde como en
   // Gastos (destildarlo acá lo saca). Uno pagado después desde Deudas
   // (settledLater) ya aparece por el gasto variable que se cargó.
@@ -7913,7 +7920,7 @@ function activityItems(from, to){
     const desde = activityWeek === 0 ? mes + '-01' : from;
     const pend = (list, fixed) => list.forEach(ex=>{
       const falta = expenseUnpaidAmount(ex);
-      if(!(falta > 0) || monthKey(ex.date) < mes || ex.date < desde || ex.date > to) return;
+      if(!(falta > 0) || isCardVar(ex) || monthKey(ex.date) < mes || ex.date < desde || ex.date > to) return;
       const lbl = dueLabel(daysUntil(ex.date));
       const kind = ex.cardAuto ? 'Pago de deuda' : fixed ? 'Gasto fijo' : 'Gasto variable';
       const acts = ex.cardAuto ? {} : fixed
