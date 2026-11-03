@@ -734,6 +734,28 @@
   .sub-seg button.active{background:var(--card);color:var(--ink);font-weight:600;
     box-shadow:0 1px 2px rgba(0,0,0,.07);}
   @media(max-width:540px){.sub-seg button{font-size:12.5px;padding:7px 6px;}}
+  /* tira de días de Actividad: los del mes elegido, siempre una semana a la
+     vista (frena en cada lunes y en el 1), se desliza de a semana */
+  .day-strip{position:relative;display:flex;gap:6px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:4px;overscroll-behavior-x:contain;
+    scrollbar-width:none;background:var(--paper);border-radius:14px;padding:4px;}
+  .day-strip::-webkit-scrollbar{display:none;}
+  .day-strip button{flex:0 0 calc((100% - 36px) / 7);border:none;border-radius:11px;
+    background:color-mix(in srgb, var(--card) 55%, transparent);color:var(--body-muted);font:inherit;
+    padding:8px 0 7px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;}
+  .day-strip .ds-wd{font-size:11.5px;font-weight:500;}
+  .day-strip .ds-n{font-size:21px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.15;}
+  .day-strip button.active{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);}
+  .day-strip button.active .ds-n{font-weight:600;}
+  .day-strip button.wk-start{scroll-snap-align:start;}
+  /* la tarjeta a la que se llegó desde Actividad, marcada un momento */
+  .go-flash{animation:goFlash 1.8s ease-out;}
+  @keyframes goFlash{0%,45%{box-shadow:0 0 0 2px var(--ink);}100%{box-shadow:0 0 0 2px transparent;}}
+  /* en negativo, como el + de la barra de abajo: hoy en Día; en Semana / Mes,
+     todos los días que entran (y hoy, si queda afuera, solo en negrita) */
+  .day-strip:not(.ranged) button.today,
+  .day-strip button.in-range{background:var(--ink);color:#fff;}
+  .day-strip.ranged button.today:not(.in-range){color:var(--ink);}
+  .day-strip.ranged button.today:not(.in-range) .ds-n{font-weight:700;}
 
   .income-note{font-size:12px;color:var(--body-muted);margin-top:2px;line-height:1.43;letter-spacing:-0.224px;}
   /* "***" que reemplaza un monto en modo privado: el asterisco se dibuja
@@ -1265,23 +1287,24 @@
   <!-- registro de lo que se hizo, día por día y en cascada como Gastos
        diarios: ingresos, gastos diarios, lo que se tildó como pagado, pagos de
        deudas, créditos y ahorro. Solo para mirar: no suma ni resta en ningún
-       bloque. Lo pendiente se ve con el toggle (o en "Que viene") — ver
-       renderActivity() -->
+       bloque. El día elegido en la tira (hoy de entrada), su semana o el mes,
+       y aparte lo vencido o lo pendiente de ese período — ver renderActivity() -->
   <div class="tab-panel" id="panel-actividad" role="tabpanel">
     <div class="card">
       <div class="section-title" id="activityTitle">Actividad</div>
-      <div class="seg sub-seg" id="activityWeekTabs" style="margin-top:16px;">
-        <button type="button" data-week="-1">Semana pasada</button>
-        <button type="button" data-week="0" class="active">Esta semana</button>
-        <button type="button" data-week="1">Que viene</button>
+      <!-- tira de días que se desliza, armada por renderActivityDays() -->
+      <div class="day-strip" id="activityDays" aria-label="Día" style="margin-top:16px;"></div>
+      <div class="seg sub-seg" id="activityRange" style="margin-top:8px;">
+        <button type="button" data-r="dia">Día</button>
+        <button type="button" data-r="semana">Semana</button>
+        <button type="button" data-r="mes">Mes</button>
       </div>
-      <!-- Todos + una por persona, ocultas si hay una sola -->
-      <div class="seg sub-seg" id="activityTabs" style="margin-top:8px;"></div>
-      <button type="button" class="switch-toggle" id="activityPendingToggle" role="switch" aria-checked="false"
-        onclick="toggleActivityPending()" style="margin-top:12px;">
-        <span class="switch-track"><span class="switch-thumb"></span></span>
-        <span class="switch-label">Mostrar pendientes</span>
-      </button>
+      <!-- en vez de lo hecho, lo que falta pagar de ese período: tocarlo de
+           nuevo lo saca -->
+      <div class="seg sub-seg" id="activityStatus" style="margin-top:8px;">
+        <button type="button" data-s="vencido">Vencido</button>
+        <button type="button" data-s="pend">Pendientes</button>
+      </div>
       <div id="activityList" style="margin-top:14px;"></div>
     </div>
   </div>
@@ -3925,6 +3948,7 @@ async function loadAll(){
   render();
 
   maybeAutoBackup();   // una copia por día, silenciosa (ver más abajo)
+  backfillPaidOn();    // el día de lo tildado antes de `paidOn` (ver más abajo)
 }
 
 // last-ditch guard against a silent mass wipe. The UI only ever removes items
@@ -4267,6 +4291,83 @@ async function maybeAutoBackup(){
       pruneAutoBackups();
     }
     try{ localStorage.setItem(autoBackupLSKey(coupleCode), today); }catch(e){}
+  }catch(e){ /* tabla ausente / offline: mañana se reintenta */ }
+}
+
+// ---- el día en que se tildó lo que se tildó antes de `paidOn` ----
+// Lo tildado con una versión sin `paidOn` no sabe cuándo se tildó, y Actividad
+// lo pondría en la fecha del gasto (un Alquiler del 5 pagado el 2 quedaba el
+// 5). Las copias de seguridad sí lo saben: la automática se hace al abrir la
+// app, antes de poder tocar nada, así que lo que en una copia está sin tildar y
+// en las siguientes (o ahora) tildado se tildó el día de esa última copia sin
+// tildar — los días sin copia nadie abrió la app. Eso vale solo con copias
+// seguidas: las automáticas viejas se borran (pruneAutoBackups), así que si
+// entre la última sin tildar y la primera tildada hay más de 2 días no se
+// sabe y queda como estaba, igual que lo que no aparece sin tildar en ninguna. Corre a lo sumo una vez por día y
+// dispositivo, y solo mientras quede algo tildado sin su día.
+const PAIDON_BACKFILL_LS = 'paidon_backfill_';
+function paidOnCandidates(){
+  const out = [];
+  [[expenses, 'expenses'], [varExpenses, 'variable_expenses']].forEach(([list, col])=>list.forEach(ex=>{
+    if(ex.settledLater || isCardVar(ex)) return;
+    if(occurrenceCount(ex) > 1){
+      const paid = occurrencesPaidArr(ex), on = occurrencesPaidOnArr(ex);
+      paid.forEach((p, i)=>{ if(p && !on[i]) out.push({ ex, col, i }); });
+    } else if(ex.paid && !ex.paidOn) out.push({ ex, col, i: null });
+  }));
+  return out;
+}
+async function inferPaidOnFromBackups(cands){
+  const { data, error } = await sb.from(BACKUP_TABLE).select('id, created_at')
+    .eq('code', coupleCode).order('created_at', { ascending: true }).limit(40);
+  if(error || !data || !data.length) return [];
+  // candidato → { unpaid: día de la última copia sin tildar, next: día de la
+  // primera tildada después de esa }
+  const seen = new Map();
+  for(const b of data){
+    const r = await sb.from(BACKUP_TABLE).select('snapshot').eq('id', b.id).single();
+    const snap = r.data && r.data.snapshot;
+    if(!snap) continue;
+    const dia = dateStrOf(new Date(b.created_at));
+    cands.forEach(c=>{
+      const old = (snap[c.col] || []).find(x=>x.id === c.ex.id);
+      if(!old) return;
+      const paid = c.i === null ? !!old.paid : !!(Array.isArray(old.occurrencesPaid) && old.occurrencesPaid[c.i]);
+      const st = seen.get(c);
+      if(!paid) seen.set(c, { unpaid: dia, next: null });
+      else if(st && !st.next) st.next = dia;
+    });
+  }
+  const seguidas = st => !st.next || addDaysStr(st.unpaid, 2) >= st.next;
+  return cands.filter(c=>seen.has(c) && seguidas(seen.get(c))).map(c=>({ ...c, day: seen.get(c).unpaid }));
+}
+async function backfillPaidOn(){
+  if(!coupleCode) return;
+  const today = todayStr();
+  try{ if(localStorage.getItem(PAIDON_BACKFILL_LS + coupleCode) === today) return; }catch(e){}
+  const cands = paidOnCandidates();
+  try{
+    if(cands.length){
+      const found = await inferPaidOnFromBackups(cands);
+      // pudo cambiar algo mientras se leían las copias: solo lo que sigue tildado sin día
+      let fixed = false, vars = false;
+      found.forEach(c=>{
+        if(c.i === null){
+          if(!c.ex.paid || c.ex.paidOn) return;
+          c.ex.paidOn = c.day;
+        } else {
+          const on = occurrencesPaidOnArr(c.ex);
+          if(!occurrencesPaidArr(c.ex)[c.i] || on[c.i]) return;
+          on[c.i] = c.day;
+          c.ex.occurrencesPaidOn = on;
+        }
+        if(c.col === 'expenses') fixed = true; else vars = true;
+      });
+      if(fixed) saveExpenses();
+      if(vars) saveVarExpenses();
+      if(fixed || vars) render();
+    }
+    try{ localStorage.setItem(PAIDON_BACKFILL_LS + coupleCode, today); }catch(e){}
   }catch(e){ /* tabla ausente / offline: mañana se reintenta */ }
 }
 
@@ -4961,6 +5062,7 @@ function switchTab(name){
   });
   window.scrollTo({top:0});
   if(name === 'ajustes') renderBackups();
+  if(name === 'actividad' && activityNeedsCenter) centerActivityDay(false);
 }
 $('tabs').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
@@ -7687,7 +7789,8 @@ function occurrencesPaidArr(ex){
 }
 // el día en que se tildó, para la página Actividad: `paidOn` en un gasto
 // simple, `occurrencesPaidOn[i]` en uno que se repite. Lo tildado antes de
-// que existiera Actividad no lo tiene (y ahí no aparece).
+// que existiera (o en una versión sin él) no lo tiene: Actividad lo pone en
+// la fecha del gasto.
 function stampPaid(ex, paid){
   if(paid) ex.paidOn = todayStr(); else delete ex.paidOn;
 }
@@ -7813,29 +7916,108 @@ function payDueSoon(id){
 // pagados (el día en que se tildaron, `paidOn`), pagos de deudas, créditos
 // sacados y ahorro en dólares cargado a mano. Solo para mirar: cada cosa ya
 // cuenta en su bloque, acá no se suma ni se resta nada. No guarda nada propio,
-// se arma de los datos que ya están. Con "Mostrar pendientes" (siempre en "Que
-// viene") se suman los fijos/variables sin tildar que vencen en esa semana, y
-// en esta semana también los vencidos del mes que siguen sin pagar.
-let activityWeek = 0;          // -1 semana pasada, 0 esta, 1 la que viene
+// se arma de los datos que ya están. Se mira un día a la vez, elegido en la
+// tira con los días del mes del selector, o su semana (lunes a domingo), o el
+// mes entero (`activityRange`). Aparte, `activityStatus` cambia lo hecho por
+// lo que falta pagar de ese período: lo vencido (del mes en curso; lo de antes
+// ya está en Deudas) o lo pendiente que falta vencer.
+let activityDay = null;        // 'YYYY-MM-DD' elegido en la tira; null = el de defaultDate()
+let activityDaysFor = '';      // mes|hoy con los que se armó la tira
+let activityNeedsCenter = true;
 let currentActivityTab = SHARED_PAY;
-const ACTIVITY_PENDING_KEY = 'activity_pending';
-let activityShowPending = false;
-try{ activityShowPending = localStorage.getItem(ACTIVITY_PENDING_KEY) === '1'; }catch(e){}
-function toggleActivityPending(){
-  activityShowPending = !activityShowPending;
-  try{ localStorage.setItem(ACTIVITY_PENDING_KEY, activityShowPending ? '1' : '0'); }catch(e){}
-  renderActivity();
-}
-// semanas de lunes a domingo
+let activityRange = 'dia';     // 'dia' | 'semana' | 'mes'
+let activityStatus = null;     // null (lo hecho) | 'vencido' | 'pend'
 function dateStrOf(d){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-function activityWeekRange(offset){
-  const d = new Date(todayStr() + 'T00:00:00');
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + offset * 7);
-  const from = dateStrOf(d);
-  d.setDate(d.getDate() + 6);
-  return { from, to: dateStrOf(d) };
+function addDaysStr(dateStr, n){
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return dateStrOf(d);
+}
+function weekStartOf(day){
+  return addDaysStr(day, -((new Date(day + 'T00:00:00').getDay() + 6) % 7));
+}
+// los días del mes del selector; se arma solo cuando cambia el mes (o el día
+// de hoy), así no pierde por dónde se deslizó, y en cada render solo se mueven
+// las marcas: .active (el día, en Día) e .in-range (la semana o el mes)
+function renderActivityDays(){
+  const hoy = todayStr(), strip = $('activityDays');
+  if(activityDaysFor !== viewMonth + '|' + hoy){
+    activityDaysFor = viewMonth + '|' + hoy;
+    let html = '';
+    for(let d = viewMonth + '-01'; monthKey(d) === viewMonth; d = addDaysStr(d, 1)){
+      const dt = new Date(d + 'T00:00:00');
+      const wd = dt.toLocaleDateString('es-AR', {weekday:'short'}).replace('.', '');
+      const full = dt.toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
+      const cls = [d === hoy ? 'today' : '', dt.getDay() === 1 || d.endsWith('-01') ? 'wk-start' : ''].filter(Boolean).join(' ');
+      html += `<button type="button" data-day="${d}"${cls ? ` class="${cls}"` : ''} aria-label="${full}">
+        <span class="ds-wd">${wd}</span><span class="ds-n">${dt.getDate()}</span></button>`;
+    }
+    strip.innerHTML = html;
+    activityNeedsCenter = true;
+  }
+  const ranged = activityRange !== 'dia';
+  const from = activityRange === 'semana' ? weekStartOf(activityDay) : '';
+  const to = activityRange === 'semana' ? addDaysStr(from, 6) : '';
+  strip.classList.toggle('ranged', ranged);
+  strip.querySelectorAll('button').forEach(b=>{
+    const d = b.dataset.day;
+    const on = !ranged && d === activityDay;
+    b.classList.toggle('active', on);
+    b.classList.toggle('in-range', activityRange === 'mes' || (ranged && d >= from && d <= to));
+    b.setAttribute('aria-pressed', on || b.classList.contains('in-range') ? 'true' : 'false');
+  });
+  if(activityNeedsCenter) centerActivityDay(false);
+}
+// deja a la vista la semana del día elegido, desde su lunes (o desde el 1, si
+// la semana empieza el mes anterior). Con la página oculta no se puede medir:
+// queda pendiente para cuando se abra
+function centerActivityDay(smooth){
+  const strip = $('activityDays');
+  const first = viewMonth + '-01', lunes = weekStartOf(activityDay);
+  const btn = strip.querySelector(`button[data-day="${lunes < first ? first : lunes}"]`);
+  if(!btn || !strip.offsetParent){ activityNeedsCenter = true; return; }
+  activityNeedsCenter = false;
+  strip.scrollTo({ left: btn.offsetLeft - 4, behavior: smooth ? 'smooth' : 'auto' });
+}
+function monthLastDay(key){
+  const [y, m] = key.split('-').map(Number);
+  return dateStrOf(new Date(y, m, 0));
+}
+// qué mira la página: `from`/`to` lo hecho (sin `from`, nada), `pendFrom`/
+// `pendTo` lo que falta pagar (sin `pendFrom`, nada), `asc` si va de lo más
+// viejo a lo más nuevo, `single` si es un día solo (sin encabezados por día)
+function activityView(){
+  const hoy = todayStr(), mes = monthNow(), day = activityDay;
+  let from = day, to = day, scope = activityDayScope(day);
+  if(activityRange === 'mes'){
+    from = viewMonth + '-01'; to = monthLastDay(viewMonth);
+    scope = 'de ' + monthLabel(viewMonth).replace(/ de \d+$/, '').toLowerCase();
+  } else if(activityRange === 'semana'){
+    from = weekStartOf(day);
+    to = addDaysStr(from, 6);
+    scope = hoy >= from && hoy <= to ? 'de esta semana' : `del ${shortDate(from)} al ${shortDate(to)}`;
+  }
+  const single = activityRange === 'dia';
+  if(activityStatus === 'vencido'){
+    const f = from > mes + '-01' ? from : mes + '-01', ayer = addDaysStr(hoy, -1), t = to < ayer ? to : ayer;
+    return { pendFrom: f <= t ? f : null, pendTo: t, single, title: 'Vencido ' + scope,
+      empty: 'No hay gastos vencidos sin pagar.' };
+  }
+  if(activityStatus === 'pend'){
+    const f = from > hoy ? from : hoy;
+    return { pendFrom: f <= to ? f : null, pendTo: to, asc: true, single, title: 'Pendientes ' + scope,
+      empty: 'No hay gastos pendientes.' };
+  }
+  return { from, to, single, title: 'Actividad ' + scope, empty: 'No hay movimientos.' };
+}
+function activityDayScope(day){
+  const hoy = todayStr();
+  if(day === hoy) return 'de hoy';
+  if(day === addDaysStr(hoy, -1)) return 'de ayer';
+  if(day === addDaysStr(hoy, 1)) return 'de mañana';
+  return `del ${shortDate(day)}`;
 }
 // en la pestaña Todos, de quién es (con la misma etiqueta que "Paga X"); lo
 // compartido ya lo dice el "partes iguales" de la tarjeta, como en Gastos
@@ -7848,188 +8030,244 @@ function expenseBearer(ex){
   return bearers.length === 1 ? bearers[0] : SHARED_PAY;
 }
 // cada movimiento es una tarjeta igual a la de su bloque: { date, name, kind
-// (texto: "Gasto fijo"…), meta (html de etiquetas), amount (todo), share(p)
-// (la parte de esa persona), dir: 'out' | 'in' | 'none', owner, check?
-// ({checked, on}), edit?, del?, pending? }
-function activityItems(from, to){
-  const inRange = d => !!d && d >= from && d <= to;
+// (texto: "Gasto fijo"…), meta (html de etiquetas), amount (todo), belongs(p)
+// (si va en la pestaña de esa persona; sin él, la de `owner`), dir: 'out' |
+// 'in' | 'none', owner, check? ({checked, on}), go (onclick que lleva a la
+// tarjeta en su página), pending? }
+function activityItems(from, to, pendFrom, pendTo){
+  const inRange = d => !!from && !!d && d >= from && d <= to;
   const items = [];
+  // un gasto que pagó una persona es de ella (lo cargó y lo pagó; lo que le
+  // deben los demás ya está en "Entre ustedes"); uno compartido, de cada uno
+  // de los que ponen su parte
   const exItem = (ex, amount, extra) => ({
     amount, owner: expenseBearer(ex), dir: 'out',
-    share: p => entryShareOf(ex, p) * (amount / (ex.amount || 1)), ...extra
+    belongs: p => isPerson(ex.paidBy) ? ex.paidBy === p : entryShareOf(ex, p) > 0, ...extra
   });
-  // lo mismo que muestran las tarjetas de Gastos: reparto, quién paga, deuda
-  const exMeta = ex => splitInfoHtml(splitLabelOf(ex)) + payerTagHtml(ex) + debtTagHtml(ex);
+  // de las etiquetas de Gastos, solo quién paga uno compartido (sin fecha,
+  // reparto, tilde, tarjeta ni deuda: acá solo se mira)
+  const exMeta = ex => payerTagHtml(ex);
   pids().forEach(p=>{
     (income.entries[p]||[]).filter(e=>inRange(e.date)).forEach(e=>{
       items.push({ date: e.date, name: e.label || 'Ingreso', kind: 'Ingreso',
-        meta: e.currency === 'USD' ? `<span>·</span><span>${fmtUsd(e.amount)} × ${fmtNum(entryRate(e))}</span>` : '',
-        amount: entryArs(e), share: q => q === p ? entryArs(e) : 0, dir: 'in', owner: p,
-        edit: `openIncomeModal('${p}','${e.id}')`, del: `removeIncome('${p}','${e.id}')` });
+        meta: '',
+        amount: entryArs(e), dir: 'in', owner: p,
+        go: `goToActivityCard('income','${e.id}','${p}')` });
     });
     savingsSlot(p).items.filter(it=>!it.auto && !it.fromIncome && inRange(it.date)).forEach(it=>{
       items.push({ date: it.date, name: 'Ahorro en dólares', kind: 'Ahorro', meta: '',
-        amountText: fmtUsd(it.amount), amount: 0, share: ()=>0, dir: 'none', owner: p,
-        edit: `currentAhorroPerson='${p}';openSavingsModal('${it.id}')`,
-        del: `currentAhorroPerson='${p}';deleteSavingsEntry('${it.id}')` });
+        amountText: fmtUsd(it.amount), amount: 0, dir: 'none', owner: p,
+        go: `goToActivityCard('savings','${it.id}','${p}')` });
     });
   });
   cardPurchases.filter(cp=>cp.credit && cpValid(cp) && inRange(cp.credit.date)).forEach(cp=>{
     const recibido = cp.credit.received || 0;
     items.push({ date: cp.credit.date, name: cp.card.trim(), kind: 'Crédito',
-      meta: `<span>·</span><span>se devuelve ${fmt(cp.amount)} en ${monthShort(cp.startMonth)}</span>`,
-      amount: recibido, share: q => q === cp.person ? recibido : 0, dir: 'in', owner: cp.person,
-      edit: `openCpModal('${cp.id}')`, del: `deleteCp('${cp.id}')` });
+      meta: '',
+      amount: recibido, dir: 'in', owner: cp.person,
+      go: `goToActivityCard('credit','${cp.id}')` });
   });
   dailyExpenses.filter(d=>inRange(d.date)).forEach(d=>{
     items.push(exItem(d, d.amount || 0, { date: d.date, name: d.desc, kind: 'Gasto diario',
-      meta: splitInfoHtml(splitLabelOf(d)) + payerTagHtml(d) + dailyCardTagHtml(d),
-      edit: `openDailyModal('${d.id}')`, del: `deleteDailyExpense('${d.id}')` }));
+      meta: exMeta(d),
+      go: `goToActivityCard('daily','${d.id}')` }));
   });
   // variables con tarjeta: no se tildan (se pagan el mes siguiente en el
   // T.Credito), así que van el día de la compra, como los diarios con tarjeta
   varExpenses.filter(ex=>isCardVar(ex) && inRange(ex.date)).forEach(ex=>{
     items.push(exItem(ex, ex.amount || 0, { date: ex.date, name: ex.desc, kind: 'Gasto variable',
-      meta: splitInfoHtml(splitLabelOf(ex)) + payerTagHtml(ex) + dailyCardTagHtml(ex),
-      edit: `openVarExpenseModal('${ex.id}')`, del: `deleteVarExpense('${ex.id}')` }));
+      meta: exMeta(ex),
+      go: `goToActivityCard('variable','${ex.id}')` }));
   });
-  // lo tildado como pagado, el día en que se tildó, con su tilde como en
-  // Gastos (destildarlo acá lo saca). Uno pagado después desde Deudas
+  // lo tildado como pagado, el día en que se tildó (o el del gasto, si es de
+  // antes de `paidOn`). Uno pagado después desde Deudas
   // (settledLater) ya aparece por el gasto variable que se cargó.
   const paidRows = (list, fixed) => list.filter(ex=>!ex.settledLater).forEach(ex=>{
     const kind = ex.fromDebt || ex.cardAuto ? 'Pago de deuda' : fixed ? 'Gasto fijo' : 'Gasto variable';
-    const meta = `<span>·</span><span>${shortDate(ex.date)}</span>` + exMeta(ex);
-    // los automáticos de tarjeta/crédito no tienen ✎/✕ en Gastos tampoco
-    const acts = ex.cardAuto ? {} : fixed
-      ? { edit: `openModal('${ex.id}')`, del: `deleteExpense('${ex.id}')` }
-      : { edit: `openVarExpenseModal('${ex.id}')`, del: `deleteVarExpense('${ex.id}')` };
+    const meta = exMeta(ex);
+    const acts = { go: `goToActivityCard('${fixed ? 'fixed' : 'variable'}','${ex.id}')` };
     const n = occurrenceCount(ex);
     if(n > 1){
       const paid = occurrencesPaidArr(ex), on = occurrencesPaidOnArr(ex);
       on.forEach((d, i)=>{
-        if(paid[i] && inRange(d)) items.push(exItem(ex, occurrenceAmount(ex), { date: d,
-          name: `${ex.desc} (${i+1} de ${n})`, kind, meta, ...acts,
-          check: { checked: true, on: `toggleExpenseOccurrencePaid('${ex.id}', ${i})` } }));
+        const dia = d || ex.date;
+        if(paid[i] && inRange(dia)) items.push(exItem(ex, occurrenceAmount(ex), { date: dia,
+          name: `${ex.desc} (${i+1} de ${n})`, kind, meta, ...acts }));
       });
       return;
     }
-    // un pago de deuda de antes de existir `paidOn` se cargó el día que se pagó
-    const day = ex.paidOn || (ex.fromDebt ? ex.date : null);
+    // tildado sin `paidOn` (de antes, ver stampPaid()): el día del gasto
+    const day = ex.paidOn || ex.date;
     if(!ex.paid || !inRange(day)) return;
-    items.push(exItem(ex, ex.amount || 0, { date: day, name: ex.desc, kind, meta, ...acts,
-      check: { checked: true, on: fixed ? `toggleExpensePaid('${ex.id}')` : `toggleVarExpensePaid('${ex.id}')` } }));
+    items.push(exItem(ex, ex.amount || 0, { date: day, name: ex.desc, kind, meta, ...acts }));
   });
   paidRows(expenses, true);
   paidRows(varExpenses, false);
+  // cuotas tildadas de una deuda en cuotas (Deudas), el día en que se
+  // tildaron o, si no lo tienen, el 1 del mes de esa cuota
+  debts.filter(d=>d.kind === 'plan' && d.months).forEach(d=>{
+    const on = Array.isArray(d.installmentsPaidOn) ? d.installmentsPaidOn : [];
+    const cuota = (d.amount || 0) / d.months, usd = d.currency === 'USD';
+    installmentsPaidArr(d).forEach((paid, i)=>{
+      const dia = on[i] || addMonthsKey(debtStartMonth(d), i) + '-01';
+      if(!paid || !inRange(dia)) return;
+      items.push({ date: dia, name: `${d.name} (${i+1} de ${d.months})`, kind: 'Pago de deuda', meta: '',
+        amount: usd ? 0 : cuota, amountText: usd ? fmtUsd(cuota) : '', dir: usd ? 'none' : 'out', owner: d.person,
+        go: `goToActivityCard('debt','${d.id}')` });
+    });
+  });
   // pendientes: sin tildar y del mes en curso o uno que viene (los de meses
-  // cerrados ya están en Deudas). En esta semana también los vencidos de
-  // antes. Con la misma etiqueta de vencimiento que Próximos vencimientos
-  if(activityShowPending || activityWeek > 0){
+  // cerrados ya están en Deudas), que vencen entre pendFrom y pendTo
+  if(pendFrom){
     const mes = monthNow();
-    const desde = activityWeek === 0 ? mes + '-01' : from;
     const pend = (list, fixed) => list.forEach(ex=>{
       const falta = expenseUnpaidAmount(ex);
-      if(!(falta > 0) || isCardVar(ex) || monthKey(ex.date) < mes || ex.date < desde || ex.date > to) return;
-      const lbl = dueLabel(daysUntil(ex.date));
+      if(!(falta > 0) || isCardVar(ex) || monthKey(ex.date) < mes || ex.date < pendFrom || ex.date > pendTo) return;
       const kind = ex.cardAuto ? 'Pago de deuda' : fixed ? 'Gasto fijo' : 'Gasto variable';
-      const acts = ex.cardAuto ? {} : fixed
-        ? { edit: `openModal('${ex.id}')`, del: `deleteExpense('${ex.id}')` }
-        : { edit: `openVarExpenseModal('${ex.id}')`, del: `deleteVarExpense('${ex.id}')` };
-      items.push(exItem(ex, falta, { date: ex.date, name: ex.desc, kind, pending: true,
-        overdue: ex.date < from, ...acts,
-        meta: `<span class="tag ${lbl.late ? 'tag-p1' : 'tag-card'}">${lbl.text}</span>` + exMeta(ex),
-        check: { checked: false, on: `payFromActivity('${fixed ? 'fixed' : 'variable'}','${ex.id}')` } }));
+      const acts = { go: `goToActivityCard('${fixed ? 'fixed' : 'variable'}','${ex.id}')` };
+      items.push(exItem(ex, falta, { date: ex.date, name: ex.desc, kind, pending: true, ...acts,
+        meta: exMeta(ex) }));
     });
     pend(expenses, true);
     pend(varExpenses, false);
   }
   return items;
 }
-function payFromActivity(kind, id){
-  const ex = (kind === 'fixed' ? expenses : varExpenses).find(x=>x.id === id);
-  if(!ex) return;
-  setExpenseFullyPaid(ex, true);
-  if(kind === 'fixed') saveExpenses(); else saveVarExpenses();
-  render();
-  notyf.success(`"${ex.desc}" marcado como pagado`);
-}
-// la misma tarjeta que billRow()/dailyBillRow(): nombre, línea de etiquetas
-// con el tilde, monto y la columna ✎/✕
-// monto entero también en la pestaña de una persona, como en Gastos
+// la misma tarjeta que billRow()/dailyBillRow(): nombre, de qué rubro es
+// (con las etiquetas si es compartido) y monto, sin fecha, tilde ni ✎/✕ — acá no se edita: tocarla lleva a la misma
+// tarjeta en su página (goToActivityCard()). Monto entero también en la
+// pestaña de una persona, como en Gastos
 function activityRowHtml(it){
   const amtText = it.amountText || (it.dir === 'in' ? '+ ' : '') + fmt(it.amount);
-  const check = it.check ? `<label class="bill-paid" title="${it.check.checked ? 'Pagado' : 'Marcar como pagado'}">
-          <input type="checkbox" ${it.check.checked ? 'checked' : ''} onchange="${it.check.on}">
-        </label>` : '';
-  return `<div class="bill">
+  return `<div class="bill${it.go ? ' bill-clickable' : ''}"${it.go ? ` onclick="${it.go}"` : ''}>
     <div class="bill-main">
       <div class="bill-name">${escapeHtml(it.name)}</div>
       <div class="bill-meta">
         <span>${it.kind}</span>${it.meta}
-        ${activityOwnerTag(it.owner)}${check}
+        ${activityOwnerTag(it.owner)}
       </div>
     </div>
     <div class="bill-amt">${amtText}</div>
-    ${it.edit ? `<button class="bill-edit" onclick="${it.edit}" aria-label="Editar">✎</button>
-    <button class="bill-del" onclick="${it.del}" aria-label="Eliminar">✕</button>` : ''}
   </div>`;
 }
-function renderActivity(){
-  const { from, to } = activityWeekRange(activityWeek);
-  document.querySelectorAll('#activityWeekTabs button').forEach(b=>
-    b.classList.toggle('active', Number(b.dataset.week) === activityWeek));
-  $('activityTitle').textContent = `Actividad del ${shortDate(from)} al ${shortDate(to)}`;
-  const tabs = $('activityTabs');
-  const solo = peopleCount() < 2;
-  tabs.style.display = solo ? 'none' : '';
-  if(!isSharedPay(currentActivityTab) && !isPerson(currentActivityTab)) currentActivityTab = SHARED_PAY;
-  if(!solo){
-    const groups = [{ key:SHARED_PAY, label:'Todos' }, ...people.map(p=>({ key:p.id, label:p.name }))];
-    tabs.innerHTML = groups.map(g=>
-      `<button type="button" data-tab="${g.key}"${g.key === currentActivityTab ? ' class="active"' : ''}>${escapeHtml(g.label)}</button>`
-    ).join('');
+// lleva de una tarjeta de Actividad a la misma en su página: pone el mes, la
+// pestaña de la persona y lo desplegable abierto para que se vea, la trae a
+// la vista y la marca un momento. Busca la tarjeta por el id que llevan sus
+// onclick (sus ✎/✕ o su tilde), así no hace falta marcar cada render
+function goToActivityCard(kind, id, person){
+  const ownerTab = ex => expenseOwner(ex);
+  let panel = 'gastos', mes = null;
+  if(kind === 'fixed' || kind === 'variable'){
+    const ex = (kind === 'fixed' ? expenses : varExpenses).find(x=>x.id === id);
+    if(!ex) return;
+    mes = monthKey(ex.date);
+    if(kind === 'fixed') currentFixedTab = ownerTab(ex);
+    else {
+      currentVarTab = ownerTab(ex);
+      const g = varGroupsOf(varExpenses.filter(x=>monthKey(x.date) === mes)).find(g=>g.list.includes(ex));
+      if(g && g.list.length > 1) expandedVarGroups.add(g.key);
+    }
+  } else if(kind === 'daily'){
+    const d = dailyExpenses.find(x=>x.id === id);
+    if(!d) return;
+    mes = monthKey(d.date);
+    if(isPerson(d.paidBy)) currentDailyTab = d.paidBy;
+    else if(!(personShareOf(d, currentDailyTab) > 0)) currentDailyTab = pids().find(p=>personShareOf(d, p) > 0) || firstPid();
+  } else if(kind === 'income'){
+    const e = (income.entries[person] || []).find(x=>x.id === id);
+    if(!e) return;
+    panel = 'ingresos'; mes = monthKey(e.date);
+    if(!isSharedPay(currentIncomeTab)) currentIncomeTab = person;
+  } else if(kind === 'credit'){
+    const cp = cardPurchases.find(x=>x.id === id);
+    if(!cp) return;
+    panel = 'deudas'; mes = monthKey(cp.credit.date);
+    currentDeudasPerson = cp.person;
+    expandedCredits.add(cardNorm(cp.card.trim()));
+  } else if(kind === 'debt'){
+    const d = debts.find(x=>x.id === id);
+    if(!d) return;
+    panel = 'deudas'; currentDeudasPerson = d.person;
+  } else if(kind === 'savings'){
+    panel = 'ahorro'; currentAhorroPerson = person;
   }
-  // en "Que viene" lo pendiente es justamente lo que se quiere ver
-  const tgl = $('activityPendingToggle');
-  tgl.style.display = activityWeek > 0 ? 'none' : '';
-  tgl.setAttribute('aria-checked', activityShowPending ? 'true' : 'false');
+  if(mes) viewMonth = mes;
+  render();
+  switchTab(panel);
+  const hit = document.querySelector(`#panel-${panel} [onclick*="'${id}'"]`);
+  const el = hit && (hit.closest('.bill, .income-entry-row, .sv-row') || hit);
+  if(!el) return;
+  // si su bloque estaba cerrado, se abre (y queda abierto, como con la flecha)
+  const card = el.closest('.card.collapsed');
+  if(card){
+    card.classList.remove('collapsed');
+    const set = readCollapsed(); set.delete(card.dataset.collapseKey); saveCollapsed(set);
+    syncCollapseBtn(card);
+  }
+  requestAnimationFrame(()=>{
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('go-flash'); void el.offsetWidth; el.classList.add('go-flash');
+    setTimeout(()=>el.classList.remove('go-flash'), 1900);
+  });
+}
+function renderActivity(){
+  const hoy = todayStr();
+  // hoy en el mes en curso, el 1 en cualquier otro
+  if(!activityDay || monthKey(activityDay) !== viewMonth) activityDay = defaultDate();
+  const view = activityView();
+  renderActivityDays();
+  document.querySelectorAll('#activityRange button').forEach(b=>
+    b.classList.toggle('active', b.dataset.r === activityRange));
+  document.querySelectorAll('#activityStatus button').forEach(b=>{
+    const on = b.dataset.s === activityStatus;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  $('activityTitle').textContent = view.title;
+  // de quién se ve lo elige la Vista del header (no tiene pestañas propias)
+  const solo = peopleCount() < 2;
+  if(!isSharedPay(currentActivityTab) && !isPerson(currentActivityTab)) currentActivityTab = SHARED_PAY;
 
   const who = solo ? SHARED_PAY : currentActivityTab;
-  const items = activityItems(from, to)
-    .filter(it=>!isPerson(who) || it.share(who) > 0.5 || (it.dir === 'none' && it.owner === who));
-  if(!items.length){
-    const que = activityWeek < 0 ? 'la semana pasada' : activityWeek > 0 ? 'la semana que viene' : 'esta semana';
-    $('activityList').innerHTML = `<div class="empty">No hay movimientos ${que}.</div>`;
-    return;
-  }
+  const mine = list => list.filter(it=>!isPerson(who) || (it.belongs ? it.belongs(who) : it.owner === who));
+  const items = mine(activityItems(view.from, view.to, view.pendFrom, view.pendTo));
   const amtOf = it => it.amount;
-  // vencidos de antes de la semana, arriba de todo; después de lo más nuevo a
-  // lo más viejo, un encabezado por día con lo que sale ese día (como Gastos diarios)
-  const overdue = items.filter(it=>it.overdue);
-  const byDay = new Map();
-  items.filter(it=>!it.overdue).forEach(it=>{
-    if(!byDay.has(it.date)) byDay.set(it.date, []);
-    byDay.get(it.date).push(it);
-  });
   const sumOut = list => list.filter(it=>it.dir === 'out').reduce((s, it)=>s + amtOf(it), 0);
   const head = (label, total) =>
     `<div class="day-head"><span>${escapeHtml(label)}</span><span class="day-total">${fmt(total)}</span></div>`;
-  const hoy = todayStr();
-  let html = overdue.length ? head('Vencido sin pagar', sumOut(overdue)) + overdue.map(it=>activityRowHtml(it)).join('') : '';
-  [...byDay.keys()].sort((a, b)=>b.localeCompare(a)).forEach(date=>{
-    const list = byDay.get(date);
-    // dentro del día: lo pendiente primero, después lo que entró y lo que salió
-    list.sort((a, b)=>(b.pending ? 1 : 0) - (a.pending ? 1 : 0) || (a.dir === 'in' ? -1 : 0) - (b.dir === 'in' ? -1 : 0));
-    const raw = new Date(date + 'T00:00:00').toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
-    const label = date === hoy ? `Hoy · ${raw}` : raw.charAt(0).toUpperCase() + raw.slice(1);
-    html += head(label, sumOut(list)) + list.map(it=>activityRowHtml(it)).join('');
-  });
-  // Totales como en Gastos: lo que sale, desplegable en Pagado / A pagar, y
-  // aparte lo que entró
+  // dentro del día: lo pendiente primero, después lo que entró y lo que salió
+  const inDay = list => list.sort((a, b)=>(b.pending ? 1 : 0) - (a.pending ? 1 : 0) || (a.dir === 'in' ? -1 : 0) - (b.dir === 'in' ? -1 : 0));
+  let html = items.length ? '' : `<div class="empty">${view.empty}</div>`;
+  if(view.single){
+    // el día ya lo dice el título: sin encabezado
+    html += inDay(items).map(it=>activityRowHtml(it)).join('');
+  } else {
+    // un encabezado por día con lo que sale ese día (como Gastos diarios); lo
+    // que viene, de lo más cercano a lo más lejano, lo demás de lo más nuevo
+    const byDay = new Map();
+    items.forEach(it=>{
+      if(!byDay.has(it.date)) byDay.set(it.date, []);
+      byDay.get(it.date).push(it);
+    });
+    [...byDay.keys()].sort((a, b)=>view.asc ? a.localeCompare(b) : b.localeCompare(a)).forEach(date=>{
+      const raw = new Date(date + 'T00:00:00').toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
+      const label = date === hoy ? `Hoy · ${raw}` : raw.charAt(0).toUpperCase() + raw.slice(1);
+      const list = inDay(byDay.get(date));
+      html += head(label, sumOut(list)) + list.map(it=>activityRowHtml(it)).join('');
+    });
+  }
+  // Totales como en Gastos: lo que sale en lo que se está mirando, y
+  // desplegado siempre el mes del selector entero — Pagado y A pagar (lo
+  // vencido y lo que falta vencer), para saber cuánto queda por pagar del
+  // mes, y lo que entró
   const asRows = list => list.map(it=>({ desc: it.name, date: it.date, v: amtOf(it) }));
   const out = items.filter(it=>it.dir === 'out');
-  const paidOut = out.filter(it=>!it.pending), pendOut = out.filter(it=>it.pending);
-  const entro = items.filter(it=>it.dir === 'in');
+  const mFrom = viewMonth + '-01', mTo = monthLastDay(viewMonth);
+  const delMes = mine(activityItems(mFrom, mTo));
+  const paidOut = delMes.filter(it=>it.dir === 'out');
+  const pendOut = mine(activityItems(null, null, mFrom, mTo)).sort((a, b)=>a.date.localeCompare(b.date));
+  const entro = delMes.filter(it=>it.dir === 'in');
+  const mesNombre = monthLabel(viewMonth).replace(/ de \d+$/, '').toLowerCase();
   const open = expandedTotalsMain.has('activity');
   html += `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('activity')">
     <div class="bill-main">
@@ -8044,25 +8282,46 @@ function renderActivity(){
   if(open){
     const v = x => x.v;
     html += `<div class="bill-occurrences">`
-      + subtotalRowHtml('Pagado', sumOut(paidOut), asRows(paidOut), 'activity:paid', true, v)
-      + (pendOut.length ? subtotalRowHtml('A pagar', sumOut(pendOut), asRows(pendOut), 'activity:unpaid', false, v, true) : '')
-      + (entro.length ? subtotalRowHtml('Ingresó', entro.reduce((s, it)=>s + amtOf(it), 0), asRows(entro), 'activity:in', true, v) : '')
+      + subtotalRowHtml(`Pagado en ${mesNombre}`, sumOut(paidOut), asRows(paidOut), 'activity:paid', true, v)
+      + subtotalRowHtml(`A pagar en ${mesNombre}`, sumOut(pendOut), asRows(pendOut), 'activity:unpaid', false, v, true)
+      + (entro.length ? subtotalRowHtml(`Ingresó en ${mesNombre}`, entro.reduce((s, it)=>s + amtOf(it), 0), asRows(entro), 'activity:in', true, v) : '')
       + `</div>`;
   }
   $('activityList').innerHTML = html;
 }
-$('activityWeekTabs').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button');
+$('activityDays').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-day]');
   if(!btn) return;
-  activityWeek = Number(btn.dataset.week);
+  activityDay = btn.dataset.day;
+  // en Mes tocar un día es querer verlo; en Semana muestra la semana de ese día
+  if(activityRange === 'mes') activityRange = 'dia';
+  renderActivity();
+  centerActivityDay(true);
+});
+$('activityRange').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-r]');
+  if(!btn) return;
+  activityRange = btn.dataset.r;
+  renderActivity();
+  if(activityRange !== 'mes') centerActivityDay(true);
+});
+$('activityStatus').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-s]');
+  if(!btn) return;
+  activityStatus = activityStatus === btn.dataset.s ? null : btn.dataset.s;
   renderActivity();
 });
-$('activityTabs').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button');
-  if(!btn) return;
-  currentActivityTab = btn.dataset.tab;
-  renderActivity();
-});
+// con mouse la rueda va para abajo: que pase la tira de a una semana (un
+// gesto, una semana; el frenado en cada lunes la deja derecha)
+let activityWheelAt = 0;
+$('activityDays').addEventListener('wheel', (e)=>{
+  const strip = e.currentTarget;
+  if(Math.abs(e.deltaY) <= Math.abs(e.deltaX) || strip.scrollWidth <= strip.clientWidth) return;
+  e.preventDefault();
+  if(Date.now() - activityWheelAt < 450) return;
+  activityWheelAt = Date.now();
+  strip.scrollBy({ left: Math.sign(e.deltaY) * strip.clientWidth, behavior: 'smooth' });
+}, { passive: false });
 
 // en la tarjeta del gasto en Gastos: por qué ese mes no lo descuenta
 function debtTagHtml(ex){
@@ -9607,9 +9866,14 @@ function toggleDebtInstallmentPaid(id, idx){
   const arr = installmentsPaidArr(d).slice();
   arr[idx] = !arr[idx];
   d.installmentsPaid = arr;
+  // el día en que se tildó, para Actividad (como stampPaid())
+  const on = Array.isArray(d.installmentsPaidOn) ? d.installmentsPaidOn.slice() : [];
+  on[idx] = arr[idx] ? todayStr() : null;
+  d.installmentsPaidOn = on;
   d.saved = arr.filter(Boolean).length * (d.amount / d.months);
   saveDebts();
   renderDeudas();
+  renderActivity();
 }
 // deuda en cuotas: se despliega en una fila por cuota con su propio checkbox,
 // igual que las ocurrencias de Limpieza
