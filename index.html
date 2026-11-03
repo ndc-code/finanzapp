@@ -823,10 +823,6 @@
   .day-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
     margin:16px 4px 8px;font-size:12px;font-weight:600;color:var(--body-muted);letter-spacing:-0.12px;}
   .day-head:first-child{margin-top:0;}
-  /* Actividad: el día de hoy resaltado, y lo que entra en verde */
-  .day-head.day-today{color:var(--primary);}
-  .bill-amt.amt-in{color:var(--good);}
-  .bill.bill-pending{border-style:dashed;}
   .day-head .day-total{font-family:'IBM Plex Mono',monospace;font-weight:600;}
 
   .settings-row{display:flex;gap:10px;}
@@ -1251,19 +1247,19 @@
   <div class="tab-panel" id="panel-actividad" role="tabpanel">
     <div class="card">
       <div class="section-title" id="activityTitle">Actividad</div>
-      <div class="seg sub-seg" id="activityWeekTabs" style="margin-bottom:10px;">
+      <div class="seg sub-seg" id="activityWeekTabs" style="margin-top:16px;">
         <button type="button" data-week="-1">Semana pasada</button>
         <button type="button" data-week="0" class="active">Esta semana</button>
         <button type="button" data-week="1">Que viene</button>
       </div>
       <!-- Todos + una por persona, ocultas si hay una sola -->
-      <div class="seg sub-seg" id="activityTabs" style="margin-bottom:10px;"></div>
+      <div class="seg sub-seg" id="activityTabs" style="margin-top:8px;"></div>
       <button type="button" class="switch-toggle" id="activityPendingToggle" role="switch" aria-checked="false"
-        onclick="toggleActivityPending()" style="margin:0 0 14px;">
+        onclick="toggleActivityPending()" style="margin-top:12px;">
         <span class="switch-track"><span class="switch-thumb"></span></span>
         <span class="switch-label">Mostrar pendientes</span>
       </button>
-      <div id="activityList"></div>
+      <div id="activityList" style="margin-top:14px;"></div>
     </div>
   </div>
 
@@ -7693,19 +7689,20 @@ function activityWeekRange(offset){
   d.setDate(d.getDate() + 6);
   return { from, to: dateStrOf(d) };
 }
-// quién aparece en una tarjeta de la pestaña Todos
+// en la pestaña Todos, de quién es (con la misma etiqueta que "Paga X"); lo
+// compartido ya lo dice el "partes iguales" de la tarjeta, como en Gastos
 function activityOwnerTag(person){
-  if(peopleCount() < 2 || isPerson(currentActivityTab)) return '';
-  return isPerson(person)
-    ? `<span class="tag ${personTagClass(person)}">${escapeHtml(nameOf(person))}</span>`
-    : `<span>Compartido</span>`;
+  if(peopleCount() < 2 || isPerson(currentActivityTab) || !isPerson(person)) return '';
+  return `<span class="tag ${personTagClass(person)}">${escapeHtml(nameOf(person))}</span>`;
 }
 function expenseBearer(ex){
   const bearers = pids().filter(p=>entryShareOf(ex, p) > 0);
   return bearers.length === 1 ? bearers[0] : SHARED_PAY;
 }
-// cada movimiento: { date, name, meta, amount (todo), share(p) (la parte de
-// esa persona), dir: 'out' | 'in' | 'none', owner, pending?, pay? }
+// cada movimiento es una tarjeta igual a la de su bloque: { date, name, kind
+// (texto: "Gasto fijo"…), meta (html de etiquetas), amount (todo), share(p)
+// (la parte de esa persona), dir: 'out' | 'in' | 'none', owner, check?
+// ({checked, on}), edit?, del?, pending? }
 function activityItems(from, to){
   const inRange = d => !!d && d >= from && d <= to;
   const items = [];
@@ -7713,64 +7710,83 @@ function activityItems(from, to){
     amount, owner: expenseBearer(ex), dir: 'out',
     share: p => entryShareOf(ex, p) * (amount / (ex.amount || 1)), ...extra
   });
+  // lo mismo que muestran las tarjetas de Gastos: reparto, quién paga, deuda
+  const exMeta = ex => splitInfoHtml(splitLabelOf(ex)) + payerTagHtml(ex) + debtTagHtml(ex);
   pids().forEach(p=>{
     (income.entries[p]||[]).filter(e=>inRange(e.date)).forEach(e=>{
-      const usd = e.currency === 'USD' ? `${fmtUsd(e.amount)} a ${fmtNum(entryRate(e))}` : '';
-      items.push({ date: e.date, name: e.label || 'Ingreso', tag: 'Ingreso', meta: usd,
-        amount: entryArs(e), share: q => q === p ? entryArs(e) : 0, dir: 'in', owner: p });
+      items.push({ date: e.date, name: e.label || 'Ingreso', kind: 'Ingreso',
+        meta: e.currency === 'USD' ? `<span>·</span><span>${fmtUsd(e.amount)} × ${fmtNum(entryRate(e))}</span>` : '',
+        amount: entryArs(e), share: q => q === p ? entryArs(e) : 0, dir: 'in', owner: p,
+        edit: `openIncomeModal('${p}','${e.id}')`, del: `removeIncome('${p}','${e.id}')` });
     });
     savingsSlot(p).items.filter(it=>!it.auto && !it.fromIncome && inRange(it.date)).forEach(it=>{
-      items.push({ date: it.date, name: 'Ahorro en dólares', tag: 'Ahorro', meta: '',
-        amountText: fmtUsd(it.amount), amount: 0, share: ()=>0, dir: 'none', owner: p });
+      items.push({ date: it.date, name: 'Ahorro en dólares', kind: 'Ahorro', meta: '',
+        amountText: fmtUsd(it.amount), amount: 0, share: ()=>0, dir: 'none', owner: p,
+        edit: `currentAhorroPerson='${p}';openSavingsModal('${it.id}')`,
+        del: `currentAhorroPerson='${p}';deleteSavingsEntry('${it.id}')` });
     });
   });
   cardPurchases.filter(cp=>cp.credit && cpValid(cp) && inRange(cp.credit.date)).forEach(cp=>{
     const recibido = cp.credit.received || 0;
-    items.push({ date: cp.credit.date, name: `Crédito ${cp.card.trim()}`, tag: 'Crédito',
-      meta: `se devuelve ${fmt(cp.amount)} en ${monthShort(cp.startMonth)}`,
-      amount: recibido, share: q => q === cp.person ? recibido : 0, dir: 'in', owner: cp.person });
+    items.push({ date: cp.credit.date, name: cp.card.trim(), kind: 'Crédito',
+      meta: `<span>·</span><span>se devuelve ${fmt(cp.amount)} en ${monthShort(cp.startMonth)}</span>`,
+      amount: recibido, share: q => q === cp.person ? recibido : 0, dir: 'in', owner: cp.person,
+      edit: `openCpModal('${cp.id}')`, del: `deleteCp('${cp.id}')` });
   });
   dailyExpenses.filter(d=>inRange(d.date)).forEach(d=>{
-    items.push(exItem(d, d.amount || 0, { date: d.date, name: d.desc, tag: 'Diario',
-      meta: isCardDaily(d) ? `con ${escapeHtml(d.card)}` : '' }));
+    items.push(exItem(d, d.amount || 0, { date: d.date, name: d.desc, kind: 'Gasto diario',
+      meta: splitInfoHtml(splitLabelOf(d)) + payerTagHtml(d) + dailyCardTagHtml(d),
+      edit: `openDailyModal('${d.id}')`, del: `deleteDailyExpense('${d.id}')` }));
   });
-  // lo tildado como pagado, el día en que se tildó. Uno pagado después desde
-  // Deudas (settledLater) ya aparece por el gasto variable que se cargó.
-  const paidRows = (list, tag) => list.filter(ex=>!ex.settledLater).forEach(ex=>{
-    const vencia = `vencía el ${shortDate(ex.date)}`;
+  // lo tildado como pagado, el día en que se tildó, con su tilde como en
+  // Gastos (destildarlo acá lo saca). Uno pagado después desde Deudas
+  // (settledLater) ya aparece por el gasto variable que se cargó.
+  const paidRows = (list, fixed) => list.filter(ex=>!ex.settledLater).forEach(ex=>{
+    const kind = ex.fromDebt || ex.cardAuto ? 'Pago de deuda' : fixed ? 'Gasto fijo' : 'Gasto variable';
+    const meta = `<span>·</span><span>${shortDate(ex.date)}</span>` + exMeta(ex);
+    // los automáticos de tarjeta/crédito no tienen ✎/✕ en Gastos tampoco
+    const acts = ex.cardAuto ? {} : fixed
+      ? { edit: `openModal('${ex.id}')`, del: `deleteExpense('${ex.id}')` }
+      : { edit: `openVarExpenseModal('${ex.id}')`, del: `deleteVarExpense('${ex.id}')` };
     const n = occurrenceCount(ex);
     if(n > 1){
       const paid = occurrencesPaidArr(ex), on = occurrencesPaidOnArr(ex);
       on.forEach((d, i)=>{
-        if(paid[i] && inRange(d)) items.push(exItem(ex, occurrenceAmount(ex),
-          { date: d, name: `${ex.desc} (${i+1} de ${n})`, tag, meta: vencia }));
+        if(paid[i] && inRange(d)) items.push(exItem(ex, occurrenceAmount(ex), { date: d,
+          name: `${ex.desc} (${i+1} de ${n})`, kind, meta, ...acts,
+          check: { checked: true, on: `toggleExpenseOccurrencePaid('${ex.id}', ${i})` } }));
       });
       return;
     }
     // un pago de deuda de antes de existir `paidOn` se cargó el día que se pagó
     const day = ex.paidOn || (ex.fromDebt ? ex.date : null);
     if(!ex.paid || !inRange(day)) return;
-    const deuda = ex.fromDebt || ex.cardAuto;
-    items.push(exItem(ex, ex.amount || 0, { date: day, name: ex.desc, tag: deuda ? 'Deuda' : tag,
-      meta: ex.fromDebt ? '' : vencia }));
+    items.push(exItem(ex, ex.amount || 0, { date: day, name: ex.desc, kind, meta, ...acts,
+      check: { checked: true, on: fixed ? `toggleExpensePaid('${ex.id}')` : `toggleVarExpensePaid('${ex.id}')` } }));
   });
-  paidRows(expenses, 'Fijo');
-  paidRows(varExpenses, 'Variable');
+  paidRows(expenses, true);
+  paidRows(varExpenses, false);
   // pendientes: sin tildar y del mes en curso o uno que viene (los de meses
-  // cerrados ya están en Deudas). En esta semana también los vencidos de antes
+  // cerrados ya están en Deudas). En esta semana también los vencidos de
+  // antes. Con la misma etiqueta de vencimiento que Próximos vencimientos
   if(activityShowPending || activityWeek > 0){
-    const mes = monthNow(), hoy = todayStr();
+    const mes = monthNow();
     const desde = activityWeek === 0 ? mes + '-01' : from;
-    const pend = (list, kind, tag) => list.forEach(ex=>{
+    const pend = (list, fixed) => list.forEach(ex=>{
       const falta = expenseUnpaidAmount(ex);
       if(!(falta > 0) || monthKey(ex.date) < mes || ex.date < desde || ex.date > to) return;
-      const vencido = ex.date < hoy;
-      items.push(exItem(ex, falta, { date: ex.date < from ? from : ex.date, sortDate: ex.date,
-        name: ex.desc, tag: ex.cardAuto ? 'Deuda' : tag, pending: true, overdue: vencido && ex.date < from,
-        meta: vencido ? `venció el ${shortDate(ex.date)}` : '', pay: `payFromActivity('${kind}','${ex.id}')` }));
+      const lbl = dueLabel(daysUntil(ex.date));
+      const kind = ex.cardAuto ? 'Pago de deuda' : fixed ? 'Gasto fijo' : 'Gasto variable';
+      const acts = ex.cardAuto ? {} : fixed
+        ? { edit: `openModal('${ex.id}')`, del: `deleteExpense('${ex.id}')` }
+        : { edit: `openVarExpenseModal('${ex.id}')`, del: `deleteVarExpense('${ex.id}')` };
+      items.push(exItem(ex, falta, { date: ex.date, name: ex.desc, kind, pending: true,
+        overdue: ex.date < from, ...acts,
+        meta: `<span class="tag ${lbl.late ? 'tag-p1' : 'tag-card'}">${lbl.text}</span>` + exMeta(ex),
+        check: { checked: false, on: `payFromActivity('${fixed ? 'fixed' : 'variable'}','${ex.id}')` } }));
     });
-    pend(expenses, 'fixed', 'Fijo');
-    pend(varExpenses, 'variable', 'Variable');
+    pend(expenses, true);
+    pend(varExpenses, false);
   }
   return items;
 }
@@ -7782,31 +7798,32 @@ function payFromActivity(kind, id){
   render();
   notyf.success(`"${ex.desc}" marcado como pagado`);
 }
-function activityRowHtml(it, who){
-  const amt = isPerson(who) ? it.share(who) : it.amount;
-  const amtText = it.amountText || (it.dir === 'in' ? '+ ' : '') + fmt(amt);
-  const parte = isPerson(who) && it.dir === 'out' && Math.abs(amt - it.amount) > 0.5
-    ? `<span>su parte de ${fmt(it.amount)}</span>` : '';
-  const late = it.pending && (it.sortDate || it.date) < todayStr();
-  return `<div class="bill${it.pending ? ' bill-pending' : ''}">
+// la misma tarjeta que billRow()/dailyBillRow(): nombre, línea de etiquetas
+// con el tilde, monto y la columna ✎/✕
+// monto entero también en la pestaña de una persona, como en Gastos
+function activityRowHtml(it){
+  const amtText = it.amountText || (it.dir === 'in' ? '+ ' : '') + fmt(it.amount);
+  const check = it.check ? `<label class="bill-paid" title="${it.check.checked ? 'Pagado' : 'Marcar como pagado'}">
+          <input type="checkbox" ${it.check.checked ? 'checked' : ''} onchange="${it.check.on}">
+        </label>` : '';
+  return `<div class="bill">
     <div class="bill-main">
       <div class="bill-name">${escapeHtml(it.name)}</div>
       <div class="bill-meta">
-        <span class="tag ${late ? 'tag-p1' : 'tag-card'}">${it.pending ? (late ? 'Vencido' : 'A pagar') + ' · ' : ''}${it.tag}</span>
-        ${it.meta ? `<span>${it.meta}</span>` : ''}${parte}${activityOwnerTag(it.owner)}
+        <span>${it.kind}</span>${it.meta}
+        ${activityOwnerTag(it.owner)}${check}
       </div>
     </div>
-    <div class="bill-amt${it.dir === 'in' ? ' amt-in' : ''}">${amtText}</div>
-    ${it.pay ? `<label class="bill-paid" title="Marcar como pagado">
-      <input type="checkbox" onchange="${it.pay}" aria-label="Marcar ${escapeHtml(it.name)} como pagado">
-    </label>` : ''}
+    <div class="bill-amt">${amtText}</div>
+    ${it.edit ? `<button class="bill-edit" onclick="${it.edit}" aria-label="Editar">✎</button>
+    <button class="bill-del" onclick="${it.del}" aria-label="Eliminar">✕</button>` : ''}
   </div>`;
 }
 function renderActivity(){
   const { from, to } = activityWeekRange(activityWeek);
   document.querySelectorAll('#activityWeekTabs button').forEach(b=>
     b.classList.toggle('active', Number(b.dataset.week) === activityWeek));
-  $('activityTitle').textContent = `Actividad · ${shortDate(from)} al ${shortDate(to)}`;
+  $('activityTitle').textContent = `Actividad del ${shortDate(from)} al ${shortDate(to)}`;
   const tabs = $('activityTabs');
   const solo = peopleCount() < 2;
   tabs.style.display = solo ? 'none' : '';
@@ -7830,9 +7847,9 @@ function renderActivity(){
     $('activityList').innerHTML = `<div class="empty">No hay movimientos ${que}.</div>`;
     return;
   }
-  const amtOf = it => isPerson(who) ? it.share(who) : it.amount;
+  const amtOf = it => it.amount;
   // vencidos de antes de la semana, arriba de todo; después de lo más nuevo a
-  // lo más viejo, un encabezado por día con lo que sale ese día
+  // lo más viejo, un encabezado por día con lo que sale ese día (como Gastos diarios)
   const overdue = items.filter(it=>it.overdue);
   const byDay = new Map();
   items.filter(it=>!it.overdue).forEach(it=>{
@@ -7840,27 +7857,43 @@ function renderActivity(){
     byDay.get(it.date).push(it);
   });
   const sumOut = list => list.filter(it=>it.dir === 'out').reduce((s, it)=>s + amtOf(it), 0);
-  const head = (label, total, today) =>
-    `<div class="day-head${today ? ' day-today' : ''}"><span>${escapeHtml(label)}</span><span class="day-total">${fmt(total)}</span></div>`;
+  const head = (label, total) =>
+    `<div class="day-head"><span>${escapeHtml(label)}</span><span class="day-total">${fmt(total)}</span></div>`;
   const hoy = todayStr();
-  let html = overdue.length ? head('Vencido sin pagar', sumOut(overdue)) + overdue.map(it=>activityRowHtml(it, who)).join('') : '';
+  let html = overdue.length ? head('Vencido sin pagar', sumOut(overdue)) + overdue.map(it=>activityRowHtml(it)).join('') : '';
   [...byDay.keys()].sort((a, b)=>b.localeCompare(a)).forEach(date=>{
     const list = byDay.get(date);
     // dentro del día: lo pendiente primero, después lo que entró y lo que salió
     list.sort((a, b)=>(b.pending ? 1 : 0) - (a.pending ? 1 : 0) || (a.dir === 'in' ? -1 : 0) - (b.dir === 'in' ? -1 : 0));
     const raw = new Date(date + 'T00:00:00').toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long'});
     const label = date === hoy ? `Hoy · ${raw}` : raw.charAt(0).toUpperCase() + raw.slice(1);
-    html += head(label, sumOut(list), date === hoy)
-      + list.map(it=>activityRowHtml(it, who)).join('');
+    html += head(label, sumOut(list)) + list.map(it=>activityRowHtml(it)).join('');
   });
-  const done = items.filter(it=>!it.pending);
-  const pagado = sumOut(done);
-  const entro = done.filter(it=>it.dir === 'in').reduce((s, it)=>s + amtOf(it), 0);
-  const falta = sumOut(items.filter(it=>it.pending));
-  const totalRow = (name, v) => `<div class="bill bill-total"><div class="bill-main"><div class="bill-name">${name}</div></div><div class="bill-amt">${fmt(v)}</div></div>`;
-  html += (done.some(it=>it.dir === 'out') ? totalRow('Gastado y pagado', pagado) : '')
-    + (entro > 0.5 ? totalRow('Ingresó', entro) : '')
-    + (items.some(it=>it.pending) ? totalRow('Falta pagar', falta) : '');
+  // Totales como en Gastos: lo que sale, desplegable en Pagado / A pagar, y
+  // aparte lo que entró
+  const asRows = list => list.map(it=>({ desc: it.name, date: it.date, v: amtOf(it) }));
+  const out = items.filter(it=>it.dir === 'out');
+  const paidOut = out.filter(it=>!it.pending), pendOut = out.filter(it=>it.pending);
+  const entro = items.filter(it=>it.dir === 'in');
+  const open = expandedTotalsMain.has('activity');
+  html += `<div class="bill bill-total bill-clickable" onclick="toggleTotalsMain('activity')">
+    <div class="bill-main">
+      <div class="bill-name-row">
+        <button type="button" class="bill-toggle${open ? ' open' : ''}" tabindex="-1"
+          aria-label="${open ? 'Ocultar' : 'Ver'} Pagado, A pagar e Ingresó">▸</button>
+        <div class="bill-name">Totales</div>
+      </div>
+    </div>
+    <div class="bill-amt">${fmt(sumOut(out))}</div>
+  </div>`;
+  if(open){
+    const v = x => x.v;
+    html += `<div class="bill-occurrences">`
+      + subtotalRowHtml('Pagado', sumOut(paidOut), asRows(paidOut), 'activity:paid', true, v)
+      + (pendOut.length ? subtotalRowHtml('A pagar', sumOut(pendOut), asRows(pendOut), 'activity:unpaid', false, v, true) : '')
+      + (entro.length ? subtotalRowHtml('Ingresó', entro.reduce((s, it)=>s + amtOf(it), 0), asRows(entro), 'activity:in', true, v) : '')
+      + `</div>`;
+  }
   $('activityList').innerHTML = html;
 }
 $('activityWeekTabs').addEventListener('click', (e)=>{
