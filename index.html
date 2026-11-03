@@ -63,13 +63,17 @@
     font:inherit;color:var(--ink);cursor:pointer;line-height:1.15;}
   .head-saldo:hover{background:var(--pearl);}
   .head-saldo[hidden]{display:none;}
-  /* la persona de la Vista, a mano: las mismas sub-pestañas de los bloques,
-     sobre fondo de tarjeta como el saldo de al lado */
-  .sub-seg.head-view{grid-area:view;justify-self:end;flex-wrap:nowrap;background:var(--card);border:1px solid var(--line);}
-  .sub-seg.head-view button{flex:0 0 auto;max-width:96px;padding:6px 10px;font-size:12.5px;}
-  .sub-seg.head-view button.active{background:var(--paper);box-shadow:none;}
+  /* la persona de la Vista, a mano: un botón con su nombre (como el saldo de
+     al lado) que pasa a la siguiente con cada toque — Todos → cada persona →
+     Todos (cycleGlobalView) */
+  .head-view{grid-area:view;justify-self:end;display:flex;align-items:center;min-width:0;max-width:100%;
+    padding:8px 11px;border:1px solid var(--line);border-radius:12px;background:var(--card);
+    font:inherit;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;line-height:1.15;
+    transition:transform .1s ease;}
+  .head-view:hover{background:var(--pearl);}
+  .head-view:active{transform:scale(0.96);}
   .head-view[hidden]{display:none;}
-  .head-view .hv-short{display:none;}
+  .hv-name{min-width:0;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   /* mismo tamaño y tono que los montos de Ingresos (.amt-cur) */
   .head-saldo-who, .head-saldo-amt{font-size:12px;font-weight:400;color:var(--body-muted);
     font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -166,8 +170,7 @@
      selector de mes entre al lado de "FinanzApp" en el mismo renglón */
   .lbl-short{display:none;}
   @media(max-width:600px){
-    .app-head{grid-template-columns:auto 1fr auto;grid-template-areas:"title saldo month" "view view view" "right right right";row-gap:10px;}
-    .sub-seg.head-view{justify-self:center;}
+    .app-head{grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"title view saldo month" "right right right right";row-gap:10px;}
     .app-head h1{grid-area:title;justify-self:start;}
     .app-head .month-nav{grid-area:month;justify-self:end;}
     h1{font-size:23px;}
@@ -187,13 +190,11 @@
   @media(max-width:479px){
     /* mismo orden que desktop: título + menú arriba y el selector de mes a
        todo el ancho (con el nombre del mes completo, entra) */
-    /* el selector de persona se achica (nombres con …) para que con 3 o 4
-       personas siga entrando al lado del ☰ */
-    .app-head{position:relative;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"title view menu" "saldo saldo saldo" "month month month";gap:12px 8px;}
-    .sub-seg.head-view{min-width:0;max-width:100%;justify-self:end;}
-    .head-view.many .hv-full{display:none;}
-    .head-view.many .hv-short{display:inline;}
-    .sub-seg.head-view button{flex:0 1 auto;padding:6px 6px;font-size:12px;}
+    /* el botón de la Vista ya dice de quién es el saldo de al lado: el saldo
+       queda solo con el monto, así entran los dos al lado del ☰ */
+    .app-head{position:relative;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"title view saldo menu" "month month month month";gap:12px 8px;}
+    .head-view{padding:8px 10px;}
+    .head-saldo .head-saldo-who{display:none;}
     .app-head .month-nav{grid-area:month;justify-self:stretch;}
     .app-head .month-nav .lbl-full{display:inline;}
     .app-head .month-nav .lbl-short{display:none;}
@@ -941,8 +942,9 @@
       <button type="button" onclick="shiftMonth(1)" aria-label="Mes siguiente">›</button>
     </div>
     <!-- de quién se ven los bloques (la persona de la Vista), siempre a mano
-         al lado del ☰ — ver renderViewMenu(); oculto con una sola persona -->
-    <div class="seg sub-seg head-view" id="headView" role="group" aria-label="Ver los bloques de"></div>
+         al lado del ☰: cada toque pasa a la siguiente — ver renderViewMenu()
+         y cycleGlobalView(); oculto con una sola persona -->
+    <button type="button" class="head-view" id="headView" onclick="cycleGlobalView()" hidden></button>
     <!-- saldo final de Gastos diarios según la Vista (renderHeadSaldo) -->
     <button type="button" class="head-saldo" id="headSaldo" onclick="goToDailySaldo()" hidden></button>
     <!-- en mobile (<= 479px) todos los íconos de .head-right van detrás de este botón -->
@@ -2972,14 +2974,15 @@ function renderViewMenu(){
       .map(o=>item('data-view', o.key, o.label, o.key === globalView)).join('');
   const headView = $('headView');
   headView.hidden = solo;
-  // con 3 o 4 personas, en el celular cada una va con su inicial (como el
-  // "Saldo N" de al lado); el nombre entero queda en el title
-  headView.classList.toggle('many', peopleCount() > 2);
-  if(!solo) headView.innerHTML = `<button type="button" data-view="${SHARED_PAY}"${isSharedPay(globalView) ? ' class="active"' : ''}>Todos</button>`
-    + pids().map(id=>{
-      const name = escapeHtml(nameOf(id));
-      return `<button type="button" data-view="${id}" title="${name}"${id === globalView ? ' class="active"' : ''}><span class="hv-full">${name}</span><span class="hv-short">${escapeHtml(nameOf(id).trim().charAt(0).toUpperCase())}</span></button>`;
-    }).join('');
+  if(!solo){
+    const opts = viewCycle();
+    const nombre = isPerson(globalView) ? nameOf(globalView) : 'Todos';
+    const sig = opts[(opts.indexOf(globalView) + 1) % opts.length];
+    headView.innerHTML = `<span class="hv-name">${escapeHtml(nombre)}</span>`;
+    const label = `Vista: ${nombre}. Tocá para ver ${isPerson(sig) ? nameOf(sig) : 'Todos'}`;
+    headView.setAttribute('aria-label', label);
+    headView.title = label;
+  }
   $('viewDropdown').innerHTML = personas +
     `<div class="session-code${solo ? '' : ' menu-sep'}">Bloques</div>` +
     item('data-detail', '0', 'Simplificada (cerrados)', !detailMode) +
@@ -3014,10 +3017,12 @@ function applyGlobalView(view){
   renderViewMenu();
   render();
 }
-$('headView').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button[data-view]');
-  if(btn && btn.dataset.view !== globalView) applyGlobalView(btn.dataset.view);
-});
+// el orden en que la pastilla del header va pasando: Todos y cada persona
+function viewCycle(){ return [SHARED_PAY, ...pids()]; }
+function cycleGlobalView(){
+  const opts = viewCycle();
+  applyGlobalView(opts[(opts.indexOf(globalView) + 1) % opts.length]);
+}
 $('viewDropdown').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
   if(!btn) return;
