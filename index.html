@@ -293,6 +293,25 @@
     .plan-op{order:0;}
   }
 
+  /* ---- Asesor del mes ---- */
+  .adv-inputs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;}
+  .adv-inputs .income-note{margin-top:6px;}
+  .sld-grid.adv-grid{grid-template-columns:repeat(3,1fr);}
+  .adv-verdict{font-size:14px;line-height:1.5;margin:14px 0 0;padding:12px 14px;border-radius:12px;
+    background:var(--pearl);border:1px solid var(--line);}
+  .adv-verdict.good{background:var(--good-bg);border-color:transparent;}
+  .adv-verdict.bad{background:var(--a-clay-bg);border-color:transparent;color:var(--a-clay-ink);}
+  .adv-verdict:empty{display:none;}
+  .plan-row.adv-total .plan-n,.plan-row.adv-total .plan-v{font-weight:700;}
+  .plan-row.adv-total{border-top:1.5px solid var(--line-strong);}
+  @media(max-width:600px){
+    .adv-inputs{grid-template-columns:1fr;}
+  }
+  @media(max-width:480px){
+    .sld-grid.adv-grid{grid-template-columns:1fr 1fr;}
+    .adv-grid .sld-cell:last-child{grid-column:1 / -1;}
+  }
+
   /* ---- accumulation goals ---- */
   .goal{padding:14px 0;border-bottom:1px solid var(--line);}
   .goal:last-child{border-bottom:none;}
@@ -999,6 +1018,11 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
         <span class="icon-badge" id="dueBadge" hidden></span>
       </button>
+      <!-- Asesor del mes: cuánto crédito sacar y qué queda para gustos sin
+           dejar de ahorrar la meta del mes que viene — ver renderAsesor() -->
+      <button type="button" class="icon-btn" id="asesorBtn" onclick="switchTab('asesor')" aria-label="Asesor">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>
+      </button>
       <!-- Resumen vive acá y no en la barra de tabs — switchTab() activa un
            panel aunque no tenga botón ahí (igual que Ajustes) -->
       <button type="button" class="icon-btn" id="resumenBtn" onclick="switchTab('resumen')" aria-label="Resumen">
@@ -1307,6 +1331,61 @@
       </div>
       <div id="activityList" style="margin-top:14px;"></div>
     </div>
+  </div>
+
+  <!-- ============ TAB: ASESOR ============ -->
+  <!-- se abre con el ícono de la lamparita del header. Siempre el mes real de
+       hoy y el que viene, no el del selector: cuánto crédito hace falta para
+       llegar a fin de mes, cuánto se puede sacar como máximo sin dejar de
+       ahorrar la meta en dólares el mes que viene, y qué queda para gustos.
+       Ver renderAsesor() / asesorPlan() -->
+  <div class="tab-panel" id="panel-asesor" role="tabpanel">
+    <div class="seg sub-seg" id="asesorTabs" style="margin-bottom:14px;"></div>
+    <div class="card">
+      <div class="section-title" id="asesorTitle">Asesor del mes</div>
+      <div class="adv-inputs">
+        <div>
+          <label for="advSaldo">Hoy tenés en cuenta</label>
+          <input type="text" inputmode="numeric" id="advSaldo" autocomplete="off" placeholder="$">
+          <p class="income-note" id="advSaldoNote"></p>
+        </div>
+        <div>
+          <label for="advMeta">Querés ahorrar el mes que viene</label>
+          <input type="text" inputmode="numeric" id="advMeta" autocomplete="off" placeholder="US$">
+          <p class="income-note" id="advMetaNote"></p>
+        </div>
+        <div>
+          <label for="advTasa">Intereses del crédito (%)</label>
+          <input type="text" inputmode="decimal" id="advTasa" autocomplete="off" placeholder="%">
+          <p class="income-note" id="advTasaNote"></p>
+        </div>
+      </div>
+      <div class="sld-grid adv-grid" id="advNumbers"></div>
+      <p class="adv-verdict" id="advVerdict"></p>
+    </div>
+
+    <div class="card">
+      <div class="section-title">¿Te alcanza para…?</div>
+      <label for="advWhatIf">Un gasto de este mes, fuera de lo de siempre</label>
+      <input type="text" inputmode="numeric" id="advWhatIf" autocomplete="off" placeholder="Ej: las sillas">
+      <p class="adv-verdict" id="advWhatIfOut"></p>
+    </div>
+
+    <div class="card">
+      <div class="section-title" id="advNowTitle">Lo que falta este mes</div>
+      <div id="advNow"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title" id="advNextTitle">El mes que viene</div>
+      <div id="advNext"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Qué podés cambiar</div>
+      <div id="advTips"></div>
+    </div>
+    <p class="hint">Son cuentas hechas con lo que cargaste en la app, no asesoramiento financiero profesional.</p>
   </div>
 
   <!-- ============ TAB: RESUMEN ============ -->
@@ -2270,6 +2349,7 @@ let currentSplit = 'equal';
 let currentPaidBy = 'A';
 let currentOwner = 'A';
 let currentAhorroPerson = 'A';   // which person's individual breakdown Ahorro shows
+let currentAsesorPerson = 'A';   // de quién son las cuentas del Asesor (renderAsesor)
 let currentDeudasPerson = 'A';   // which person's debts the Deudas tab shows
 let currentDebtTplPerson = 'A';  // which person's recurring debts Ajustes shows
 let viewMonth = '';           // 'YYYY-MM' — the month being planned
@@ -3033,7 +3113,7 @@ function syncTabsToGlobalView(){
   const v = globalView;
   currentIncomeTab = currentStartTab = currentFixedTab = currentVarTab = currentResumenTab = currentActivityTab = v;
   TRIP_KINDS.forEach(k=>{ tripTab[k] = v; });
-  if(isPerson(v)) currentBudgetTab = currentDailyTab = currentDeudasPerson = currentAhorroPerson = currentDueTab = v;
+  if(isPerson(v)) currentBudgetTab = currentDailyTab = currentDeudasPerson = currentAhorroPerson = currentDueTab = currentAsesorPerson = v;
   document.querySelectorAll('#ahorroPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentAhorroPerson));
   document.querySelectorAll('#deudasPersonSeg button').forEach(b=>b.classList.toggle('active', b.dataset.person === currentDeudasPerson));
 }
@@ -5063,6 +5143,7 @@ function switchTab(name){
   window.scrollTo({top:0});
   if(name === 'ajustes') renderBackups();
   if(name === 'actividad' && activityNeedsCenter) centerActivityDay(false);
+  if(name === 'asesor') renderAsesor();
 }
 $('tabs').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
@@ -7902,6 +7983,372 @@ $('dueSoonTabs').addEventListener('click', (e)=>{
   currentDueTab = btn.dataset.tab;
   renderDueSoon();
 });
+// ---- Asesor del mes (su propia página, desde la lamparita del header) ----
+// Cuentas, no consejos de inversión: con lo que la persona tiene hoy en
+// cuenta, lo que viene gastando y lo que ya debe del mes que viene, calcula
+// cuánto crédito necesita sí o sí para llegar a fin de mes (mínimo), cuánto
+// puede sacar como máximo sin dejar de ahorrar su meta en dólares el mes que
+// viene (máximo: lo que devuelve, con intereses, sale del mes que viene) y lo
+// que queda entre los dos para gustos. Siempre el mes real de hoy, como
+// Próximos vencimientos, no el del selector.
+// "Lo que viene gastando" es, por rubro, lo más alto entre el promedio de los
+// últimos ASESOR_HIST meses cerrados y lo que lleva este mes: a propósito del
+// lado prudente. Lo tipeado (saldo, meta, intereses) es una preferencia de
+// este dispositivo en localStorage, no un dato del espacio.
+const ASESOR_KEY = 'asesor_inputs';
+const ASESOR_HIST = 3;
+let asesorWhatIf = 0;   // "¿Te alcanza para…?": solo en memoria
+
+function asesorInputsAll(){
+  try{ return JSON.parse(localStorage.getItem(ASESOR_KEY) || '{}') || {}; }catch(e){ return {}; }
+}
+function asesorInputs(person){
+  return ((asesorInputsAll()[coupleCode] || {})[person]) || {};
+}
+function setAsesorInput(person, field, value){
+  const all = asesorInputsAll();
+  const space = all[coupleCode] = all[coupleCode] || {};
+  const mine = space[person] = space[person] || {};
+  if(value == null || !Number.isFinite(value)) delete mine[field];
+  else mine[field] = value;
+  // el saldo vale para el mes en que se cargó: al empezar otro vuelve a
+  // proponer el de la app
+  if(field === 'saldo') mine.saldoMonth = monthNow();
+  try{ localStorage.setItem(ASESOR_KEY, JSON.stringify(all)); }catch(e){}
+}
+// "15", "15,5" o "15.5" → 15.5; vacío → NaN (se usa el de los créditos)
+function parsePct(s){
+  s = String(s || '').replace(/[\s%]/g, '').replace(',', '.');
+  if(!s) return NaN;
+  const v = Number(s);
+  return v >= 0 ? v : NaN;
+}
+
+// los meses cerrados con algo cargado para esa persona, del más reciente
+// para atrás (hasta un año), así un mes vacío no tira el promedio a cero
+function asesorHistMonths(person){
+  const now = monthNow();
+  const out = [];
+  for(let i = 1; i <= 12 && out.length < ASESOR_HIST; i++){
+    const k = addMonthsKey(now, -i);
+    const hay = incomeTotalArs(person, k) > 0
+      || expenses.some(ex=>monthKey(ex.date) === k && personShareOf(ex, person) > 0)
+      || dailyExpenses.some(d=>monthKey(d.date) === k && entryShareOf(d, person) > 0);
+    if(hay) out.push(k);
+  }
+  return out;
+}
+const asesorAvg = (keys, fn) => keys.length ? keys.reduce((s,k)=>s + fn(k), 0) / keys.length : 0;
+function asesorFijosOf(person, key){
+  return expenses.filter(ex=>monthKey(ex.date) === key).reduce((s,ex)=>s + personShareOf(ex, person), 0);
+}
+// los variables "de todos los meses": sin las filas automáticas de tarjeta y
+// créditos (eso entra aparte, en lo ya comprometido), sin pagos de deudas
+// viejas (fromDebt) y sin lo que esa persona pagó con tarjeta (lo devuelve
+// el mes siguiente, también dentro de lo comprometido)
+function asesorVarsOf(person, key){
+  return varExpenses
+    .filter(e=>monthKey(e.date) === key && !e.cardAuto && !e.fromDebt && !(isCardVar(e) && cardDailyPayer(e) === person))
+    .reduce((s,e)=>s + entryShareOf(e, person), 0);
+}
+// lo que ya se sabe que sale el mes `key`: cuotas, T.Credito y créditos que
+// se devuelven ese mes (lo mismo que syncCardExpenses va a cargar)
+function asesorCommittedOf(person, key){
+  let total = 0;
+  const parts = [];
+  desiredCardExpenses().forEach(w=>{
+    if(w.person !== person || w.month !== key) return;
+    total += w.amount;
+    parts.push(cardExpenseDesc(w.kind, w.card));
+  });
+  return { total, parts };
+}
+// la tasa de sus últimos 3 créditos (intereses / lo recibido), para no
+// tener que cargarla
+function asesorCreditRate(person){
+  const cs = cardPurchases.filter(p=>p.credit && p.person === person && (p.credit.received || 0) > 0)
+    .sort((a,b)=>(b.credit.date || '').localeCompare(a.credit.date || '')).slice(0, 3);
+  const recibido = cs.reduce((s,p)=>s + p.credit.received, 0);
+  const intereses = cs.reduce((s,p)=>s + Math.max(0, (p.amount || 0) - p.credit.received), 0);
+  return { n: cs.length, rate: recibido > 0 ? intereses / recibido : null };
+}
+
+function asesorPlan(person){
+  const M = monthNow(), N = addMonthsKey(M, 1);
+  const hist = asesorHistMonths(person);
+  const inp = asesorInputs(person);
+  const usd = usdRate();
+
+  // ---- este mes: lo que falta pagar hasta fin de mes ----
+  const hoy = new Date();
+  const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+  const diasQuedan = diasMes - hoy.getDate() + 1;   // hoy incluido
+  const fijosPend = expenses.filter(ex=>monthKey(ex.date) === M && (ex.amount || 0) > 0)
+    .reduce((s,ex)=>s + personShareOf(ex, person) * expenseUnpaidAmount(ex) / ex.amount, 0);
+  // incluye el T.Credito / Credito de este mes si todavía no se tildó: es la
+  // plata que más pesa a principio de mes
+  const varsPend = varExpenses.filter(e=>monthKey(e.date) === M && !e.paid && !isCardVar(e))
+    .reduce((s,e)=>s + entryShareOf(e, person), 0);
+  // gastos diarios por transferencia (los de tarjeta no salen de la cuenta
+  // este mes). Sin historia, el ritmo de lo que va de este mes
+  const diariosHist = asesorAvg(hist, k=>dailyTotalOf(person, k));
+  const diariosRitmo = dailyTotalOf(person, M) / hoy.getDate() * diasMes;
+  const diariosMes = hist.length ? diariosHist : diariosRitmo;
+  const porDia = diariosMes / diasMes;
+  const diariosResto = porDia * diasQuedan;
+  const necesitas = fijosPend + varsPend + diariosResto;
+
+  // lo que la app estima que hay en la cuenta: el saldo de Gastos diarios ya
+  // tiene restados los fijos y variables del mes aunque no estén pagos, así
+  // que se le suman de vuelta (si no, se descontarían dos veces)
+  const appSaldo = Math.max(0, Math.round(bolsaOf(person, M) - dailyTotalOf(person, M) + fijosPend + varsPend));
+  const saldoCargado = inp.saldoMonth === M && Number.isFinite(inp.saldo);
+  const saldo = saldoCargado ? inp.saldo : appSaldo;
+  const creditoMin = Math.max(0, necesitas - saldo);
+
+  // ---- el mes que viene, sin sacar otro crédito ----
+  const ingN = incomeTotalArs(person, N) || incomeTotalArs(person, M) || asesorAvg(hist, k=>incomeTotalArs(person, k));
+  const ingFuente = incomeTotalArs(person, N) ? 'ya cargado' : incomeTotalArs(person, M) ? `igual que ${monthShort(M)}` : 'tu promedio';
+  const fijosN = Math.max(asesorFijosOf(person, N), asesorFijosOf(person, M), asesorAvg(hist, k=>asesorFijosOf(person, k)));
+  const varsN = Math.max(asesorVarsOf(person, M), asesorAvg(hist, k=>asesorVarsOf(person, k)));
+  const diariosN = Math.max(diariosMes, dailyTotalOf(person, M));
+  const comp = asesorCommittedOf(person, N);
+  const libreN = ingN - fijosN - varsN - diariosN - comp.total;
+
+  const dolaresHoy = dolaresOf(person, M);
+  const metaDefault = usd > 0 && dolaresHoy > 0 ? Math.round(dolaresHoy / usd / 10) * 10 : 0;
+  const metaUsd = Number.isFinite(inp.meta) ? inp.meta : metaDefault;
+  const metaArs = metaUsd * usd;
+  const cr = asesorCreditRate(person);
+  const tasa = Number.isFinite(inp.tasa) ? inp.tasa / 100 : (cr.rate != null ? cr.rate : 0);
+  const podesDevolver = libreN - metaArs;
+  const creditoMax = Math.max(0, podesDevolver / (1 + tasa));
+  const margen = creditoMax - creditoMin;
+  const ahorroConMin = libreN - creditoMin * (1 + tasa);
+
+  return { M, N, hist, usd, diasQuedan, porDia, fijosPend, varsPend, diariosResto, necesitas,
+    appSaldo, saldoCargado, saldo, creditoMin,
+    ingN, ingFuente, fijosN, varsN, diariosN, comp, libreN,
+    metaUsd, metaArs, metaDefault, cr, tasa, podesDevolver, creditoMax, margen, ahorroConMin };
+}
+
+// pesos → "US$ 300" con la cotización de hoy
+const asesorUsd = (ars, rate) => !(rate > 0) ? '—' : ars < 0 ? '-' + fmtUsd(-ars / rate) : fmtUsd(ars / rate);
+// un renglón con el signo a la izquierda, como "Tu plan en 3 números"
+function asesorRow(op, n, d, v, total){
+  return `<div class="plan-row${total ? ' adv-total' : ''}">
+    <span class="plan-op">${op}</span>
+    <span class="plan-main"><span class="plan-n">${n}</span>${d ? `<span class="plan-d">${d}</span>` : ''}</span>
+    <span class="plan-v">${v}</span>
+  </div>`;
+}
+
+function renderAsesor(){
+  if(!$('panel-asesor')) return;
+  if(!isPerson(currentAsesorPerson)) currentAsesorPerson = firstPid();
+  const tabs = $('asesorTabs');
+  personTabsHtml(tabs, currentAsesorPerson);
+  const person = currentAsesorPerson;
+  const plan = asesorPlan(person);
+  const mes = monthShort(plan.M), mesN = monthShort(plan.N);
+  $('asesorTitle').textContent = `Asesor de ${mes}`;
+
+  // los campos se rellenan solo si no se está escribiendo en ellos, así
+  // render() no le mueve el cursor a nadie
+  const fill = (id, val) => { const el = $(id); if(el && document.activeElement !== el) el.value = val; };
+  const inp = asesorInputs(person);
+  fill('advSaldo', groupThousands(String(Math.round(plan.saldo))));
+  fill('advMeta', plan.metaUsd ? groupThousands(String(Math.round(plan.metaUsd))) : '');
+  fill('advTasa', Number.isFinite(inp.tasa) ? String(inp.tasa).replace('.', ',')
+    : (plan.cr.rate != null ? String(Math.round(plan.cr.rate * 1000) / 10).replace('.', ',') : ''));
+  fill('advWhatIf', asesorWhatIf ? groupThousands(String(asesorWhatIf)) : '');
+  $('advSaldoNote').innerHTML = plan.saldoCargado
+    ? `La app calcula ${fmt(plan.appSaldo)}. <button type="button" class="btn-link" style="font-size:12px;" onclick="resetAsesorSaldo()">Usar ese</button>`
+    : 'Estimado por la app: el saldo de Gastos diarios más lo que todavía no pagaste. Si en el banco ves otro número, cambialo.';
+  $('advMetaNote').textContent = plan.usd > 0 ? `Con el dólar de hoy son ${fmt(plan.metaArs)}.` : 'Sin cotización del dólar de hoy.';
+  $('advTasaNote').textContent = Number.isFinite(inp.tasa) ? 'Lo cargaste vos.'
+    : plan.cr.n ? `Sale de tus últimos ${plan.cr.n === 1 ? 'crédito' : plan.cr.n + ' créditos'}.`
+    : 'Todavía no cargaste créditos: poné el interés que te ofrecen.';
+
+  // ---- los tres números ----
+  const cell = (label, amt, cls) => `<div class="sld-cell ${cls || ''}">
+      <div class="sld-who">${label}</div><div class="sld-amt">${fmt(amt)}</div></div>`;
+  const margenOk = plan.podesDevolver >= 0 && plan.margen >= 0;
+  $('advNumbers').innerHTML =
+    cell('Crédito mínimo', plan.creditoMin) +
+    cell('Crédito máximo', plan.creditoMax, 'sld-dashed') +
+    cell('Para gustos', Math.max(0, plan.margen), margenOk ? 'tone-good' : 'tone-bad');
+
+  const meta = fmtUsd(plan.metaUsd);
+  const v = $('advVerdict');
+  if(!plan.metaUsd){
+    v.className = 'adv-verdict';
+    v.textContent = `Poné cuántos dólares querés ahorrar en ${mesN} para calcular el máximo.`;
+  }else if(plan.podesDevolver < 0){
+    v.className = 'adv-verdict bad';
+    v.innerHTML = `Aun sin sacar crédito, en ${mesN} te quedarían <b>${asesorUsd(plan.libreN, plan.usd)}</b>, no ${meta}. `
+      + `Sacá solo el mínimo (${fmt(plan.creditoMin)}) y mirá abajo qué podés recortar.`;
+  }else if(plan.margen < 0){
+    v.className = 'adv-verdict bad';
+    v.innerHTML = `Para llegar a fin de mes necesitás ${fmt(plan.creditoMin)}, pero con eso en ${mesN} ahorrarías `
+      + `<b>${asesorUsd(plan.ahorroConMin, plan.usd)}</b> en vez de ${meta}. Los gustos de este mes, mejor que esperen.`;
+  }else if(plan.creditoMin <= 0){
+    v.className = 'adv-verdict good';
+    v.innerHTML = `Con lo que tenés llegás a fin de mes sin crédito. Si sacás, no pases de <b>${fmt(plan.creditoMax)}</b> `
+      + `y en ${mesN} igual ahorrás ${meta}.`;
+  }else{
+    v.className = 'adv-verdict good';
+    v.innerHTML = `Sacá entre <b>${fmt(plan.creditoMin)}</b> y <b>${fmt(plan.creditoMax)}</b>. `
+      + `Lo que pase del mínimo es lo que tenés para gustos este mes, y en ${mesN} igual ahorrás ${meta}.`;
+  }
+
+  renderAsesorWhatIf(plan);
+
+  // ---- el detalle de este mes ----
+  $('advNowTitle').textContent = `Lo que falta en ${mes}`;
+  $('advNow').innerHTML =
+    asesorRow('−', 'Gastos fijos sin pagar', 'Tu parte de lo que todavía no tildaste.', fmt(plan.fijosPend)) +
+    asesorRow('−', 'Gastos variables sin pagar', 'Incluye el T.Credito y los créditos de este mes si no están tildados.', fmt(plan.varsPend)) +
+    asesorRow('−', 'Gastos diarios hasta fin de mes',
+      `${plan.diasQuedan} ${plan.diasQuedan === 1 ? 'día' : 'días'} × ${fmt(plan.porDia)} por día (${plan.hist.length ? 'tu promedio por transferencia' : 'lo que va de este mes'}).`,
+      fmt(plan.diariosResto)) +
+    asesorRow('=', 'Necesitás', '', fmt(plan.necesitas), true) +
+    asesorRow('+', 'Tenés hoy', '', fmt(plan.saldo)) +
+    asesorRow('=', 'Crédito mínimo', 'Lo que te falta sí o sí, viviendo como venís viviendo.', fmt(plan.creditoMin), true);
+
+  // ---- el detalle del mes que viene ----
+  const histTxt = plan.hist.length
+    ? `Lo más alto entre tu promedio de ${plan.hist.length === 1 ? 'el último mes' : `los últimos ${plan.hist.length} meses`} y ${mes}.`
+    : `Lo de ${mes}.`;
+  $('advNextTitle').textContent = `${mesN.charAt(0).toUpperCase() + mesN.slice(1)}, sin otro crédito`;
+  $('advNext').innerHTML =
+    asesorRow('+', 'Ingreso', plan.ingFuente.charAt(0).toUpperCase() + plan.ingFuente.slice(1) + '.', fmt(plan.ingN)) +
+    asesorRow('−', 'Gastos fijos', histTxt, fmt(plan.fijosN)) +
+    asesorRow('−', 'Gastos variables', histTxt + ' Sin tarjeta ni créditos.', fmt(plan.varsN)) +
+    asesorRow('−', 'Gastos diarios', 'Por transferencia, como venís.', fmt(plan.diariosN)) +
+    asesorRow('−', 'Ya comprometido', plan.comp.parts.length ? escapeHtml(plan.comp.parts.join(', ')) + '.' : 'Nada de tarjeta ni créditos todavía.', fmt(plan.comp.total)) +
+    asesorRow('=', 'Te quedaría', asesorUsd(plan.libreN, plan.usd), fmt(plan.libreN), true) +
+    asesorRow('−', 'Tu meta', fmtUsd(plan.metaUsd), fmt(plan.metaArs)) +
+    asesorRow('=', 'Podés devolver', `Dividido ${(1 + plan.tasa).toFixed(2).replace('.', ',')} por los intereses da el crédito máximo.`, fmt(Math.max(0, plan.podesDevolver)), true);
+
+  renderAsesorTips(person, plan);
+}
+
+function renderAsesorWhatIf(plan){
+  const out = $('advWhatIfOut');
+  const x = asesorWhatIf;
+  if(!(x > 0)){ out.className = 'adv-verdict'; out.textContent = ''; return; }
+  const credito = Math.max(0, plan.necesitas + x - plan.saldo);
+  const devolves = credito * (1 + plan.tasa);
+  const ahorro = plan.libreN - devolves;
+  const mesN = monthShort(plan.N);
+  const llega = plan.metaUsd > 0 && ahorro >= plan.metaArs;
+  out.className = 'adv-verdict ' + (llega ? 'good' : 'bad');
+  const credTxt = credito > 0
+    ? `Tendrías que sacar <b>${fmt(credito)}</b> de crédito y en ${mesN} devolver ${fmt(devolves)}.`
+    : 'Te alcanza sin sacar crédito.';
+  out.innerHTML = `${credTxt} En ${mesN} ahorrarías <b>${asesorUsd(ahorro, plan.usd)}</b>`
+    + (plan.metaUsd ? ` (tu meta es ${fmtUsd(plan.metaUsd)}): ${llega ? 'te alcanza.' : 'no te alcanza.'}` : '.');
+}
+
+// ---- Qué podés cambiar: lo que más pesa, con números de esa persona ----
+function renderAsesorTips(person, plan){
+  const rows = [];
+  const usd = plan.usd;
+  // 1) cuánto se fue en intereses
+  const desde = addMonthsKey(plan.M, -ASESOR_HIST);
+  const creds = cardPurchases.filter(p=>p.credit && p.person === person && monthKey(p.credit.date) >= desde);
+  const intereses = creds.reduce((s,p)=>s + Math.max(0, (p.amount || 0) - (p.credit.received || 0)), 0);
+  if(intereses > 0){
+    rows.push(asesorRow('%', 'Intereses de créditos',
+      `Es lo que pagaste de intereses desde ${monthShort(desde)}. Cada $100.000 que sacás te cuestan ${fmt(100000 * plan.tasa)} más el mes que viene.`,
+      fmt(intereses)));
+  }
+  // 2) los gastos diarios que más pesan, agrupados por nombre
+  if(plan.hist.length){
+    const by = new Map();
+    dailyExpenses.filter(d=>plan.hist.includes(monthKey(d.date))).forEach(d=>{
+      const share = entryShareOf(d, person);
+      if(!(share > 0)) return;
+      const k = String(d.desc || '').trim().toLowerCase();
+      if(!k) return;
+      const cur = by.get(k) || { name: String(d.desc).trim(), total: 0, n: 0 };
+      cur.total += share; cur.n++;
+      by.set(k, cur);
+    });
+    [...by.values()].sort((a,b)=>b.total - a.total).slice(0, 4).forEach(g=>{
+      const porMes = g.total / plan.hist.length;
+      rows.push(asesorRow('día', escapeHtml(g.name),
+        `${g.n} ${g.n === 1 ? 'vez' : 'veces'} en ${plan.hist.length === 1 ? 'el último mes' : `${plan.hist.length} meses`}. `
+        + `A la mitad, ahorrás ${asesorUsd(porMes / 2, usd)} por mes.`,
+        `${fmt(porMes)}<span style="font-size:11px;font-weight:400;color:var(--body-muted);"> /mes</span>`));
+    });
+  }
+  // 3) gastos fijos que subieron: este mes contra el más viejo del historial
+  if(plan.hist.length){
+    const viejo = plan.hist[plan.hist.length - 1];
+    const sumBy = (key) => {
+      const m = new Map();
+      expenses.filter(ex=>monthKey(ex.date) === key).forEach(ex=>{
+        const k = String(ex.desc || '').trim().toLowerCase();
+        const share = personShareOf(ex, person);
+        if(!k || !(share > 0)) return;
+        const cur = m.get(k) || { name: String(ex.desc).trim(), v: 0 };
+        cur.v += share;
+        m.set(k, cur);
+      });
+      return m;
+    };
+    const antes = sumBy(viejo), ahora = sumBy(plan.M);
+    const subas = [];
+    ahora.forEach((g, k)=>{
+      const a = antes.get(k);
+      if(a && a.v > 0 && g.v > a.v * 1.1) subas.push({ name: g.name, de: a.v, a: g.v });
+    });
+    subas.sort((x,y)=>(y.a - y.de) - (x.a - x.de)).slice(0, 3).forEach(s=>{
+      rows.push(asesorRow('fijo', escapeHtml(s.name),
+        `Subió ${Math.round((s.a / s.de - 1) * 100)}% desde ${monthShort(viejo)} (${fmt(s.de)} → ${fmt(s.a)}). ¿Se puede cambiar de plan o proveedor?`,
+        `+${fmt(s.a - s.de)}`));
+    });
+  }
+  $('advTips').innerHTML = rows.length ? rows.join('')
+    : '<div class="empty">Todavía no hay meses suficientes cargados para comparar.</div>';
+}
+
+function resetAsesorSaldo(){
+  setAsesorInput(currentAsesorPerson, 'saldo', null);
+  const el = $('advSaldo');
+  if(el) el.blur();
+  renderAsesor();
+}
+$('asesorTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  currentAsesorPerson = btn.dataset.tab;
+  renderAsesor();
+});
+['advSaldo','advMeta','advWhatIf'].forEach(attachThousands);
+$('advSaldo').addEventListener('input', ()=>{
+  const v = numVal('advSaldo');
+  setAsesorInput(currentAsesorPerson, 'saldo', Number.isFinite(v) ? v : null);
+  renderAsesor();
+});
+$('advMeta').addEventListener('input', ()=>{
+  const v = numVal('advMeta');
+  setAsesorInput(currentAsesorPerson, 'meta', Number.isFinite(v) ? v : null);
+  renderAsesor();
+});
+$('advTasa').addEventListener('input', ()=>{
+  const v = parsePct($('advTasa').value);
+  setAsesorInput(currentAsesorPerson, 'tasa', Number.isFinite(v) ? v : null);
+  renderAsesor();
+});
+$('advWhatIf').addEventListener('input', ()=>{
+  const v = numVal('advWhatIf');
+  asesorWhatIf = Number.isFinite(v) ? v : 0;
+  renderAsesor();
+});
+
 function payDueSoon(id){
   const ex = expenses.find(x=>x.id === id);
   if(!ex) return;
@@ -8710,6 +9157,7 @@ function render(){
   renderBalance();
   renderAhorro();
   renderDeudas();
+  renderAsesor();
   renderTrip();
   // gastos posibles ahora es por mes: si Ajustes está abierto (o se abre
   // después) tiene que reflejar el mes que se está viendo en Gastos, no
