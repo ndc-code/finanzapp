@@ -137,6 +137,10 @@
      que cuelga de un Totales (Pagado/A pagar, monto/intereses…) se ve */
   .card.collapsed .bill-total + .bill-occurrences .bill{display:flex !important;}
   .card.collapsed .bill-total + .bill-occurrences .bill-occurrences{display:block !important;}
+  /* el desglose del Saldo de Gastos diarios cuelga de un saldo, no de una
+     lista: se ve igual con el bloque cerrado */
+  .card.collapsed .sld-detail .bill{display:flex !important;}
+  .card.collapsed .sld-detail .bill-occurrences{display:block !important;}
   @media(max-width:540px){.card{padding:18px 10px;}}
 
   .name-a{color:var(--a-gold-ink);}
@@ -447,6 +451,8 @@
   /* saldo que suma el crédito (al pie de Gastos posibles): borde punteado,
      porque el crédito no es plata propia */
   .sld-cell.sld-dashed{border:1.5px dashed var(--line-strong);background:transparent;}
+  .sld-cell.sld-click{cursor:pointer;}
+  .sld-cell.sld-click .bill-toggle{display:inline-block;padding:0;font-size:11px;}
   /* the last block (Ahorro) is a verdict, not a running total — it reads green
      when you cerraste el mes en positivo y rojo cuando no */
   .sld-cell.tone-good{background:var(--good-bg);border-color:transparent;}
@@ -860,6 +866,7 @@
   .bill-subtotal .bill-amt{font-weight:600;color:var(--body-muted);font-size:13.5px;}
   .bill-subtotal.is-paid .bill-amt{color:var(--good);}
   .bill-subtotal-item{padding:8px 14px;}
+  .bill-subtotal-item .tag{margin-left:6px;}
 
   /* gasto con "veces por mes" (ej: limpieza ×3): tarjeta padre + acordeón de
      ocurrencias. La flecha vive junto al nombre (.bill-name-row) y toda la
@@ -2183,6 +2190,11 @@
     <div class="confirm-type" id="confirmType" hidden>
       <label for="confirmTypeInput" id="confirmTypeLabel"></label>
       <input type="text" id="confirmTypeInput" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="confirm-type" id="confirmValue" hidden>
+      <label for="confirmValueInput" id="confirmValueLabel"></label>
+      <input type="text" id="confirmValueInput" inputmode="decimal" autocomplete="off">
+      <p class="income-note" id="confirmValueNote"></p>
     </div>
     <div class="confirm-actions">
       <button type="button" class="btn-cancel" onclick="closeConfirmModal()">Cancelar</button>
@@ -3692,7 +3704,8 @@ function seedBudgetTemplatesForMonth(key){
   const out = {};
   pids().forEach(id=>{
     const list = prior && prior[id] ? prior[id] : defaultBudgetCats();
-    out[id] = list.map(c=>({ ...c, id: genId() }));
+    // "Comprados" es de ese mes: el mes nuevo arranca sin comprar
+    out[id] = list.map(c=>{ const { bought, boughtOn, ...rest } = c; return { ...rest, id: genId() }; });
   });
   return out;
 }
@@ -5205,8 +5218,18 @@ document.addEventListener('keydown', (e)=>{
 let confirmModalAction = null;
 let confirmModalWord = null;
 const normWord = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+// opts.input = {label, value, valid(v), note(v)}: un campo de valor (p. ej.
+// el dólar de compra); el OK queda deshabilitado mientras valid() dé falso y
+// onConfirm recibe lo tipeado
+let confirmModalInput = null;
 function confirmWordOk(){
-  return !confirmModalWord || normWord($('confirmTypeInput').value) === normWord(confirmModalWord);
+  const wordOk = !confirmModalWord || normWord($('confirmTypeInput').value) === normWord(confirmModalWord);
+  const valueOk = !confirmModalInput || confirmModalInput.valid($('confirmValueInput').value);
+  return wordOk && valueOk;
+}
+function refreshConfirmValueNote(){
+  if(!confirmModalInput) return;
+  $('confirmValueNote').textContent = confirmModalInput.note ? confirmModalInput.note($('confirmValueInput').value) : '';
 }
 function openConfirmModal(message, onConfirm, opts){
   opts = opts || {};
@@ -5222,26 +5245,40 @@ function openConfirmModal(message, onConfirm, opts){
   $('confirmType').hidden = !confirmModalWord;
   $('confirmTypeInput').value = '';
   if(confirmModalWord) $('confirmTypeLabel').innerHTML = `Para confirmar, escribí <strong>${escapeHtml(confirmModalWord)}</strong>`;
+  confirmModalInput = opts.input || null;
+  $('confirmValue').hidden = !confirmModalInput;
+  if(confirmModalInput){
+    $('confirmValueLabel').textContent = confirmModalInput.label || '';
+    $('confirmValueInput').value = confirmModalInput.value || '';
+    refreshConfirmValueNote();
+  }
   ok.disabled = !confirmWordOk();
   $('confirmModal').classList.add('open');
   document.body.classList.add('modal-open');
   if(confirmModalWord) $('confirmTypeInput').focus();
+  else if(confirmModalInput){ $('confirmValueInput').focus(); $('confirmValueInput').select(); }
 }
 function closeConfirmModal(){
   $('confirmModal').classList.remove('open');
   document.body.classList.remove('modal-open');
   confirmModalAction = null;
   confirmModalWord = null;
+  confirmModalInput = null;
 }
 $('confirmTypeInput').addEventListener('input', ()=>{ $('confirmModalOk').disabled = !confirmWordOk(); });
 $('confirmTypeInput').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter' && confirmWordOk()){ e.preventDefault(); $('confirmModalOk').click(); }
 });
+$('confirmValueInput').addEventListener('input', ()=>{ refreshConfirmValueNote(); $('confirmModalOk').disabled = !confirmWordOk(); });
+$('confirmValueInput').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter' && confirmWordOk()){ e.preventDefault(); $('confirmModalOk').click(); }
+});
 $('confirmModalOk').addEventListener('click', ()=>{
   if(!confirmWordOk()) return;
   const action = confirmModalAction;
+  const value = confirmModalInput ? $('confirmValueInput').value : undefined;
   closeConfirmModal();
-  if(action) action();
+  if(action) action(value);
 });
 $('confirmModal').addEventListener('click', (e)=>{ if(e.target === $('confirmModal')) closeConfirmModal(); });
 
@@ -8083,12 +8120,15 @@ function asesorPlan(person){
   const hoy = new Date();
   const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
   const diasQuedan = diasMes - hoy.getDate() + 1;   // hoy incluido
-  const fijosPend = expenses.filter(ex=>monthKey(ex.date) === M && (ex.amount || 0) > 0)
-    .reduce((s,ex)=>s + personShareOf(ex, person) * expenseUnpaidAmount(ex) / ex.amount, 0);
-  // incluye el T.Credito / Credito de este mes si todavía no se tildó: es la
-  // plata que más pesa a principio de mes
-  const varsPend = varExpenses.filter(e=>monthKey(e.date) === M && !e.paid && !isCardVar(e))
-    .reduce((s,e)=>s + entryShareOf(e, person), 0);
+  // varsPend incluye el T.Credito / Credito de este mes si todavía no se
+  // tildó: es la plata que más pesa a principio de mes. dolaresPend es la
+  // Compra dólares sin tildar: sigue en la cuenta, pero ya tiene destino
+  // lo que todavía va a salir de la cuenta (cashFlowOf): lo que pagás vos,
+  // entero, o tu parte si es de a cada uno; lo que paga otro se arregla en
+  // "Entre ustedes", no sale de tu cuenta para el proveedor
+  const cfM = cashFlowOf(person, M);
+  const pendOf = kind => cfM.pending.filter(x=>x.kind === kind).reduce((t,x)=>t + x.amt, 0);
+  const fijosPend = pendOf('fijos'), varsPend = pendOf('vars'), dolaresPend = pendOf('dolares');
   // gastos diarios por transferencia (los de tarjeta no salen de la cuenta
   // este mes). Sin historia, el ritmo de lo que va de este mes
   const diariosHist = asesorAvg(hist, k=>dailyTotalOf(person, k));
@@ -8096,12 +8136,11 @@ function asesorPlan(person){
   const diariosMes = hist.length ? diariosHist : diariosRitmo;
   const porDia = diariosMes / diasMes;
   const diariosResto = porDia * diasQuedan;
-  const necesitas = fijosPend + varsPend + diariosResto;
+  const necesitas = fijosPend + varsPend + dolaresPend + diariosResto;
 
-  // lo que la app estima que hay en la cuenta: el saldo de Gastos diarios ya
-  // tiene restados los fijos y variables del mes aunque no estén pagos, así
-  // que se le suman de vuelta (si no, se descontarían dos veces)
-  const appSaldo = Math.max(0, Math.round(bolsaOf(person, M) - dailyTotalOf(person, M) + fijosPend + varsPend));
+  // lo que la app estima que hay en la cuenta: el mismo "En cuenta" del
+  // header (el saldo de Gastos diarios más lo que todavía no salió)
+  const appSaldo = Math.max(0, Math.round(enCuentaOf(person, M)));
   const saldoCargado = inp.saldoMonth === M && Number.isFinite(inp.saldo);
   const saldo = saldoCargado ? inp.saldo : appSaldo;
   const creditoMin = Math.max(0, necesitas - saldo);
@@ -8126,7 +8165,7 @@ function asesorPlan(person){
   const margen = creditoMax - creditoMin;
   const ahorroConMin = libreN - creditoMin * (1 + tasa);
 
-  return { M, N, hist, usd, diasQuedan, porDia, fijosPend, varsPend, diariosResto, necesitas,
+  return { M, N, hist, usd, diasQuedan, porDia, fijosPend, varsPend, dolaresPend, diariosResto, necesitas,
     appSaldo, saldoCargado, saldo, creditoMin,
     ingN, ingFuente, fijosN, varsN, diariosN, comp, libreN,
     metaUsd, metaArs, metaDefault, cr, tasa, podesDevolver, creditoMax, margen, ahorroConMin };
@@ -8164,7 +8203,7 @@ function renderAsesor(){
   fill('advWhatIf', asesorWhatIf ? groupThousands(String(asesorWhatIf)) : '');
   $('advSaldoNote').innerHTML = plan.saldoCargado
     ? `La app calcula ${fmt(plan.appSaldo)}. <button type="button" class="btn-link" style="font-size:12px;" onclick="resetAsesorSaldo()">Usar ese</button>`
-    : 'Estimado por la app: el saldo de Gastos diarios más lo que todavía no pagaste. Si en el banco ves otro número, cambialo.';
+    : 'Estimado por la app: tus ingresos menos lo que ya salió de tu cuenta (el mismo "En cuenta" de arriba). Si en el banco ves otro número, cambialo.';
   $('advMetaNote').textContent = plan.usd > 0 ? `Con el dólar de hoy son ${fmt(plan.metaArs)}.` : 'Sin cotización del dólar de hoy.';
   $('advTasaNote').textContent = Number.isFinite(inp.tasa) ? 'Lo cargaste vos.'
     : plan.cr.n ? `Sale de tus últimos ${plan.cr.n === 1 ? 'crédito' : plan.cr.n + ' créditos'}.`
@@ -8207,8 +8246,9 @@ function renderAsesor(){
   // ---- el detalle de este mes ----
   $('advNowTitle').textContent = `Lo que falta en ${mes}`;
   $('advNow').innerHTML =
-    asesorRow('−', 'Gastos fijos sin pagar', 'Tu parte de lo que todavía no tildaste.', fmt(plan.fijosPend)) +
+    asesorRow('−', 'Gastos fijos sin pagar', 'Lo que todavía no tildaste y sale de tu cuenta.', fmt(plan.fijosPend)) +
     asesorRow('−', 'Gastos variables sin pagar', 'Incluye el T.Credito y los créditos de este mes si no están tildados.', fmt(plan.varsPend)) +
+    (plan.dolaresPend > 0 ? asesorRow('−', 'Dólares por comprar', 'Compra dólares todavía sin tildar como comprada.', fmt(plan.dolaresPend)) : '') +
     asesorRow('−', 'Gastos diarios hasta fin de mes',
       `${plan.diasQuedan} ${plan.diasQuedan === 1 ? 'día' : 'días'} × ${fmt(plan.porDia)} por día (${plan.hist.length ? 'tu promedio por transferencia' : 'lo que va de este mes'}).`,
       fmt(plan.diariosResto)) +
@@ -8954,8 +8994,11 @@ function creditReceivedOf(person, key){
 function bolsaOf(person, key){ return financeFor(person, key).bolsa; }
 function wantsBudgetOf(person, key){ return financeFor(person, key).wants; }
 // lo cargado en el rubro Compra dólares de esa persona ese mes
+function dolaresCatOf(person, key){
+  return (budgetTemplatesForMonth(key || viewMonth)[person] || []).find(x=>x.label === 'Compra dólares') || null;
+}
 function dolaresOf(person, key){
-  const c = (budgetTemplatesForMonth(key || viewMonth)[person] || []).find(x=>x.label === 'Compra dólares');
+  const c = dolaresCatOf(person, key);
   return c ? (c.amount || 0) : 0;
 }
 // Salidas y gustos es un dato, no un rubro: 60% Salidas, 40% Gustos
@@ -9072,7 +9115,7 @@ function subtotalRowHtml(label, amount, items, key, isPaidRow, amountFn, showDat
   const rows = items.map(x=>{
     const dateLabel = showDate ? `<span class="bill-subtotal-date"> · ${shortDate(x.date)}</span>` : '';
     return `<div class="bill bill-subtotal-item">
-    <div class="bill-main"><div class="bill-name">${escapeHtml(x.desc)}${dateLabel}</div></div>
+    <div class="bill-main"><div class="bill-name">${escapeHtml(x.desc)}${dateLabel}${x.tagHtml || ''}</div></div>
     <div class="bill-amt">${fmt(amountFn(x))}</div>
   </div>`;
   }).join('');
@@ -9359,15 +9402,61 @@ function budgetRubroRow(c, person){
        </button>`
     : '';
 
+  // el tilde "Comprados": mientras no esté, esa plata sigue en la cuenta y
+  // el "En cuenta" del header no la resta (ver cashFlowOf)
+  const boughtHtml = isDolares && (c.amount || 0) > 0
+    ? `<div class="bill-meta"><span>${c.bought ? 'Comprados' : 'Sin comprar'}</span>
+        <label class="bill-paid" title="${c.bought ? 'Comprados' : 'Marcar como comprados'}">
+          <input type="checkbox" ${c.bought ? 'checked' : ''} onchange="toggleDolaresBought('${c.id}', '${person}')" aria-label="Dólares comprados">
+        </label></div>`
+    : '';
   return `<div class="bill">
     <div class="bill-main">
-      ${nameHtml}
+      ${nameHtml}${boughtHtml}
     </div>
     ${amt}
     ${registerBtn}
     <button class="bill-edit" onclick="toggleBudgetAmtEdit('${c.id}')" aria-label="Editar">✎</button>
     <button class="bill-del" onclick="deleteBudgetRubro('${c.id}', '${person}')" aria-label="Eliminar">✕</button>
   </div>`;
+}
+// tildar Comprados pregunta a qué dólar se compró: los dólares quedan fijos
+// (lo que se decidió ahorrar) y los pesos se recalculan con ese precio, que
+// es lo que de verdad salió de la cuenta. c.fx pasa a ser ese precio.
+function toggleDolaresBought(id, person){
+  const c = (budgetTemplatesForMonth(viewMonth)[person] || []).find(x=>x.id === id);
+  if(!c) return;
+  if(c.bought){
+    delete c.bought; delete c.boughtOn;
+    saveBudgetTemplates();
+    render();
+    return;
+  }
+  render();   // el checkbox vuelve a destildado hasta que se confirme
+  const oldFx = c.fx || usdRate();
+  if(!(oldFx > 0)) return notyf.error('Falta la cotización del dólar');
+  const usd = Math.round((c.amount || 0) / oldFx);
+  openConfirmModal(`Compra dólares de ${monthLabel(viewMonth)}: ${fmtUsd(usd)}.`, (value)=>{
+    const rate = parseRate(value);
+    if(!(rate > 0)) return;
+    c.fx = rate;
+    c.amount = Math.round(usd * rate);
+    c.bought = true;
+    c.boughtOn = todayStr();
+    redistribuirWantsSegunDolares(person);
+    saveBudgetTemplates();
+    renderBudgetTemplates();
+    render();
+    notyf.success(`${fmtUsd(usd)} comprados a ${fmtRate(rate)}: ${fmt(c.amount)}`);
+  }, {
+    title: 'Dólares comprados', okLabel: 'Listo', danger: false,
+    input: {
+      label: '¿A qué dólar los compraste?',
+      value: fmtRate(oldFx),
+      valid: v => parseRate(v) > 0,
+      note: v => parseRate(v) > 0 ? `Son ${fmt(Math.round(usd * parseRate(v)))} en pesos.` : 'Poné el precio de un dólar, en pesos.'
+    }
+  });
 }
 function registerDolaresPurchase(id, person){
   const c = (budgetTemplatesForMonth(viewMonth)[person] || []).find(x=>x.id === id);
@@ -9654,27 +9743,145 @@ function renderDailyBlock(fin){
 function dailySaldoFinalOf(person){
   return bolsaOf(person, viewMonth) - dailyTotalOf(person, viewMonth);
 }
-function renderDailySaldoFinal(person){
-  $('dailySaldoFinal').innerHTML = saldoCell(names[person], dailySaldoFinalOf(person));
+// ---- En cuenta: la plata que de verdad entró y salió de la cuenta ----
+// La cadena (financeFor) resta la PARTE de cada uno en cada gasto; la cuenta
+// del banco ve otra cosa: un gasto compartido lo paga entero quien figura en
+// paidBy (o cada uno su parte si es 'shared'), lo que paga otro no sale de tu
+// cuenta, y lo que no se tildó todavía no salió. cashFlowOf() arma las dos
+// cosas a la vez, gasto por gasto, para poder mostrar el puente:
+//   Ingresos + Créditos − Pagado = En cuenta
+//   En cuenta − A pagar − Le devolvés a X + Te devuelve X = Saldo a fin de mes
+// `items` de cada grupo son {desc, date, amt} para los desplegables.
+function cashFlowOf(person, key){
+  key = key || viewMonth;
+  const past = isPastMonth(key);
+  const others = pids().filter(id=>id !== person);
+  const paid = [], pending = [], owe = {}, owed = {};
+  others.forEach(id=>{ owe[id] = []; owed[id] = []; });
+  // fracción del gasto que sale de la cuenta de esta persona
+  const outRatio = (e, shareFn) => {
+    if(isPerson(e.paidBy)) return e.paidBy === person ? 1 : 0;
+    return (e.amount || 0) > 0 ? shareFn(e, person) / e.amount : 0;
+  };
+  // lo que la cadena restó (chain) menos lo que salió (out) y lo que va a
+  // salir (pend) es plata entre ustedes: si lo pagó otro, se la devolvés; si
+  // lo pagaste vos, los demás te devuelven su parte
+  const entry = (e, chain, out, pend, shareFn, kind) => {
+    const base = { desc: e.desc, date: e.date, kind };
+    if(out > 0.5) paid.push({ ...base, amt: out });
+    if(pend > 0.5) pending.push({ ...base, amt: pend });
+    const rest = chain - out - pend;
+    if(Math.abs(rest) < 0.5) return;
+    if(isPerson(e.paidBy) && e.paidBy !== person){
+      if(owe[e.paidBy]) owe[e.paidBy].push({ ...base, amt: rest });
+      return;
+    }
+    // lo pagaste vos: cada uno de los demás te devuelve su parte
+    const shOthers = others.map(id=>[id, shareFn(e, id)]).filter(([,v])=>v > 0);
+    const tot = shOthers.reduce((t,[,v])=>t + v, 0);
+    shOthers.forEach(([id, v])=>owed[id].push({ ...base, amt: -rest * v / tot }));
+  };
+  expenses.filter(ex=>monthKey(ex.date) === key && (ex.amount || 0) > 0).forEach(ex=>{
+    const r = outRatio(ex, personShareOf);
+    const chain = personShareOf(ex, person) * countedRatio(ex);
+    entry(ex, chain, expensePaidAmount(ex) * r, past ? 0 : expenseUnpaidAmount(ex) * r, personShareOf, 'fijos');
+  });
+  varExpenses.filter(e=>monthKey(e.date) === key && (e.amount || 0) > 0).forEach(e=>{
+    const chain = varShareThisMonth(e, person);
+    // con tarjeta no sale de la cuenta este mes (vuelve en el T.Credito)
+    if(isCardVar(e)){ entry(e, chain, 0, 0, entryShareOf, 'vars'); return; }
+    const r = outRatio(e, entryShareOf);
+    entry(e, chain, e.paid ? e.amount * r : 0, !past && !e.paid ? e.amount * r : 0, entryShareOf, 'vars');
+  });
+  dailyExpenses.filter(d=>monthKey(d.date) === key && (d.amount || 0) > 0).forEach(d=>{
+    if(cardNorm(d.card)) return;   // tarjeta: ni la cadena ni la cuenta lo ven este mes
+    entry(d, entryShareOf(d, person), d.amount * outRatio(d, entryShareOf), 0, entryShareOf, 'diarios');
+  });
+  const c = dolaresCatOf(person, key);
+  if(c && (c.amount || 0) > 0){
+    const it = { desc: 'Compra dólares', date: c.boughtOn || '', amt: c.amount, kind: 'dolares' };
+    if(c.bought) paid.push(it); else pending.push({ ...it, desc: 'Compra dólares (sin comprar)' });
+  }
+  const byDate = (x, y)=>(x.date || '9') < (y.date || '9') ? -1 : (x.date || '9') > (y.date || '9') ? 1 : 0;
+  [paid, pending, ...Object.values(owe), ...Object.values(owed)].forEach(l=>l.sort(byDate));
+  const sum = l => l.reduce((t,x)=>t + x.amt, 0);
+  const inc = incomeTotalArs(person, key), credito = creditReceivedOf(person, key);
+  const paidTotal = sum(paid), pendTotal = sum(pending);
+  const enCuenta = inc + credito - paidTotal;
+  const oweTotals = {}, owedTotals = {};
+  others.forEach(id=>{ oweTotals[id] = sum(owe[id]); owedTotals[id] = sum(owed[id]); });
+  const puente = enCuenta - pendTotal
+    - others.reduce((t,id)=>t + oweTotals[id], 0) + others.reduce((t,id)=>t + owedTotals[id], 0);
+  // la cadena no deja Salidas y gustos en negativo (financeFor().wants): si
+  // eso pasa, el puente no llega solo al saldo y la diferencia va aparte
+  const fin = bolsaOf(person, key) - dailyTotalOf(person, key);
+  return { inc, credito, paid, paidTotal, pending, pendTotal, enCuenta, owe, owed, oweTotals, owedTotals,
+           fin, ajuste: Math.abs(fin - puente) >= 1 ? fin - puente : 0 };
 }
-// el mismo saldo, en el header: solo el de la persona elegida en la Vista
-// (con Compartido / Todos no se muestra; con una sola persona, el suyo)
+// lo que debería haber hoy en el banco. Es el número del header.
+function enCuentaOf(person, key){ return cashFlowOf(person, key).enCuenta; }
+// tocar el Saldo despliega de dónde sale el "En cuenta" del header y cómo
+// se llega desde ahí a este saldo de fin de mes (ver cashFlowOf)
+function renderDailySaldoFinal(person){
+  const key = 'dailySaldo:' + person;
+  const open = expandedTotalsMain.has(key);
+  const fin = dailySaldoFinalOf(person);
+  const cell = `<div class="sld-cell sld-click" role="button" tabindex="0" onclick="toggleTotalsMain('${key}')"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleTotalsMain('${key}');}"
+      aria-expanded="${open}" aria-label="${open ? 'Ocultar' : 'Ver'} lo que tenés en cuenta">
+    <div class="sld-who"><span class="bill-toggle${open ? ' open' : ''}" aria-hidden="true">▸</span> ${escapeHtml(names[person])}</div>
+    <div class="sld-amt ${fin < 0 ? 'neg' : ''}">${fmt(fin)}</div>
+  </div>`;
+  if(!open){ $('dailySaldoFinal').innerHTML = cell; return; }
+  const cf = cashFlowOf(person, viewMonth);
+  const row = (label, amt) => `<div class="bill bill-subtotal">
+      <div class="bill-main"><div class="bill-name">${label}</div></div>
+      <div class="bill-amt">${fmt(amt)}</div>
+    </div>`;
+  const total = (label, amt) => `<div class="bill bill-total">
+      <div class="bill-main"><div class="bill-name">${label}</div></div>
+      <div class="bill-amt">${fmt(amt)}</div>
+    </div>`;
+  const amt = x => x.amt;
+  let html = row('Ingresos', cf.inc)
+    + (cf.credito > 0 ? row('+ Créditos', cf.credito) : '')
+    + subtotalRowHtml('− Pagado', cf.paidTotal, cf.paid, key + ':paid', true, amt, true)
+    + total('En cuenta', cf.enCuenta)
+    + subtotalRowHtml('− A pagar', cf.pendTotal, cf.pending, key + ':pend', false, amt, true);
+  pids().filter(id=>id !== person).forEach(id=>{
+    const n = escapeHtml(nameOf(id));
+    if(cf.oweTotals[id] >= 0.5) html += subtotalRowHtml(`− Le devolvés a ${n}`, cf.oweTotals[id], cf.owe[id], key + ':owe:' + id, false, amt, true);
+    if(cf.owedTotals[id] >= 0.5) html += subtotalRowHtml(`+ Te devuelve ${n}`, cf.owedTotals[id], cf.owed[id], key + ':owed:' + id, false, amt, true);
+  });
+  if(cf.ajuste) html += row(cf.ajuste > 0 ? '+ Ajuste' : '− Ajuste', Math.abs(cf.ajuste));
+  html += total('Saldo a fin de mes', fin);
+  $('dailySaldoFinal').innerHTML = cell + `<div class="sld-detail">${html}</div>`;
+}
+// en el header va lo que tenés en la cuenta hoy (enCuentaOf), no el saldo de
+// fin de mes: solo el de la persona elegida en la Vista (con Compartido /
+// Todos no se muestra; con una sola persona, el suyo)
 function renderHeadSaldo(){
   const box = $('headSaldo');
   if(!box) return;
   const person = isPerson(globalView) ? globalView : (peopleCount() < 2 ? firstPid() : null);
   box.hidden = !coupleCode || !person;
   if(box.hidden) return;
-  const amt = dailySaldoFinalOf(person);
-  // solo "Saldo": de quién es ya lo dice el botón de la Vista de al lado; el
-  // nombre completo va en el aria-label
-  box.innerHTML = `<span class="head-saldo-who">Saldo</span>`
+  const amt = enCuentaOf(person, viewMonth);
+  // solo "En cuenta": de quién es ya lo dice el botón de la Vista de al lado;
+  // el nombre completo va en el aria-label
+  box.innerHTML = `<span class="head-saldo-who">En cuenta</span>`
     + `<span class="head-saldo-amt${amt < 0 ? ' neg' : ''}">${fmt(amt)}</span>`;
-  box.setAttribute('aria-label', `Saldo de ${nameOf(person)}: ${fmt(amt)}. Ver en Gastos diarios`);
+  box.setAttribute('aria-label', `En cuenta de ${nameOf(person)}: ${fmt(amt)}. Ver en Gastos diarios`);
+  box.title = `Lo que debería haber hoy en tu cuenta: ingresos menos lo que ya pagaste. A fin de mes te quedan ${fmt(dailySaldoFinalOf(person))}.`;
 }
 // tocar el saldo del header lleva a la card de donde sale
 function goToDailySaldo(){
+  // abre el desglose del Saldo, que es de donde sale el "En cuenta"
+  const person = isPerson(globalView) ? globalView : firstPid();
+  currentDailyTab = person;
+  expandedTotalsMain.add('dailySaldo:' + person);
   switchTab('gastos');
+  render();
   const el = $('dailySaldoFinal');
   if(el) el.scrollIntoView({ behavior:'smooth', block:'center' });
 }
