@@ -606,6 +606,9 @@
     .fixed-row{flex-wrap:wrap;row-gap:6px;}
     .fixed-row .f-label,.fixed-row input.f-label-edit{flex:1 1 auto;}
     .fixed-actions,.fixed-actions.two{flex:1 0 100%;justify-content:flex-end;order:3;}
+    /* categorías de Gastos diarios: sin monto, ✎ ✕ entran en la misma línea */
+    .fixed-row.cat-row{flex-wrap:nowrap;}
+    .fixed-row.cat-row .fixed-actions{flex:0 0 52px;order:0;}
   }
 
   .chart-title{font-size:12px;color:var(--body-muted);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;}
@@ -1552,6 +1555,20 @@
     </div>
 
     <div class="card">
+      <div class="section-title">Gastos diarios</div>
+      <p class="income-note" style="margin-top:-4px;">Las categorías de tus gastos diarios, sin montos. Salen como fichas al cargar un gasto diario, primero las que más usás, y completan la descripción mientras escribís. Cada descripción nueva que cargues se suma sola.</p>
+      <div class="fixed-head">
+        <span class="h1c">Categoría</span>
+        <span class="h3c"></span>
+      </div>
+      <div id="dyTplTable"></div>
+      <div class="fixed-add">
+        <input type="text" id="dyTplLabelInput" placeholder="Ej: Kiosko, Nafta, Café">
+        <button type="button" onclick="addDailyTemplate()" aria-label="Agregar categoría">+</button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="section-title">Copias de seguridad</div>
       <p class="income-note" style="margin-top:-4px;">Una copia guarda una foto completa de todo: gastos, ingresos, fijos, metas y ajustes. Si algún día se borra o se rompe algo, restaurás y vuelve tal cual estaba.</p>
       <div class="backup-actions">
@@ -2230,6 +2247,7 @@ const DAILY_EXPENSES_KEY = 'dailyexpenses_v1';
 // página Viajes (se activa en Ajustes): UN viaje a la vez, 100% aparte de los
 // meses — no entra en financeFor() ni en el "Entre ustedes" del mes. Ver tripFinance()
 const TRIP_KEY = 'trip_v1';
+const DAILY_TEMPLATES_KEY = 'dailytemplates_v1';
 
 let expenses = [];
 // ---- quiénes viven en este espacio ----
@@ -2326,6 +2344,10 @@ let editingDebtId = null;
 // [{id,label,amount}]}, mismo molde (plano, sin mes) que varEstimates. Es lo
 // que sale como ficha rápida en el modal de "Agregar deuda"; no toca `debts`.
 let debtTemplates = {};
+// categorías de Gastos diarios (Ajustes): [{id, label}], una sola lista para
+// todo el espacio. null = nunca se armó: se arma sola con lo ya cargado
+// (dailyTemplateList)
+let dailyTemplates = null;
 // el viaje: {enabled, name, income:[], fixed:[], variable:[], daily:[]}. Cada
 // entrada es {id, desc, amount, date, paidBy, shares, splitType, paid?}, el
 // mismo molde que un gasto variable: paidBy 'shared' = cada uno puso su parte
@@ -2450,7 +2472,8 @@ const COLUMN_FOR_KEY = {
   settled_v1: 'settled_months',
   cardpurchases_v1: 'card_purchases',
   dailyexpenses_v1: 'daily_expenses',
-  trip_v1: 'trip'
+  trip_v1: 'trip',
+  dailytemplates_v1: 'daily_templates'
 };
 const MIGRATION_FLAG_KEYS = new Set(['fixed_m1','fixed_m2','fixed_m3','fixedincome_m1','budget_cats_m1','budget_cats_m3']);
 
@@ -2607,6 +2630,7 @@ function applyCoupleRow(){
   if(Array.isArray(coupleRow.card_purchases)) cardPurchases = coupleRow.card_purchases;
   if(Array.isArray(coupleRow.daily_expenses)) dailyExpenses = coupleRow.daily_expenses;
   if(coupleRow.trip && typeof coupleRow.trip === 'object') trip = normalizeTrip(coupleRow.trip);
+  if(Array.isArray(coupleRow.daily_templates)) dailyTemplates = coupleRow.daily_templates;
   ensureSharedSlots();
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
@@ -2673,6 +2697,8 @@ function paintFromLocalCache(code){
     if(dx) dailyExpenses = JSON.parse(dx);
     const tr = readLocalCache(code, TRIP_KEY);
     if(tr) trip = normalizeTrip(JSON.parse(tr));
+    const dtc = readLocalCache(code, DAILY_TEMPLATES_KEY);
+    if(dtc) dailyTemplates = JSON.parse(dtc);
     if(normalizeExpenses()){ /* fixed up in-memory; loadAll()'s real save will persist it */ }
     normalizeVarExpenses();
     render();
@@ -4021,6 +4047,12 @@ async function loadAll(){
     const v = await store.get(TRIP_KEY);
     if(v) trip = normalizeTrip(JSON.parse(v));
   }catch(e){}
+  // ídem las categorías de Gastos diarios
+  try{
+    const v = await store.get(DAILY_TEMPLATES_KEY);
+    if(v) dailyTemplates = JSON.parse(v);
+  }catch(e){}
+  if(dailyTemplates != null && !Array.isArray(dailyTemplates)) dailyTemplates = null;
 
   if(normalizeExpenses()) saveExpenses();
   if(normalizeVarExpenses()) saveVarExpenses();
@@ -4038,6 +4070,7 @@ async function loadAll(){
   renderVarEstimates();
   renderBudgetTemplates();
   renderDebtTemplates();
+  renderDailyTemplates();
   render();
 
   maybeAutoBackup();   // una copia por día, silenciosa (ver más abajo)
@@ -4113,6 +4146,10 @@ async function saveDebtTemplates(){
   if(await bailOnMassWipe(prevCol('debt_templates'), countItems(debtTemplates), ()=>{ render(); renderDebtTemplates(); })) return false;
   return await store.set(DEBT_TEMPLATES_KEY, JSON.stringify(debtTemplates));
 }
+async function saveDailyTemplates(){
+  if(await bailOnMassWipe(prevCol('daily_templates'), (dailyTemplates || []).length, ()=>{ renderDailyTemplates(); })) return false;
+  return await store.set(DAILY_TEMPLATES_KEY, JSON.stringify(dailyTemplates || []));
+}
 async function saveSavings(){
   if(await bailOnMassWipe(prevCol('savings'), countItems(savings), ()=>{ renderAhorro(); })) return false;
   return await store.set(SAVINGS_KEY, JSON.stringify(savings));
@@ -4152,6 +4189,7 @@ function currentSnapshot(){
     // solo si la columna ya existe: restaurar una copia que la trae a un
     // couples sin `trip` haría fallar el update entero
     ...(tripColumnExists() ? { trip } : {}),
+    ...(dailyTplColumnExists() && dailyTemplates ? { daily_templates: dailyTemplates } : {}),
     migration_flags: (coupleRow && coupleRow.migration_flags) || {}
   };
 }
@@ -4220,6 +4258,7 @@ async function applySnapshot(s){
   if(Array.isArray(s.card_purchases)) patch.card_purchases = s.card_purchases;
   if(Array.isArray(s.daily_expenses)) patch.daily_expenses = s.daily_expenses;
   if(s.trip && typeof s.trip === 'object' && tripColumnExists()) patch.trip = s.trip;
+  if(Array.isArray(s.daily_templates) && dailyTplColumnExists()) patch.daily_templates = s.daily_templates;
   if(s.migration_flags && typeof s.migration_flags === 'object') patch.migration_flags = s.migration_flags;
   if(!Object.keys(patch).length) throw new Error('La copia no tiene datos reconocibles.');
 
@@ -4229,7 +4268,7 @@ async function applySnapshot(s){
   [[STORE_KEY,'expenses'],[NAMES_KEY,'names'],[INCOME_KEY,'income'],[FIXED_KEY,'fixed'],
    [FIXED_INCOME_KEY,'fixed_income'],[VAR_ESTIMATES_KEY,'variable_estimates'],
    [VAR_EXPENSES_KEY,'variable_expenses'],[BUDGET_TEMPLATES_KEY,'budget_overrides'],[GOALS_KEY,'goals'],
-   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings'],[SETTLED_KEY,'settled_months'],[CARD_PURCHASES_KEY,'card_purchases'],[DAILY_EXPENSES_KEY,'daily_expenses'],[TRIP_KEY,'trip']]
+   [DEBTS_KEY,'debts'],[DEBT_TEMPLATES_KEY,'debt_templates'],[SAVINGS_KEY,'savings'],[SETTLED_KEY,'settled_months'],[CARD_PURCHASES_KEY,'card_purchases'],[DAILY_EXPENSES_KEY,'daily_expenses'],[TRIP_KEY,'trip'],[DAILY_TEMPLATES_KEY,'daily_templates']]
     .forEach(([k,col])=>{ if(data[col] != null) writeLocalCache(coupleCode, k, JSON.stringify(data[col])); });
   // el snapshot puede traer una columna legítimamente vacía; que el guardaespaldas
   // no lo confunda con corrupción durante el refresco posterior
@@ -4238,7 +4277,7 @@ async function applySnapshot(s){
   refreshPeopleUI();
   render();
   renderFixed(); renderChips(); renderFixedIncome(); renderIncomeChips(); renderIncomeLists();
-  renderVarEstimates(); renderBudgetTemplates(); renderDebtTemplates();
+  renderVarEstimates(); renderBudgetTemplates(); renderDebtTemplates(); renderDailyTemplates();
 }
 
 async function doManualBackup(){
@@ -5499,6 +5538,7 @@ function normalizeTrip(t){
 // la columna `trip` puede no existir todavía en Supabase (no hay migraciones):
 // ver currentSnapshot()/applySnapshot()
 const tripColumnExists = () => !!coupleRow && Object.prototype.hasOwnProperty.call(coupleRow, 'trip');
+const dailyTplColumnExists = () => !!coupleRow && Object.prototype.hasOwnProperty.call(coupleRow, 'daily_templates');
 
 const TRIP_KIND_INFO = {
   // "Ahorro" no es una sugerencia más: trae el total ahorrado (ver pickTripSavings)
@@ -10138,17 +10178,142 @@ function renderDailyCardChips(){
     .map(c=>`<button type="button" data-card="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
 }
 const dailyFormShares = () => dailyIsShared() ? sharesFor(currentDailySplit) : soloShares(currentDailyOwner);
-// las últimas descripciones distintas de ese mismo dueño, para cargar "Super" de un toque
+
+// ---- categorías de Gastos diarios (Ajustes › Gastos diarios) ----
+const catKey = s => normWord(String(s || ''));
+// la lista; si nunca se armó, se arma con las descripciones ya cargadas
+// (y se guarda si la columna existe — si no, vive en memoria y en la caché)
+function dailyTemplateList(){
+  if(!Array.isArray(dailyTemplates)){
+    const seen = new Set();
+    dailyTemplates = [];
+    dailyCatOrder(null, dailyExpenses.map(d=>({ label: String(d.desc || '').trim() })))
+      .forEach(c=>{ const k = catKey(c.label); if(k && !seen.has(k)){ seen.add(k); dailyTemplates.push({ id: genId(), label: c.label }); } });
+    if(dailyTemplates.length && dailyTplColumnExists()) saveDailyTemplates();
+  }
+  return dailyTemplates;
+}
+// cuántas veces se usó cada categoría: primero las de `owner` (el dueño del
+// gasto que se está cargando), después las de todos, después la más reciente
+function dailyCatOrder(owner, list){
+  const use = new Map();
+  dailyExpenses.forEach(d=>{
+    const k = catKey(d.desc);
+    if(!k) return;
+    const u = use.get(k) || { own: 0, all: 0, last: '' };
+    u.all++;
+    if(owner != null && expenseOwner(d) === owner) u.own++;
+    if((d.date || '') > u.last) u.last = d.date || '';
+    use.set(k, u);
+  });
+  const z = { own: 0, all: 0, last: '' };
+  return list.slice().sort((a, b)=>{
+    const ua = use.get(catKey(a.label)) || z, ub = use.get(catKey(b.label)) || z;
+    return (ub.own - ua.own) || (ub.all - ua.all) || ub.last.localeCompare(ua.last) || a.label.localeCompare(b.label, 'es');
+  });
+}
+// cada descripción nueva que se carga se suma sola a la lista
+function ensureDailyTemplate(desc){
+  const label = String(desc || '').trim();
+  if(!label) return;
+  const list = dailyTemplateList();
+  if(list.some(c=>catKey(c.label) === catKey(label))) return;
+  list.push({ id: genId(), label });
+  saveDailyTemplates();
+  renderDailyTemplates();
+}
+// fichas del modal: todas las categorías, la más usada primero (scroll
+// horizontal); con algo escrito, solo las que lo contienen (las que empiezan
+// así primero)
 function renderDailyChips(){
-  const seen = new Set(), recent = [];
-  dailyExpenses.filter(d=>expenseOwner(d) === currentDailyOwner)
-    .sort((a,b)=>(b.date||'').localeCompare(a.date||''))
-    .forEach(d=>{
-      const label = String(d.desc || '').trim();
-      const k = label.toLowerCase();
-      if(k && !seen.has(k) && recent.length < 6){ seen.add(k); recent.push(label); }
-    });
-  $('dlyDescChips').innerHTML = recent.map(r=>`<button type="button" data-desc="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
+  const typed = catKey($('dlyDesc').value);
+  let list = dailyCatOrder(currentDailyOwner, dailyTemplateList());
+  if(typed){
+    const starts = list.filter(c=>catKey(c.label).startsWith(typed));
+    const has = list.filter(c=>!catKey(c.label).startsWith(typed) && catKey(c.label).includes(typed));
+    list = [...starts, ...has];
+  }
+  $('dlyDescChips').innerHTML = list.map(c=>`<button type="button" data-desc="${escapeHtml(c.label)}">${escapeHtml(c.label)}</button>`).join('');
+  $('dlyDescChips').scrollLeft = 0;
+}
+// autocompletar: al tipear, completa con la categoría más usada que empieza
+// así y deja seleccionado lo agregado, así seguir escribiendo lo pisa
+$('dlyDesc').addEventListener('input', (e)=>{
+  const el = $('dlyDesc');
+  const typed = el.value;
+  const deleting = e.inputType && e.inputType.startsWith('delete');
+  if(!deleting && typed.trim() && el.selectionEnd === typed.length){
+    const k = catKey(typed);
+    const hit = dailyCatOrder(currentDailyOwner, dailyTemplateList())
+      .find(c=>catKey(c.label).startsWith(k) && c.label.length > typed.length);
+    if(hit){
+      // con las mayúsculas/tildes de la categoría ("ki" → "Kiosko")
+      el.value = hit.label;
+      el.setSelectionRange(typed.length, el.value.length);
+    }
+  }
+  renderDailyChips();
+});
+
+let editingDailyTplId = null;
+function renderDailyTemplates(){
+  const box = $('dyTplTable');
+  if(!box) return;
+  const list = dailyCatOrder(null, dailyTemplateList());
+  box.innerHTML = list.length ? list.map(c=>{
+    if(editingDailyTplId === c.id){
+      return `<div class="fixed-row cat-row" data-id="${c.id}">
+        <input type="text" class="f-label-edit" value="${escapeHtml(c.label)}" aria-label="Categoría">
+        <span class="fixed-actions two">
+          <button type="button" class="ok" onclick="saveEditDailyTemplate('${c.id}')" aria-label="Guardar">✓</button>
+          <button type="button" class="del" onclick="cancelEditDailyTemplate()" aria-label="Cancelar">✕</button>
+        </span>
+      </div>`;
+    }
+    return `<div class="fixed-row cat-row" data-id="${c.id}">
+      <span class="f-label">${escapeHtml(c.label)}</span>
+      <span class="fixed-actions two">
+        <button type="button" class="edit" onclick="startEditDailyTemplate('${c.id}')" aria-label="Editar">✎</button>
+        <button type="button" class="del" onclick="removeDailyTemplate('${c.id}')" aria-label="Eliminar">✕</button>
+      </span>
+    </div>`;
+  }).join('') : `<div class="income-note" style="padding:12px 0;">Todavía no hay categorías: se suman solas al cargar gastos diarios.</div>`;
+}
+function addDailyTemplate(){
+  const label = $('dyTplLabelInput').value.trim();
+  if(!label) return;
+  const list = dailyTemplateList();
+  if(list.some(c=>catKey(c.label) === catKey(label))){ notyf.error(`"${label}" ya está en la lista`); return; }
+  list.push({ id: genId(), label });
+  $('dyTplLabelInput').value = '';
+  saveDailyTemplates();
+  renderDailyTemplates();
+}
+$('dyTplLabelInput').addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); addDailyTemplate(); } });
+function startEditDailyTemplate(id){ editingDailyTplId = id; renderDailyTemplates(); }
+function cancelEditDailyTemplate(){ editingDailyTplId = null; renderDailyTemplates(); }
+// renombrar solo cambia la categoría, no los gastos ya cargados con el nombre viejo
+function saveEditDailyTemplate(id){
+  const row = document.querySelector(`#dyTplTable .fixed-row[data-id="${id}"]`);
+  const item = dailyTemplateList().find(c=>c.id === id);
+  if(!row || !item) return;
+  const label = row.querySelector('.f-label-edit').value.trim();
+  if(!label) return;
+  if(dailyTemplateList().some(c=>c.id !== id && catKey(c.label) === catKey(label))){ notyf.error(`"${label}" ya está en la lista`); return; }
+  item.label = label;
+  editingDailyTplId = null;
+  saveDailyTemplates();
+  renderDailyTemplates();
+}
+function removeDailyTemplate(id){
+  const item = dailyTemplateList().find(c=>c.id === id);
+  if(!item) return;
+  openConfirmModal(`¿Sacar "${item.label}" de las categorías? Los gastos ya cargados no cambian.`, ()=>{
+    dailyTemplates = dailyTemplateList().filter(c=>c.id !== id);
+    saveDailyTemplates();
+    renderDailyTemplates();
+    notyf.success(`"${item.label}" eliminada`);
+  }, { okLabel: 'Sacar' });
 }
 // cuánto le queda a cada persona afectada si se guarda lo que hay en el form
 // — solo cuenta lo pagado por transferencia (lo pagado con crédito no resta
@@ -10243,6 +10408,7 @@ $('dailyForm').addEventListener('submit', (e)=>{
   if(existing) Object.assign(existing, fields);
   else dailyExpenses.push({ id: genId(), ...fields });
   saveDailyExpenses();
+  ensureDailyTemplate(desc);
   // un gasto con crédito puede cambiar lo que le toca a "Cuotas <origen>" el
   // mes que viene — ver desiredCardExpenses()
   persistCardExpenses();
